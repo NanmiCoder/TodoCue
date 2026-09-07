@@ -1,0 +1,88 @@
+import AppKit
+import Combine
+import ServiceManagement
+
+/// Menu bar entry: the only entry point on screens without a notch.
+@MainActor
+final class StatusItemController: NSObject, NSMenuDelegate {
+    private let item: NSStatusItem
+    private let model: AppModel
+    private weak var appDelegate: AppDelegate?
+    private var cancellables: Set<AnyCancellable> = []
+    private let menu = NSMenu()
+
+    init(model: AppModel, delegate: AppDelegate) {
+        self.model = model
+        self.appDelegate = delegate
+        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        super.init()
+        if let b = item.button {
+            b.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: "TodoCue")
+            b.imagePosition = .imageLeading
+            b.setAccessibilityLabel("TodoCue 任务")
+        }
+        menu.delegate = self
+        item.menu = menu
+        model.$today.map(\.remaining).removeDuplicates().sink { [weak self] n in self?.updateTitle(n) }.store(in: &cancellables)
+        model.$connectionState.sink { [weak self] _ in self?.updateTitle(model.remaining) }.store(in: &cancellables)
+        updateTitle(0)
+    }
+
+    private func updateTitle(_ n: Int) {
+        guard let b = item.button else { return }
+        b.title = n > 0 ? " \(n)" : ""
+        b.appearsDisabled = !model.connectionState.isOnline
+        b.toolTip = model.connectionState.isOnline ? "今日剩余 \(n) 项" : "TodoCue · \(model.connectionState.label)"
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        menu.addItem(withTitle: "打开面板", action: #selector(openPanel), keyEquivalent: "").target = self
+        let remaining = NSMenuItem(title: "今日剩余 \(model.remaining) 项", action: nil, keyEquivalent: "")
+        remaining.isEnabled = false
+        menu.addItem(remaining)
+        if let n = model.next?.next {
+            let nx = NSMenuItem(title: "下一项：\(n.task.title)", action: #selector(openNext), keyEquivalent: "")
+            nx.target = self
+            nx.representedObject = n.task.id
+            menu.addItem(nx)
+        }
+        if !model.connectionState.isOnline {
+            let off = NSMenuItem(title: model.connectionState.label, action: nil, keyEquivalent: "")
+            off.isEnabled = false
+            menu.addItem(off)
+        }
+        menu.addItem(.separator())
+        let add = NSMenuItem(title: "新建任务", action: #selector(newTask), keyEquivalent: "n")
+        add.target = self
+        add.isEnabled = model.canWrite
+        menu.addItem(add)
+        menu.addItem(withTitle: "重新连接", action: #selector(reconnect), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        if #available(macOS 13.0, *) {
+            let login = NSMenuItem(title: "登录时启动", action: #selector(toggleLogin), keyEquivalent: "")
+            login.target = self
+            login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+            menu.addItem(login)
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "退出 TodoCue", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    }
+
+    @objc private func openPanel() { model.openToday() }
+    @objc private func openNext(_ sender: NSMenuItem) {
+        if let id = sender.representedObject as? String { model.reveal(taskId: id) }
+    }
+    @objc private func newTask() { model.newTask() }
+    @objc private func reconnect() { model.reconnect() }
+    @objc private func openSettings() { model.showSettings() }
+    @objc private func toggleLogin() {
+        guard #available(macOS 13.0, *) else { return }
+        do {
+            if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
+            else { try SMAppService.mainApp.register() }
+        } catch {
+            model.showToast(Toast(message: "登录项设置失败：\(error.localizedDescription)", isError: true))
+        }
+    }
+}

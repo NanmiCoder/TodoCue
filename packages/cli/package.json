@@ -1,0 +1,19 @@
+{
+  "name": "@todocue/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "todocue": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@todocue/engine": "0.1.0",
+    "@todocue/server": "0.1.0",
+    "@todocue/shared": "0.1.0",
+    "commander": "^14.0.0",
+    "zod": "^4.1.0"
+  }
+}

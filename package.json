@@ -1,0 +1,30 @@
+{
+  "name": "todocue",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TodoCue: local task runtime with a macOS notch/side-panel client, CLI and MCP.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "clean": "rm -rf packages/*/dist packages/*/tsconfig.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b tsconfig.build.json --noEmit",
+    "dev:serve": "tsx packages/cli/src/index.ts serve",
+    "todocue": "node packages/cli/dist/index.js",
+    "macos:build": "scripts/build-macos.sh",
+    "install:local": "npm run build && node packages/cli/dist/index.js install"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
