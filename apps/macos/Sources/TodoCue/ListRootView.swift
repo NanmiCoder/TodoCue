@@ -7,28 +7,33 @@ struct ListRootView: View {
     @State private var completedExpanded = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            TabBarView().padding(.horizontal, 18)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if model.tab == .today, let next = model.next?.next { NextCard(candidate: next) }
-                    switch model.tab {
-                    case .today: TodayListView()
-                    case .upcoming: UpcomingListView()
-                    case .all: AllListView()
+        GeometryReader { geometry in
+            // Grow both outer gutters smoothly from 12pt at 300pt to 16pt at 340pt.
+            let horizontalInset = min(16, 12 + max(0, geometry.size.width - Theme.panelMinWidth) * 0.1)
+
+            VStack(spacing: 10) {
+                TabBarView().padding(.horizontal, 18)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        if model.tab == .today, let next = model.next?.next { NextCard(candidate: next) }
+                        switch model.tab {
+                        case .today: TodayListView()
+                        case .upcoming: UpcomingListView()
+                        case .all: AllListView()
+                        }
+                        if model.tab == .today, !model.today.completed.isEmpty {
+                            CompletedTodayView(expanded: $completedExpanded)
+                        }
                     }
-                    if model.tab == .today, !model.today.completed.isEmpty {
-                        CompletedTodayView(expanded: $completedExpanded)
-                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .id(model.tab)
+                .scrollIndicators(.automatic)
+                .cueSurface(radius: 18)
+                .padding(.horizontal, horizontalInset)
+                QuickAddView().padding(.horizontal, horizontalInset)
             }
-            .id(model.tab)
-            .scrollIndicators(.automatic)
-            .cueSurface(radius: 18)
-            .padding(.horizontal, 10)
-            QuickAddView()
         }
     }
 }
@@ -305,7 +310,7 @@ struct QuickAddView: View {
         .padding(.horizontal, 12).padding(.vertical, 11)
         .background(Theme.insetSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(focused ? accent.opacity(0.55) : Color.white.opacity(0.12), lineWidth: focused ? 1 : 0.5))
-        .padding(.horizontal, 12).padding(.bottom, 12)
+        .padding(.bottom, 12)
         .animation(Theme.interaction, value: focused || hasText)
         .onChange(of: model.quickAddFocusRequest) { _, _ in focused = true }
         .onChange(of: model.isQuickAdding) { _, adding in

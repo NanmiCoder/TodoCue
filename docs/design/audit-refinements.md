@@ -41,3 +41,15 @@
 用户后续提供的桌面截图显示：圆角玻璃之外还有一圈细矩形边。排查指向 macOS 26 的透明窗口阴影；[SDL 对同类细边问题的修复](https://discourse.libsdl.org/t/sdl-cocoa-fix-1px-border-in-fullscreen-on-tahoe/66147)也采用关闭原生窗口阴影的方式处理。
 
 TodoCue 在 macOS 26+ 关闭 `NSWindow.hasShadow`，由原生玻璃保留可见边缘；旧系统继续使用原有窗口阴影。不改内容间距、窗口大小或可调整宽度的行为。实际检查了获得输入焦点后从 300pt 拖至 340pt，输入焦点保留；33 项测试通过。原生 App 截图用于确认内容和交互，窗口外沿问题的原始证据来自用户桌面截图。
+
+## 内容区域的左右留白
+
+主内容卡片原有的 10pt 外边距在宽窗口空状态中显得贴边，底部输入框的 12pt 外边距也与它不齐。两者现在由列表父视图统一控制：300pt 窗口使用 12pt，300–340pt 之间随实际宽度线性增长，340pt 及以上使用 16pt。拖动窗口不会在断点突然跳动。内容内部的 10pt padding、任务行与页头间距保持原样。
+
+- [今日，340pt](evidence/2026-09-07-padding/01-today-light-340.png)：主卡片和底部输入框边缘对齐。
+- [全部，340pt](evidence/2026-09-07-padding/02-all-light-340.png)：原有五件任务仍完整显示在首屏。
+- [今日，300pt](evidence/2026-09-07-padding/03-today-light-300.png)：焦点任务和下方三件待办完整显示。
+- [输入时拖至 415pt](evidence/2026-09-07-padding/04-quick-add-light-415.png)：从 300pt 实际拖动左边缘，输入内容和焦点保留。测试文字没有提交。
+- [安装版空状态，415pt](evidence/2026-09-07-padding/05-installed-empty-light-415.png)：保留用户窗口宽度，更新后确认空状态的外围留白。
+
+本轮截图来自原生浅色界面，任务列表检查使用既有隔离数据库。33 项 Swift 测试通过，DMG 重新构建并完成签名验证；已从 DMG 更新 `/Applications/TodoCue.app`。正式 runtime 健康，真实任务记录及认证 token 更新前后指纹一致。
