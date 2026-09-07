@@ -155,4 +155,4 @@ npm run macos:dmg
 
 - [TodoCue v0.1.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.0) 已发布并设为 Latest，正文与 `release-notes/v0.1.0.md` 一致。
 - Release 的 Assets 包含 `TodoCue-0.1.0-macOS-arm64.dmg`、`TodoCue-0.1.0-macOS-x64.dmg` 和 `SHA256SUMS`。
-- 仓库当前为 Private，查看 Release 和下载资产需要登录有仓库访问权限的 GitHub 账号。未登录访问返回 404；Release 发布状态不改变仓库可见性。
+- 首次发布时仓库为 Private；同日已按维护者要求改为 Public，Release 与安装包现可公开访问。

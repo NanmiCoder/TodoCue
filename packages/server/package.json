@@ -16,5 +16,6 @@
     "@todocue/shared": "0.1.0",
     "fastify": "^5.6.0",
     "zod": "^4.1.0"
-  }
+  },
+  "license": "MIT"
 }

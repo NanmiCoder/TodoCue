@@ -19,5 +19,6 @@
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/luxon": "^3.7.0"
-  }
+  },
+  "license": "MIT"
 }

@@ -15,5 +15,6 @@
     "@todocue/shared": "0.1.0",
     "commander": "^14.0.0",
     "zod": "^4.1.0"
-  }
+  },
+  "license": "MIT"
 }

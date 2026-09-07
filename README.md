@@ -1,86 +1,105 @@
-# TodoCue
+<p align="center">
+  <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. 深绿色开口圆环与玻璃任务卡片组成的 3D 品牌插画。">
+</p>
 
-本地任务运行时 + macOS 桌面体验。人通过刘海快览和右侧悬浮面板管理任务，Agent 通过 CLI、MCP 和 Local API 操作同一份数据。
+<p align="center">
+  <strong>把事情记在手边，把注意力留给当下。</strong><br>
+  一个原生 macOS 待办工具。你用浮动面板，Agent 用 CLI 或 MCP，操作同一份本地任务。
+</p>
 
-[下载最新版 macOS 安装包](https://github.com/NanmiCoder/TodoCue/releases/latest) · [发布说明](release-notes/)
+<p align="center">
+  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>下载 macOS 版</strong></a> ·
+  <a href="docs/agents.md">Agent 接入</a> ·
+  <a href="release-notes/">版本说明</a> ·
+  <a href="LICENSE">MIT</a>
+</p>
 
-```
-macOS UI / CLI / MCP  →  Local API (127.0.0.1, token)  →  Task Engine  →  SQLite (~/.todocue)
-```
+## 看清今天，只管下一步
 
-## 目录
+打开面板，先看到今天最该处理的一件事，再看其余安排。点开任务，备注、项目、预计耗时和截止时间都在同一处。
 
-| 路径 | 内容 |
-|---|---|
-| `packages/shared` | Zod 契约：实体、输入、查询结果、事件、错误码（三种接口共用） |
-| `packages/engine` | Task Engine：规则、today/next 排序、重复实例、提醒调度、SQLite 迁移与备份 |
-| `packages/server` | Fastify Local API（令牌认证、幂等、SSE `/v1/events`）、运行时引导、HTTP 客户端 |
-| `packages/cli` | `todocue` CLI（任务命令、`serve`、`service`、`install`、`doctor`、`export`、`mcp`） |
-| `apps/macos` | SwiftUI + AppKit 客户端 `TodoCue.app` 与通知辅助程序 `TodoCueNotifier.app` |
-| `skills/todocue` | 可分发的 Agent skill：通过 CLI 管理任务、时间、重复与重试 |
-| `docs/` | `PLAN.md`（原始计划）、`implementation-plan.md`（实施计划与验收）、`api.md`（接口契约）、`agents.md`（Agent 接入） |
+<p align="center">
+  <img src="assets/readme/today-light.png" width="390" alt="浅色今日面板：下一步建议、已安排任务、今日完成进度与底部快速输入。">
+  <img src="assets/readme/task-detail-dark.png" width="390" alt="深色任务详情：完整备注、项目、耗时、计划与截止时间，以及完成和稍后提醒操作。">
+</p>
 
-## 安装使用（macOS）
+**浅色的今天，深色的详情。** 上图均为真实 macOS App 截图，使用演示任务。窗口可在 300–600 点之间调整宽度并记住选择；菜单栏和刘海快览提供随手查看的入口。
 
-在 [GitHub Releases](https://github.com/NanmiCoder/TodoCue/releases/latest) 页面的 **Assets** 中下载 DMG：Apple Silicon 选择 `arm64`，Intel 选择 `x64`。打开 DMG，将 **TodoCue.app 拖入 Applications**，再从应用程序中打开。App 自带 Node、CLI 和通知辅助程序，首次启动自动配置后台服务；需要提醒时，在设置中允许通知。
+## 想到，就记下来
 
-任务数据固定保存在用户主目录下的 **`~/.todocue/todocue.sqlite`**。删除、覆盖或重新安装 App 不会删除该目录，重新打开后继续使用原有任务。设置页可以打开数据文件夹。安装、备份和卸载说明见 [macOS 安装](docs/macos-install.md)。
+在底部输入一句话，回车就加入今天。需要更完整的安排时，点「添加详情」继续填写项目、优先级、时间、提醒或重复规则，已经输入的内容会保留。
 
-## 从源码构建
+<p align="center">
+  <img src="assets/readme/quick-add-light.png" width="390" alt="交互第一步：在今日面板底部输入新任务，可直接提交或添加详情。">
+  <img src="assets/readme/task-form-light.png" width="390" alt="交互第二步：同一条输入展开为任务表单，可补充备注、项目、预计耗时和时间安排。">
+</p>
 
-要求：macOS 14+，Node 24+（已在 Node 26 验证），Xcode 26 / Swift 6 命令行工具。
+- **待在手边。** 原生 SwiftUI + AppKit 浮动面板，支持浅色与深色外观。macOS 26 使用 Liquid Glass，旧系统采用兼容材质。
+- **安排有后续。** 支持重复任务、提醒、稍后提醒，以及完成后的撤销。关闭面板后，后台服务继续负责提醒。
+- **数据属于你。** 任务保存在 `~/.todocue/todocue.sqlite`。覆盖、删除或重新安装 App 后，这个目录仍然保留。
 
-```bash
-npm install
-npm run build              # TypeScript 各包
-npm run macos:dmg          # 生成自带运行时的 App 和当前架构 DMG
-# 将 DMG 中的 TodoCue.app 拖入 Applications 后打开
-```
+## 下载与安装
 
-`npm run macos:dmg` 从锁文件安装生产依赖，下载并校验固定版本的官方 Node，使用可用的 Developer ID 签名（没有则使用临时签名），生成 `apps/macos/build/TodoCue-<version>-macOS-<arch>.dmg`。设置 `TODOCUE_NOTARY_PROFILE` 可使用已配置的 keychain profile 为 App 和 DMG 提交公证并装订票据。仅本机 Swift 开发构建仍可用 `npm run macos:build`。
+当前版本 **[v0.1.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.0)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
 
-安装版 App 首次启动写入 `~/.todocue/bin/todocue`、尝试链接到可写的 PATH 目录，并安装 LaunchAgent `com.todocue.runtime`。关闭面板或退出 App 后，后台服务仍负责提醒。CLI、后台 Node 和辅助程序都来自已安装的 App。
+| 你的 Mac | 安装包 |
+| --- | --- |
+| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.0/TodoCue-0.1.0-macOS-arm64.dmg) |
+| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.0/TodoCue-0.1.0-macOS-x64.dmg) |
 
-日常：
+打开 DMG → 将 **TodoCue.app 拖入 Applications** → 从应用程序中启动。
 
-```bash
-todocue add 写周报 -P high --due today --remind 17:30 -p work -e 30
-todocue add 晨跑 --repeat daily --time 06:30 --remind-time 06:00 --start tomorrow
-todocue add 健身 --repeat weekly --weekdays mon,wed,fri --time 19:00
-todocue today          # 逾期 / 必须完成 / 已安排 + 今日完成
-todocue next           # 现在最该做的一项及原因
-todocue done <id> / snooze <id> -m 15 / edit <id> -d tomorrow / skip <id> / series stop <id>
-todocue doctor         # 安装、运行时、通知授权、失败提醒
-todocue export -o backup.json
-todocue --json ...     # 所有业务命令支持 JSON 输出
-```
+App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无需另装运行时。需要提醒时，在设置中允许通知。更新时下载新 DMG 并替换 App；当前尚无 App 内自动更新。
 
-开发时不装服务：`npm run dev:serve`（前台运行时），`TODOCUE_HOME=/tmp/x` 可隔离数据。
+[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.0/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
-## GitHub Release
+## 让 Agent 和你操作同一份待办
 
-推送 `vX.Y.Z` 标签会触发 macOS 发布工作流，构建 Apple Silicon 和 Intel 两个已签名、公证的 DMG，全部成功后发布到 GitHub Release。版本与发布说明由仓库维护；GitHub Secrets 配置、证书导出和发版命令见 [发布指南](docs/github-release.md)。
+把 [TodoCue skill](skills/todocue/SKILL.md) 安装给 Codex、Claude Code 或其他支持 skills 的本机 Agent，就可以这样描述：
 
-## 运行时行为
+> 帮我把「整理本周进展」放到今天，归到工作项目，预计 25 分钟。
 
-- 数据在 `~/.todocue`（可用 `TODOCUE_HOME` 覆盖）：`todocue.sqlite`（WAL）、`token`、`connection.json`（0600）、`logs/`、`backups/`（迁移前自动 `VACUUM INTO` 备份）。
-- 端口默认 `47831`（`TODOCUE_PORT`），只监听 `127.0.0.1`；所有接口除 `/v1/health` 都需要 `Authorization: Bearer <token>`。
-- 时区首次启动时读取系统并持久化（`TODOCUE_TZ` 可覆盖）；具体时刻以 UTC 保存并保留 IANA 时区，日期级计划保留日期精度。
-- 重复系列预生成未来 30 天实例，在启动、跨日和查询时补齐；停止系列取消今天之后的实例并保留历史。
-- 提醒持久化在 `reminders` 表；调度器每 5 秒检查，发送前核对任务最新状态；失败重试 3 次；启动或睡眠恢复后 2 分钟外的提醒作为“错过”处理，多条合并成一条摘要通知。
-- 通知通过 `TodoCueNotifier.app`（UNUserNotificationCenter）提交，点击通知打开 `todocue://task/<id>` 定位到面板中的任务；辅助程序缺失时降级为 `osascript` 通知。
-
-## 测试
+Agent 通过 CLI 操作本地服务，结果会同步显示在 App 中。也可以直接在终端使用：
 
 ```bash
-npm test                     # vitest：引擎（可控时钟 + 内存库）、API、CLI
-cd apps/macos && swift test  # TodoCueKit 解码 / SSE 解析
+todocue add "整理本周进展" -d today -p work -e 25
+todocue today
+todocue --json today
 ```
 
-## Agent 接入
+偏好 MCP 的 Agent 可连接 `todocue mcp`。CLI、MCP 和桌面端共用同一套任务规则、同一份 SQLite 数据；Local API 只监听 `127.0.0.1`，使用本机令牌认证。
 
-本机编程 Agent 默认使用 [TodoCue skill](skills/todocue/SKILL.md) 调用 `todocue --json …`。将 `skills/todocue` 安装到 Codex 或 Claude Code 的个人 skill 目录后，就能用自然语言管理 App 中的待办和提醒。
+[安装 skill 与 MCP 接入步骤](docs/agents.md) · [Local API 文档](docs/api.md)
 
-也可选择 MCP：Codex 使用 `codex mcp add todocue -- todocue mcp`；Claude Code 使用 `claude mcp add --scope user --transport stdio todocue -- todocue mcp`。
+<details>
+<summary><strong>从源码构建与参与开发</strong></summary>
 
-完整安装步骤、其他 Agent 接入方式和本机运行边界见 [Agent 接入](docs/agents.md)。
+需要 macOS 14+、Node 24+、Xcode 26 / Swift 6 工具链。
+
+```bash
+npm ci
+npm run build
+npm test
+swift test --package-path apps/macos
+npm run macos:dmg
+```
+
+DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的官方 Node，安装锁定的生产依赖，并检查内置 Node、SQLite 和 MCP 能否运行。
+
+| 路径 | 职责 |
+| --- | --- |
+| `apps/macos` | SwiftUI / AppKit 客户端与通知辅助程序 |
+| `packages/engine` | 任务规则、重复实例、提醒与 SQLite |
+| `packages/server` | Local API、认证与 SSE 实时同步 |
+| `packages/cli`、`packages/shared` | CLI / MCP 接口与共享契约 |
+| `skills/todocue` | 可分发的 Agent skill |
+
+开发时运行 `npm run dev:serve`；使用 `TODOCUE_HOME` 可隔离开发数据。GitHub Actions 在推送 `vX.Y.Z` 标签后构建双架构安装包，完成签名、公证后发布 Release。
+
+[发布指南](docs/github-release.md) · [实现与验收](docs/implementation-plan.md) · [提交 Issue](https://github.com/NanmiCoder/TodoCue/issues)
+
+</details>
+
+## 许可证
+
+[MIT](LICENSE) © 2026 NanmiCoder。欢迎使用、修改和贡献。
