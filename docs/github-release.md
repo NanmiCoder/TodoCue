@@ -135,6 +135,16 @@ npm run macos:dmg
 - actionlint 1.7.12 工作流校验、Shell 语法检查和 release dry run 通过。
 - 发布脚本 17 项、TypeScript 38 项、Swift 33 项测试通过。
 - Apple Silicon DMG 重新构建成功，Developer ID 签名验证通过；App 与通知辅助程序均读取 `0.1.0`，最终 DMG 的 SHA-256 与旁置校验文件一致。
-- Intel 的 App 与通知辅助程序在本机使用 Xcode 26.5 交叉编译成功；未在 Intel runner 上执行或完成该架构的完整 DMG 验收。
-- 实际确认 `--release` 缺少公证 profile 时立即失败，既有 DMG 不被覆盖。本轮没有提交 App 公证或创建 GitHub Release；工作流尚待提交推送。
-- 五个 Repository Secrets 已配置完成。证书导出文件验证包含预期的 Developer ID 和私钥；Apple `notarytool store-credentials` 已验证公证邮箱、专用密码和 Team ID 匹配。专用密码标记为 `TodoCue GitHub Release`，参考项目的 `cc-haha` 密码保留。验证使用的临时证书、密码文件和钥匙串已清理；仍需推送工作流后进行首次云端试跑。
+- Intel 的 App 与通知辅助程序在本机使用 Xcode 26.5 交叉编译成功；完整 Intel DMG 在下述云端试跑中验收。
+- 实际确认 `--release` 缺少公证 profile 时立即失败，既有 DMG 不被覆盖。
+- 五个 Repository Secrets 已配置完成。证书导出文件验证包含预期的 Developer ID 和私钥；Apple `notarytool store-credentials` 已验证公证邮箱、专用密码和 Team ID 匹配。专用密码标记为 `TodoCue GitHub Release`，参考项目的 `cc-haha` 密码保留。验证使用的临时证书、密码文件和钥匙串已清理。
+
+### GitHub Actions 验收（2026-09-07）
+
+[首次云端试跑](https://github.com/NanmiCoder/TodoCue/actions/runs/34126522765) 使用提交 `593be20`，通过 `workflow_dispatch` 启动，约 9 分钟完成，结果为 `success`。
+
+- 版本、发布说明、五个 Secrets 检查、发布脚本测试、TypeScript 测试与构建通过。
+- Apple Silicon 与 Intel 均在对应架构的 GitHub runner 上通过 33 项 Swift 测试，完成完整打包、Developer ID 签名、App 与 DMG 公证及票据装订。两个架构的内置 Node、SQLite 和 MCP 加载检查均通过。
+- 四份 Apple 公证回执（两个架构各自的 App 和 DMG）均为 `Accepted`。
+- 下载后的两个 DMG 校验和一致；本机重新验证 DMG 与包内 App 的签名、公证票据和 Gatekeeper 均通过。主程序、通知辅助程序及内置 Node 的架构分别为 arm64 / x86_64，主 App 与通知辅助程序的版本均为 `0.1.0`。
+- 手动试跑的安装包保存在 Actions artifacts，不创建公开 Release。推送正式版本标签才会进入发布步骤。
