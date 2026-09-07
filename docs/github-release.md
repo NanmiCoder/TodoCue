@@ -162,3 +162,12 @@ npm run macos:dmg
 主分支推送与 PR 运行 `.github/workflows/quality.yml`：Linux 上执行 `npm run check`，macOS 上执行 Swift 测试。版本发布也执行同一套运行时门禁，两种架构分别运行 Swift 测试。
 
 本地统一入口为 `npm run check:macos`；其中 `test:smoke` 使用临时数据库和随机端口，启动真实 CLI/MCP 子进程，验收附件上传、图片读取、提醒事件与持久化重启。它不会读写日常 TodoCue 数据。涉及原生 UI 的变更还需完成 Computer Use 验收；[0.1.1 验收记录](qa/v0.1.1.md) 是本次版本的人工门禁记录。
+
+### 0.1.1 正式发布（2026-09-08）
+
+[发布流程](https://github.com/NanmiCoder/TodoCue/actions/runs/34147845206) 针对提交 `6a06b83` 全部成功，[v0.1.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.1) 已公开并成为 Latest。
+
+- 本地完整 133 项测试、真实 CLI/MCP 冒烟及 Computer Use 原生验收完成后，先推送主分支；[远程质量门禁](https://github.com/NanmiCoder/TodoCue/actions/runs/34147756979) 成功后才推送标签。
+- 两个架构分别通过 51 项 Swift 测试，完成 Developer ID 签名及 App/DMG 公证，四份回执均为 `Accepted`。
+- 公开 Release 的双架构 DMG、`SHA256SUMS`、正文和 Latest 状态已核对。下载后，两种 DMG 与包内 App 的签名、票据、Gatekeeper 和版本复核通过。
+- 原生用例、截图、通知授权边界和最终安装包校验和见 [0.1.1 验收记录](qa/v0.1.1.md)。
