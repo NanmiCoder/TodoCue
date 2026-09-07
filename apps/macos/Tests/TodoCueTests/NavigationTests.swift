@@ -10,7 +10,8 @@ final class NavigationTests: XCTestCase {
         model.openPanel()
         model.openToday()
         model.newTask()
-        XCTAssertEqual(requestedFocus, [false, false, true])
+        model.focusQuickAdd()
+        XCTAssertEqual(requestedFocus, [false, false, true, true])
     }
 
     @MainActor func testPanelIsNonactivatingAndDoesNotHideOnDeactivate() async {

@@ -3,17 +3,25 @@ import TodoCueKit
 
 /// Builds the secondary text line for a task row.
 enum TaskMeta {
-    static func line(for t: TodoTask, includeProject: Bool = true, includeDeadline: Bool = true) -> String {
-        var parts: [String] = []
-        if let at = t.scheduledAt { parts.append(TCDate.instantLabel(at)) }
-        else if let d = t.scheduledDate { parts.append(TCDate.dateLabel(d)) }
+    enum Kind: Hashable { case scheduled, deadline, project, estimate }
+    struct Item: Identifiable {
+        let id: Kind
+        let text: String
+    }
+
+    static func items(for t: TodoTask, includeProject: Bool = true, includeDeadline: Bool = true) -> [Item] {
+        var parts: [Item] = []
+        if let value = scheduledLabel(t) { parts.append(Item(id: .scheduled, text: value)) }
         if includeDeadline {
-            if let at = t.dueAt { parts.append("截止 " + TCDate.instantLabel(at)) }
-            else if let d = t.dueDate { parts.append("截止 " + TCDate.dateLabel(d)) }
+            if let value = dueLabel(t) { parts.append(Item(id: .deadline, text: "截止 " + value)) }
         }
-        if includeProject, let p = t.project, !p.isEmpty { parts.append(p) }
-        if let m = t.estimateMinutes, m > 0 { parts.append(estimateLabel(m)) }
-        return parts.joined(separator: " · ")
+        if includeProject, let p = t.project, !p.isEmpty { parts.append(Item(id: .project, text: p)) }
+        if let m = t.estimateMinutes, m > 0 { parts.append(Item(id: .estimate, text: estimateLabel(m))) }
+        return parts
+    }
+
+    static func line(for t: TodoTask, includeProject: Bool = true, includeDeadline: Bool = true) -> String {
+        items(for: t, includeProject: includeProject, includeDeadline: includeDeadline).map(\.text).joined(separator: " · ")
     }
 
     static func estimateLabel(_ m: Int) -> String {

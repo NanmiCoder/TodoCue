@@ -53,9 +53,9 @@ PLIST
 }
 
 make_icon() {
-  # Cheap programmatic icon: mint rounded square with a check mark, via Swift + CoreGraphics.
+  # Native vector mark, shared with the open-ring cue in the panel and menu bar.
   local iconset="$OUT/AppIcon.iconset"
-  [[ -f "$OUT/AppIcon.icns" ]] && return 0
+  [[ -f "$OUT/AppIcon.icns" && "$OUT/AppIcon.icns" -nt "$0" ]] && return 0
   mkdir -p "$iconset"
   cat > "$OUT/icon.swift" <<'SWIFT'
 import AppKit
@@ -66,14 +66,20 @@ for (name, px) in sizes {
     img.lockFocus()
     let r = NSRect(x: 0, y: 0, width: px, height: px).insetBy(dx: CGFloat(px)*0.06, dy: CGFloat(px)*0.06)
     let path = NSBezierPath(roundedRect: r, xRadius: CGFloat(px)*0.22, yRadius: CGFloat(px)*0.22)
-    NSColor(red: 0.05, green: 0.06, blue: 0.08, alpha: 1).setFill(); path.fill()
-    let check = NSBezierPath()
-    check.lineWidth = CGFloat(px) * 0.11
-    check.lineCapStyle = .round; check.lineJoinStyle = .round
-    check.move(to: NSPoint(x: CGFloat(px)*0.28, y: CGFloat(px)*0.50))
-    check.line(to: NSPoint(x: CGFloat(px)*0.44, y: CGFloat(px)*0.34))
-    check.line(to: NSPoint(x: CGFloat(px)*0.73, y: CGFloat(px)*0.66))
-    NSColor(red: 0.40, green: 0.90, blue: 0.75, alpha: 1).setStroke(); check.stroke()
+    NSGradient(starting: NSColor(red: 0.96, green: 0.98, blue: 0.97, alpha: 1),
+               ending: NSColor(red: 0.76, green: 0.82, blue: 0.81, alpha: 1))!.draw(in: path, angle: -60)
+    NSColor.white.withAlphaComponent(0.8).setStroke()
+    path.lineWidth = max(0.5, CGFloat(px) * 0.01); path.stroke()
+    let ring = NSBezierPath()
+    ring.appendArc(withCenter: NSPoint(x: CGFloat(px) * 0.47, y: CGFloat(px) * 0.50),
+                   radius: CGFloat(px) * 0.235, startAngle: 38, endAngle: 322)
+    ring.lineWidth = CGFloat(px) * 0.085
+    ring.lineCapStyle = .round
+    let ink = NSColor(red: 0.06, green: 0.36, blue: 0.30, alpha: 1)
+    ink.setStroke(); ring.stroke()
+    ink.setFill()
+    let dot = CGFloat(px) * 0.115
+    NSBezierPath(ovalIn: NSRect(x: CGFloat(px) * 0.70 - dot / 2, y: CGFloat(px) * 0.50 - dot / 2, width: dot, height: dot)).fill()
     img.unlockFocus()
     let rep = NSBitmapImageRep(data: img.tiffRepresentation!)!
     rep.size = NSSize(width: px, height: px)

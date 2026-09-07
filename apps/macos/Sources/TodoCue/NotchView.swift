@@ -54,8 +54,8 @@ struct NotchRootView: View {
         }
         .animation(state.reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.32, dampingFraction: 0.86), value: state.expanded)
         .preferredColorScheme(.dark)
-        .environment(\.accent, Color(nsColor: .systemMint))
-        .tint(Color(nsColor: .systemMint))
+        .environment(\.accent, Theme.accent(.dark))
+        .tint(Theme.accent(.dark))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("TodoCue 刘海快览")
     }
@@ -67,7 +67,8 @@ struct NotchRootView: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center) {
+                CueMark().scaleEffect(0.8).frame(width: 16, height: 16)
                 Text("今日剩余")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.65))
@@ -84,7 +85,7 @@ struct NotchRootView: View {
                 Button("查看全部") { state.onOpenAll?() }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(nsColor: .systemMint))
+                    .foregroundStyle(Theme.accent(.dark))
                     .accessibilityLabel("查看全部今日任务")
             }
             if let next = model.next?.next {
@@ -115,7 +116,7 @@ private struct NotchNextRow: View {
         Button { state.onOpenTask?(candidate.task.id) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.forward.circle.fill")
-                    .foregroundStyle(Color(nsColor: .systemMint))
+                    .foregroundStyle(Theme.accent(.dark))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(candidate.task.title)
                         .font(.system(size: 13, weight: .semibold))

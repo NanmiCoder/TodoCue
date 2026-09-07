@@ -17,7 +17,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         if let b = item.button {
-            b.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: "TodoCue")
+            b.image = Self.cueImage()
             b.imagePosition = .imageLeading
             b.setAccessibilityLabel("TodoCue 任务")
         }
@@ -26,6 +26,23 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         model.$today.map(\.remaining).removeDuplicates().sink { [weak self] n in self?.updateTitle(n) }.store(in: &cancellables)
         model.$connectionState.sink { [weak self] _ in self?.updateTitle(model.remaining) }.store(in: &cancellables)
         updateTitle(0)
+    }
+
+    private static func cueImage() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            NSColor.black.setStroke()
+            let ring = NSBezierPath()
+            ring.appendArc(withCenter: NSPoint(x: 8, y: 9), radius: 6, startAngle: 38, endAngle: 322)
+            ring.lineWidth = 1.7
+            ring.lineCapStyle = .round
+            ring.stroke()
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 13, y: 7.3, width: 3.4, height: 3.4)).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "TodoCue"
+        return image
     }
 
     private func updateTitle(_ n: Int) {

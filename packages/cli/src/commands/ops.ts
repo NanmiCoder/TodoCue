@@ -9,6 +9,8 @@ import { RUNTIME_VERSION, TodoCueError, ErrorCodes, type DoctorCheck } from "@to
 import { HelperNotifier, TaskEngine, defaultHelperCandidates, openDatabase } from "@todocue/engine";
 import {
   TodoCueClient,
+  appBundle,
+  packagedHelper,
   ensureHome,
   isRuntimeAlive,
   resolveHome,
@@ -16,6 +18,7 @@ import {
   startRuntime,
   type RuntimePaths,
 } from "@todocue/server";
+import { bootstrapRuntime, installCliWrapper } from "../bootstrap.js";
 import { print, type OutputOptions } from "../output.js";
 import {
   installLaunchAgent,
@@ -50,32 +53,6 @@ async function copyBundle(src: string, dest: string): Promise<void> {
   await execFileP("/usr/bin/ditto", [src, dest]);
 }
 
-/** Write ~/.todocue/bin/todocue (a tiny wrapper) and link it into a PATH dir when possible. */
-function installCliWrapper(paths: RuntimePaths): string {
-  const wrapper = path.join(paths.bin, "todocue");
-  fs.writeFileSync(wrapper, `#!/bin/sh\nexec "${process.execPath}" "${cliEntryPath()}" "$@"\n`, { mode: 0o755 });
-  for (const dir of ["/opt/homebrew/bin", "/usr/local/bin"]) {
-    try {
-      fs.accessSync(dir, fs.constants.W_OK);
-      const link = path.join(dir, "todocue");
-      try {
-        const existing = fs.readlinkSync(link);
-        if (existing === wrapper) return `${wrapper} (linked from ${link})`;
-        fs.unlinkSync(link);
-      } catch {
-        /* not a symlink or missing */
-      }
-      if (!fs.existsSync(link)) {
-        fs.symlinkSync(wrapper, link);
-        return `${wrapper} (linked from ${link})`;
-      }
-    } catch {
-      /* not writable */
-    }
-  }
-  return `${wrapper} (add ${paths.bin} to PATH)`;
-}
-
 async function waitForRuntime(paths: RuntimePaths, timeoutMs: number): Promise<boolean> {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until) {
@@ -86,6 +63,11 @@ async function waitForRuntime(paths: RuntimePaths, timeoutMs: number): Promise<b
 }
 
 export function registerOpsCommands(program: Command, ctx: Ctx): void {
+  program.command("bootstrap", { hidden: true }).description("prepare the packaged app runtime")
+    .action(async () => {
+      const result = await bootstrapRuntime(resolveHome(ctx.home()));
+      print(ctx.out(), result, () => "TodoCue runtime is ready");
+    });
   program
     .command("serve")
     .description("run the runtime in the foreground (used by the LaunchAgent)")
@@ -165,8 +147,25 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
       const paths = runtimePaths(resolveHome(ctx.home()));
       ensureHome(paths);
       const steps: { step: string; ok: boolean; detail: string }[] = [];
+      if (appBundle()) {
+        const result = await bootstrapRuntime(paths.home);
+        const authorization = opts.skipNotifications ? null : await ctx.client().requestNotificationAuthorization();
+        print(ctx.out(), { ...result, authorization }, () => `TodoCue installed; data: ${paths.home}`);
+        return;
+      }
       const helperSrc = builtApp("TodoCueNotifier");
       const appSrc = builtApp("TodoCue");
+      if (appSrc && !opts.skipApps && fs.existsSync(path.join(appSrc, "Contents/Resources/runtime/bin/node"))) {
+        let applications = path.join(os.homedir(), "Applications");
+        try { fs.accessSync("/Applications", fs.constants.W_OK); applications = "/Applications"; } catch { /* user-local installation */ }
+        const dest = path.join(applications, "TodoCue.app");
+        await copyBundle(appSrc, dest);
+        const runtime = path.join(dest, "Contents/Resources/runtime");
+        await execFileP(path.join(runtime, "bin/node"), [path.join(runtime, "packages/cli/dist/index.js"), "--home", paths.home, "--json", "bootstrap"], { timeout: 90_000 });
+        const authorization = opts.skipNotifications ? null : await ctx.client().requestNotificationAuthorization();
+        print(ctx.out(), { app: dest, home: paths.home, running: true, authorization }, () => `installed ${dest}; data: ${paths.home}`);
+        return;
+      }
       if (!opts.skipApps) {
         if (helperSrc) {
           await copyBundle(helperSrc, path.join(paths.bin, "TodoCueNotifier.app"));
@@ -182,7 +181,7 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
           steps.push({ step: "app", ok: false, detail: "apps/macos/build/TodoCue.app not found; run `npm run macos:build`" });
         }
       }
-      const wrapper = installCliWrapper(paths);
+      const wrapper = installCliWrapper(paths, process.execPath, cliEntryPath());
       steps.push({ step: "cli", ok: true, detail: wrapper });
       const plist = await installLaunchAgent(paths, {
         nodePath: process.execPath,
@@ -219,7 +218,7 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
       add("database", fs.existsSync(paths.database), fs.existsSync(paths.database) ? paths.database : "no database yet (created on first runtime start)");
       const la = await launchAgentStatus(paths);
       add("launchAgent", la.installed && la.loaded, la.detail, la.installed ? (la.loaded ? "ok" : "warn") : "warn");
-      const notifier = new HelperNotifier({ searchPaths: [...defaultHelperCandidates(home), path.join(repoRoot(), "apps/macos/build/TodoCueNotifier.app/Contents/MacOS/TodoCueNotifier")] });
+      const notifier = new HelperNotifier({ searchPaths: [packagedHelper() ?? "", ...defaultHelperCandidates(home), path.join(repoRoot(), "apps/macos/build/TodoCueNotifier.app/Contents/MacOS/TodoCueNotifier")] });
       const helper = notifier.resolveHelper();
       add("notifierHelper", !!helper, helper ?? "TodoCueNotifier not found; reminders fall back to osascript (no click-through). Run `npm run macos:build && todocue install`");
       const alive = await isRuntimeAlive(paths);

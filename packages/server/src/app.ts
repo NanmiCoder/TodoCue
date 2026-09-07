@@ -71,7 +71,9 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     }
   }, 15_000);
   pingTimer.unref?.();
-  app.addHook("onClose", async () => {
+  // Close hijacked SSE sockets before Fastify waits for active connections.
+  // onClose is too late: a visible app would otherwise keep shutdown pending.
+  app.addHook("preClose", async () => {
     clearInterval(pingTimer);
     for (const c of sseClients) {
       try {

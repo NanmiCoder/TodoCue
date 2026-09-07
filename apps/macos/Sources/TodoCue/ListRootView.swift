@@ -7,16 +7,11 @@ struct ListRootView: View {
     @State private var completedExpanded = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            TabBarView()
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                .padding(.bottom, 12)
+        VStack(spacing: 10) {
+            TabBarView().padding(.horizontal, 18)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    if model.tab == .today, let n = model.next?.next {
-                        NextCard(candidate: n)
-                    }
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    if model.tab == .today, let next = model.next?.next { NextCard(candidate: next) }
                     switch model.tab {
                     case .today: TodayListView()
                     case .upcoming: UpcomingListView()
@@ -26,44 +21,49 @@ struct ListRootView: View {
                         CompletedTodayView(expanded: $completedExpanded)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .id(model.tab)
             .scrollIndicators(.automatic)
-            Divider().opacity(0.4)
+            .cueSurface(radius: 18)
+            .padding(.horizontal, 10)
             QuickAddView()
         }
     }
 }
 
-/// Equal-width, persistent navigation stays reachable when the task list scrolls.
+/// A single navigation lens with a sliding selection; content never changes the hit targets.
 private struct TabBarView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
+    @Namespace private var selection
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2) {
             ForEach(PanelTab.allCases) { tab in
-                Button { model.tab = tab } label: {
-                    Text(tab.label)
-                        .font(.system(size: 12, weight: model.tab == tab ? .semibold : .medium))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 29)
-                        .contentShape(RoundedRectangle(cornerRadius: 7))
+                Button { withAnimation(Theme.interaction) { model.tab = tab } } label: {
+                    Text(tab.label).font(.system(size: 12, weight: model.tab == tab ? .semibold : .medium))
+                        .frame(maxWidth: .infinity).frame(height: 32)
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(model.tab == tab ? accent : .secondary)
-                .background(model.tab == tab ? Color(nsColor: .controlBackgroundColor) : .clear,
-                            in: RoundedRectangle(cornerRadius: 7))
-                .shadow(color: .black.opacity(model.tab == tab ? 0.05 : 0), radius: 2, y: 1)
+                .foregroundStyle(model.tab == tab ? Color.primary : .secondary)
+                .background {
+                    if model.tab == tab {
+                        Capsule().fill(Theme.surface)
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+                            .shadow(color: .black.opacity(0.055), radius: 3, y: 1)
+                            .matchedGeometryEffect(id: "selected-tab", in: selection)
+                    }
+                }
                 .accessibilityLabel(tab.label)
                 .accessibilityAddTraits(model.tab == tab ? .isSelected : [])
             }
         }
         .padding(3)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("任务视图切换")
+        .background(Color.primary.opacity(0.045), in: Capsule())
+        .accessibilityElement(children: .contain).accessibilityLabel("任务视图切换")
     }
 }
 
@@ -71,46 +71,49 @@ struct NextCard: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     let candidate: NextCandidate
+    @State private var hovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("接下来", systemImage: "arrow.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(accent)
-                Spacer()
-                Text(candidate.group.label)
-                    .font(.system(size: 11))
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 6) {
+                Circle().fill(accent).frame(width: 5, height: 5)
+                Text("下一步").font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
+                Spacer(minLength: 4)
+                Text(candidate.group.label).font(.system(size: 10, weight: .medium))
                     .foregroundStyle(candidate.task.isOverdue ? Theme.overdue : .secondary)
             }
-            HStack(alignment: .top, spacing: 10) {
-                CheckButton(task: candidate.task)
-                Button { model.routes.append(.detail(candidate.task.id)) } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(candidate.task.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                        let meta = TaskMeta.line(for: candidate.task, includeDeadline: !candidate.task.isOverdue)
-                        if candidate.task.isOverdue, let due = TaskMeta.dueLabel(candidate.task) {
-                            (Text("截止 " + due).foregroundColor(Theme.overdue)
-                             + Text(meta.isEmpty ? "" : " · " + meta).foregroundColor(.secondary))
-                                .font(.system(size: 12)).lineLimit(2)
-                        } else if !meta.isEmpty {
-                            Text(meta).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
-                        }
-                    }
+            Button { model.routes.append(.detail(candidate.task.id)) } label: {
+                Text(candidate.task.title)
+                    .font(.system(size: 17, weight: .semibold)).tracking(-0.3)
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).accessibilityLabel("打开 \(candidate.task.title)")
+            TaskMetadataView(task: candidate.task, emphasized: true)
+            HStack {
+                Button { model.complete(candidate.task) } label: { Label("完成", systemImage: "checkmark") }
+                    .buttonStyle(CueButtonStyle(prominent: true))
+                    .disabled(!model.canWrite || model.completingTaskIDs.contains(candidate.task.id))
+                    .accessibilityLabel("完成 \(candidate.task.title)")
+                Spacer()
+                Button { model.routes.append(.detail(candidate.task.id)) } label: {
+                    Image(systemName: "chevron.right").foregroundStyle(accent)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("打开 \(candidate.task.title)")
+                .buttonStyle(QuietIconButtonStyle()).accessibilityLabel("查看下一步详情")
             }
         }
-        .padding(14)
-        .background(accent.opacity(0.075), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(accent.opacity(0.18), lineWidth: 0.5))
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(accent.opacity(hovered ? 0.10 : 0.065))
+        }
+        .overlay(alignment: .leading) {
+            Capsule().fill(accent.opacity(0.5)).frame(width: 2, height: 22).padding(.leading, -1)
+        }
+        .onHover { hovered = $0 }
+        .animation(Theme.interaction, value: hovered)
     }
 }
 
@@ -132,16 +135,37 @@ struct SectionHeader: View {
 }
 
 struct EmptyStateView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.accent) private var accent
     let text: String
     var systemImage = "checkmark.seal"
+    var allowsAdd = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: systemImage).font(.system(size: 26)).foregroundStyle(.secondary)
-            Text(text).font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        VStack(spacing: 18) {
+            ZStack {
+                Circle().stroke(accent.opacity(0.065), lineWidth: 1).frame(width: 108, height: 108)
+                Circle().stroke(accent.opacity(0.12), lineWidth: 1).frame(width: 80, height: 80)
+                Circle().fill(accent.opacity(0.07)).frame(width: 56, height: 56)
+                Image(systemName: systemImage).font(.system(size: 22, weight: .light)).foregroundStyle(accent)
+            }
+            .accessibilityHidden(true)
+            VStack(spacing: 8) {
+                Text(text.components(separatedBy: "\n").first ?? text)
+                    .font(.system(size: 17, weight: .medium)).tracking(-0.3)
+                if text.contains("\n") {
+                    Text(text.components(separatedBy: "\n").dropFirst().joined(separator: "\n"))
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            if allowsAdd {
+                Button { model.focusQuickAdd() } label: { Label("记下一件事", systemImage: "plus") }
+                    .buttonStyle(CueButtonStyle()).disabled(!model.canWrite)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, 34)
     }
 }
 
@@ -161,10 +185,10 @@ struct TodayListView: View {
         } else if model.connectionState == .noRuntime && model.today.date.isEmpty {
             EmptyStateView(text: "连接后，任务会显示在这里", systemImage: "tray")
         } else if sections.isEmpty && model.next?.next == nil {
-            EmptyStateView(text: "今天的任务都安排好了\n添加一件想做的小事", systemImage: "checkmark.circle")
+            EmptyStateView(text: model.today.completed.isEmpty ? "从一件小事开始\n记下来，就不用一直惦记。" : "今天已清空\n完成了 \(model.today.completed.count) 件事，留点时间给自己。", systemImage: model.today.completed.isEmpty ? "plus" : "checkmark", allowsAdd: true)
         } else {
             ForEach(sections, id: \.0) { section, items in
-                VStack(spacing: 6) {
+                VStack(spacing: 2) {
                     SectionHeader(title: section.label, count: items.count, color: section == .overdue ? Theme.overdue : .secondary)
                     ForEach(items) { item in
                         TaskRowView(task: item.task, reasons: item.reasons)
@@ -188,7 +212,7 @@ struct UpcomingListView: View {
             EmptyStateView(text: "没有即将到来的任务", systemImage: "calendar")
         } else {
             ForEach(groups, id: \.0) { date, tasks in
-                VStack(spacing: 6) {
+                VStack(spacing: 2) {
                     SectionHeader(title: TCDate.dateLabel(date), count: tasks.count)
                     ForEach(tasks) { t in TaskRowView(task: t, reasons: []) }
                 }
@@ -199,9 +223,12 @@ struct UpcomingListView: View {
 
 struct AllListView: View {
     @EnvironmentObject var model: AppModel
+    @State private var query = ""
 
     private var groups: [(String, [TodoTask])] {
-        let dict = Dictionary(grouping: model.allTasks) { $0.project ?? "" }
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tasks = model.allTasks.filter { term.isEmpty || [$0.title, $0.project ?? "", $0.notes ?? ""].contains { $0.localizedStandardContains(term) } }
+        let dict = Dictionary(grouping: tasks) { $0.project ?? "" }
         let keys = dict.keys.sorted { a, b in
             if a.isEmpty != b.isEmpty { return b.isEmpty } // named projects first
             return a < b
@@ -210,13 +237,22 @@ struct AllListView: View {
     }
 
     var body: some View {
-        if model.allTasks.isEmpty {
-            EmptyStateView(text: "没有待办任务", systemImage: "tray")
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("搜索任务、项目或备注", text: $query).textFieldStyle(.plain).accessibilityLabel("搜索任务")
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                    .buttonStyle(.plain).accessibilityLabel("清除搜索")
+            }
+        }
+        .font(.system(size: 12)).padding(10).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+        if groups.isEmpty {
+            EmptyStateView(text: query.isEmpty ? "所有事情，都已妥当\n有新想法时，随时记下来。" : "没有找到相关任务\n试试其他关键词。", systemImage: query.isEmpty ? "tray" : "magnifyingglass", allowsAdd: query.isEmpty)
         } else {
             ForEach(groups, id: \.0) { project, tasks in
-                VStack(spacing: 6) {
+                VStack(spacing: 2) {
                     SectionHeader(title: project.isEmpty ? "未分组" : project, count: tasks.count)
-                    ForEach(tasks) { t in TaskRowView(task: t, reasons: [], showProject: false) }
+                    ForEach(tasks) { t in TaskRowView(task: t, reasons: [], showProject: false, compact: true) }
                 }
             }
         }
@@ -227,52 +263,70 @@ struct QuickAddView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @FocusState private var focused: Bool
+    private var hasText: Bool { !model.quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "plus").font(.system(size: 14, weight: .medium)).foregroundStyle(accent)
-                .accessibilityHidden(true)
-            TextField("添加到今天…", text: $model.quickAddText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .focused($focused)
-                .onSubmit { model.quickAdd() }
-                .disabled(!model.canWrite || model.isQuickAdding)
-                .accessibilityLabel("快速添加到今天")
-            if model.isQuickAdding {
-                ProgressView().controlSize(.small)
-            } else if !model.quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Button { model.quickAdd() } label: { Image(systemName: "arrow.up.circle.fill") }
-                    .buttonStyle(QuietIconButtonStyle())
-                    .foregroundStyle(accent)
-                    .help("添加到今天（回车）")
-                    .accessibilityLabel("添加到今天")
-                    .disabled(!model.canWrite)
-            }
-            Button {
-                var draft = model.savedDraft ?? TaskDraft()
-                if !model.quickAddText.isEmpty {
-                    draft.title = model.quickAddText
-                    draft.scheduledMode = .date
-                    model.quickAddText = ""
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "plus").font(.system(size: 16, weight: .light)).foregroundStyle(accent)
+                    .frame(width: 24).accessibilityHidden(true)
+                TextField("添加到今天…", text: $model.quickAddText,
+                          prompt: Text("添加到今天…").foregroundColor(.secondary))
+                    .textFieldStyle(.plain).font(.system(size: 13))
+                    .focused($focused).onSubmit { model.quickAdd() }
+                    .disabled(!model.canWrite || model.isQuickAdding)
+                    .accessibilityLabel("快速添加到今天")
+                if model.isQuickAdding { ProgressView().controlSize(.small) }
+                else if hasText {
+                    Button { model.quickAdd() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 23)).foregroundStyle(accent) }
+                        .buttonStyle(.plain).accessibilityLabel("添加到今天").help("添加到今天（回车）")
+                        .disabled(!model.canWrite)
+                } else {
+                    Button(action: expand) { Image(systemName: "square.and.pencil") }
+                        .buttonStyle(QuietIconButtonStyle()).foregroundStyle(.secondary)
+                        .accessibilityLabel(model.savedDraft == nil ? "展开完整表单" : "继续草稿")
+                        .help(model.savedDraft == nil ? "展开完整表单（⌘N）" : "继续未保存的草稿")
+                        .disabled(!model.canWrite)
                 }
-                model.presentForm(draft)
-            } label: {
-                Image(systemName: model.savedDraft == nil ? "slider.horizontal.3" : "square.and.pencil")
             }
-            .buttonStyle(QuietIconButtonStyle())
-            .help(model.savedDraft == nil ? "展开完整表单（⌘N）" : "继续未保存的草稿")
-            .accessibilityLabel(model.savedDraft == nil ? "展开完整表单" : "继续草稿")
-            .disabled(!model.canWrite || model.isQuickAdding)
+            if focused || hasText {
+                HStack {
+                    Label("今天", systemImage: "calendar").foregroundStyle(.secondary)
+                    Spacer()
+                    Button("添加详情", action: expand).buttonStyle(.plain).foregroundStyle(accent)
+                        .disabled(!model.canWrite || model.isQuickAdding)
+                    Text("↵").font(.system(size: 12)).foregroundStyle(.tertiary).accessibilityHidden(true)
+                }
+                .font(.system(size: 11))
+                .padding(.leading, 4)
+                .transition(.opacity)
+            }
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 6)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(focused ? accent.opacity(0.6) : .clear, lineWidth: 1))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12).padding(.vertical, 11)
+        .background(Theme.insetSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(focused ? accent.opacity(0.55) : Color.white.opacity(0.12), lineWidth: focused ? 1 : 0.5))
+        .padding(.horizontal, 12).padding(.bottom, 12)
+        .animation(Theme.interaction, value: focused || hasText)
         .onChange(of: model.quickAddFocusRequest) { _, _ in focused = true }
+        .onChange(of: model.isQuickAdding) { _, adding in
+            if !adding {
+                DispatchQueue.main.async {
+                    // Restore the insertion point only while the user is still in this panel.
+                    if NSApp.keyWindow is SidePanelWindow { focused = true }
+                }
+            }
+        }
         .onAppear { if model.quickAddFocusRequest > 0 { focused = true } }
+    }
+
+    private func expand() {
+        var draft = model.savedDraft ?? TaskDraft()
+        if hasText {
+            draft.title = model.quickAddText
+            draft.scheduledMode = .date
+            model.quickAddText = ""
+        }
+        model.presentForm(draft)
     }
 }
 

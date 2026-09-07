@@ -17,6 +17,7 @@ import {
 import { buildApp } from "./app.js";
 import { ensureHome, loadOrCreateToken, readJsonFile, resolveHome, resolvePort, runtimePaths, writeSecretJson, type RuntimePaths } from "./config.js";
 import { createLogger, type Logger } from "./logger.js";
+import { packagedHelper } from "./bundle.js";
 
 export interface RuntimeOptions {
   home?: string;
@@ -89,7 +90,7 @@ export async function startRuntime(opts: RuntimeOptions = {}): Promise<RunningRu
   const notifier =
     opts.notifier ??
     new HelperNotifier({
-      searchPaths: [...defaultHelperCandidates(paths.home), repoHelperCandidate() ?? ""].filter(Boolean),
+      searchPaths: [packagedHelper() ?? "", ...defaultHelperCandidates(paths.home), repoHelperCandidate() ?? ""].filter(Boolean),
       log: (m) => logger.info(m),
     });
   const scheduler = new Scheduler({ engine, notifier, tickMs: opts.tickMs, log: (m) => logger.info(m) });

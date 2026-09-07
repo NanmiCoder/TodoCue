@@ -14,7 +14,11 @@ Minimum macOS 14, SwiftPM only (no Xcode project), no third-party dependencies.
 | `Tests/TodoCueKitTests` | Decoding + SSE parser tests against docs/api.md fixtures |
 | `build/` | Output of `scripts/build-macos.sh` (`TodoCue.app`, `TodoCueNotifier.app`) |
 
-## Build & run
+## Installable DMG
+
+From the repository root, run `npm run macos:dmg`. The resulting DMG contains a standalone `TodoCue.app` plus an Applications shortcut. Drag the app into `/Applications` and open it: it installs its bundled runtime as a LaunchAgent and a user-local CLI automatically. No separately installed Node or source checkout is required. Persistent data stays in `~/.todocue/` when the app is removed or replaced. See [installation details](../../docs/macos-install.md).
+
+## Swift development build & run
 
 ```bash
 cd apps/macos
@@ -26,7 +30,7 @@ open apps/macos/build/TodoCue.app                     # shows the side panel
 open apps/macos/build/TodoCue.app --args --background # menu bar only (what a login-item launch does)
 ```
 
-Both bundles are ad-hoc signed (`codesign --sign -`), `LSUIElement=true`, and carry a programmatic
+Plain Swift build bundles are ad-hoc signed (`codesign --sign -`), `LSUIElement=true`, and carry a programmatic
 icon. The app registers the `todocue` URL scheme (`CFBundleURLTypes`).
 
 The app reads `~/.todocue/connection.json` (or `$TODOCUE_HOME/connection.json`) for the base URL and
@@ -63,6 +67,12 @@ Expected install locations searched by `todocue install` / `doctor`:
 
 ## Behaviour notes
 
+The macOS 26 design uses one native `NSGlassEffectView` for the floating shell, titanium neutrals,
+an open-ring Cue mark, a real daily progress ring and one emphasized next task. Readable content
+surfaces stay separate from the glass navigation plane. macOS 14/15 use the existing visual-effect fallback.
+Quick add expands in place; the All view searches task titles/projects/notes; detail actions stay at the
+bottom; date/repeat options unfold only when needed. See [design rationale and validation](../../docs/design/liquid-glass.md).
+
 - **Notch quick-look** exists only on screens where `NSScreen.safeAreaInsets.top > 0`. The window is a
   non-activating panel above the status bar; collapsed it is just the notch width + 10 pt each side.
   Hover ≥ 200 ms expands (260 ms), leaving hot zone + panel for 350 ms collapses (180 ms).
@@ -70,8 +80,11 @@ Expected install locations searched by `todocue install` / `doctor`:
   the pointer is near the top edge (no Accessibility permission needed).
 - **Fullscreen heuristic**: auto-expand is suppressed when the frontmost app owns an on-screen window
   whose size equals the notch screen's full frame (`CGWindowListCopyWindowInfo`). Toggle in settings.
-- **Side panel**: 380×680 pt, 12 pt from the top-right of the visible frame of the screen under the mouse,
-  clamped on small screens; draggable; The panel stays visible when you work in another app. Showing it does not activate TodoCue;
+- **Side panel**: defaults to 340×680 pt, 12 pt from the top-right of the visible frame of the screen under the mouse.
+  Drag the left grip or a window edge to resize between 300–600 pt wide; double-click the grip to reset to 340 pt.
+  Width is saved in the app's user preferences and restored on reopening/relaunch. The grip also supports accessibility increment/decrement.
+  Text wraps and control groups flow onto another row at narrow widths, including the active multiline editor without losing selection.
+  The panel is clamped on small screens and remains draggable. It stays visible when you work in another app. Showing it does not activate TodoCue;
   only an explicit editing action requests keyboard input. Close with the × button or Esc while the
   panel has keyboard focus. Pin protects the root panel from accidental Esc (× still closes it).
   Back / Esc from a form preserves the draft; ⌘N or “继续草稿” restores it. Repositions on screen/space changes.
@@ -81,7 +94,7 @@ Expected install locations searched by `todocue install` / `doctor`:
 
 ## Known limitations
 
-- The app is not sandboxed or notarized; ad-hoc signature only. The login item requires the `.app`
+- The app is not sandboxed. The DMG builder uses a Developer ID when available; notarization requires `TODOCUE_NOTARY_PROFILE`. Plain Swift builds use an ad-hoc signature. The login item requires the `.app`
   to stay at a stable path (copy it to `/Applications` or `~/Applications`).
 - Notification authorization is per bundle: the helper's bundle identifier `com.todocue.notifier` is what
   appears in System Settings › Notifications.

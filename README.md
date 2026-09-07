@@ -15,20 +15,29 @@ macOS UI / CLI / MCP  →  Local API (127.0.0.1, token)  →  Task Engine  →  
 | `packages/server` | Fastify Local API（令牌认证、幂等、SSE `/v1/events`）、运行时引导、HTTP 客户端 |
 | `packages/cli` | `todocue` CLI（任务命令、`serve`、`service`、`install`、`doctor`、`export`、`mcp`） |
 | `apps/macos` | SwiftUI + AppKit 客户端 `TodoCue.app` 与通知辅助程序 `TodoCueNotifier.app` |
+| `skills/todocue` | 可分发的 Agent skill：通过 CLI 管理任务、时间、重复与重试 |
 | `docs/` | `PLAN.md`（原始计划）、`implementation-plan.md`（实施计划与验收）、`api.md`（接口契约）、`agents.md`（Agent 接入） |
 
-## 快速开始
+## 安装使用（macOS）
+
+打开 DMG，将 **TodoCue.app 拖入 Applications**，再从应用程序中打开。App 自带 Node、CLI 和通知辅助程序，首次启动自动配置后台服务；需要提醒时，在设置中允许通知。
+
+任务数据固定保存在用户主目录下的 **`~/.todocue/todocue.sqlite`**。删除、覆盖或重新安装 App 不会删除该目录，重新打开后继续使用原有任务。设置页可以打开数据文件夹。安装、备份和卸载说明见 [macOS 安装](docs/macos-install.md)。
+
+## 从源码构建
 
 要求：macOS 14+，Node 24+（已在 Node 26 验证），Xcode 26 / Swift 6 命令行工具。
 
 ```bash
 npm install
 npm run build              # TypeScript 各包
-npm run macos:build        # 生成 apps/macos/build/TodoCue.app 与 TodoCueNotifier.app
-node packages/cli/dist/index.js install
+npm run macos:dmg          # 生成自带运行时的 App 和当前架构 DMG
+# 将 DMG 中的 TodoCue.app 拖入 Applications 后打开
 ```
 
-`todocue install` 会：创建 `~/.todocue`、把辅助程序复制到 `~/.todocue/bin`、把 `TodoCue.app` 装到 `~/Applications`、写入 `~/.todocue/bin/todocue` 命令并尝试链接到 `/opt/homebrew/bin`、安装并启动 LaunchAgent `com.todocue.runtime`、请求通知授权。之后打开 `~/Applications/TodoCue.app`。
+`npm run macos:dmg` 从锁文件安装生产依赖，下载并校验固定版本的官方 Node，使用可用的 Developer ID 签名（没有则使用临时签名），生成 `apps/macos/build/TodoCue-<version>-macOS-<arch>.dmg`。设置 `TODOCUE_NOTARY_PROFILE` 可使用已配置的 keychain profile 提交公证并装订票据。仅本机 Swift 开发构建仍可用 `npm run macos:build`。
+
+安装版 App 首次启动写入 `~/.todocue/bin/todocue`、尝试链接到可写的 PATH 目录，并安装 LaunchAgent `com.todocue.runtime`。关闭面板或退出 App 后，后台服务仍负责提醒。CLI、后台 Node 和辅助程序都来自已安装的 App。
 
 日常：
 
@@ -64,4 +73,8 @@ cd apps/macos && swift test  # TodoCueKit 解码 / SSE 解析
 
 ## Agent 接入
 
-见 `docs/agents.md`。简版：在 Claude Code 中 `claude mcp add todocue -- todocue mcp`。
+本机编程 Agent 默认使用 [TodoCue skill](skills/todocue/SKILL.md) 调用 `todocue --json …`。将 `skills/todocue` 安装到 Codex 或 Claude Code 的个人 skill 目录后，就能用自然语言管理 App 中的待办和提醒。
+
+也可选择 MCP：Codex 使用 `codex mcp add todocue -- todocue mcp`；Claude Code 使用 `claude mcp add --scope user --transport stdio todocue -- todocue mcp`。
+
+完整安装步骤、其他 Agent 接入方式和本机运行边界见 [Agent 接入](docs/agents.md)。

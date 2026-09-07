@@ -11,26 +11,29 @@ struct TaskDetailView: View {
 
     var body: some View {
         if let task {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(alignment: .top, spacing: 12) {
-                        CheckButton(task: task)
-                        Text(task.title)
-                            .font(.system(size: 17, weight: .semibold))
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            statusLine(task)
+                            Text(task.title)
+                                .font(.system(size: 22, weight: .semibold)).tracking(-0.45)
+                                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                            if let notes = task.notes, !notes.isEmpty {
+                                Text(notes).font(.system(size: 13)).lineSpacing(3)
+                                    .foregroundStyle(.secondary).textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        EditorSection(title: "安排", icon: "calendar") { fields(task) }
+                        if let sid = task.seriesId { seriesBlock(sid, task: task) }
+                        reminderLine(task).padding(.horizontal, 6)
                     }
-                    statusLine(task)
-                    if let n = task.notes, !n.isEmpty {
-                        Text(n).font(.system(size: 13)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    }
-                    fields(task)
-                    if let sid = task.seriesId { seriesBlock(sid, task: task) }
-                    reminderLine(task)
-                    actions(task)
+                    .padding(.horizontal, 12).padding(.bottom, 16)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                actions(task).padding(.horizontal, 16).padding(.vertical, 12)
             }
             .task(id: task.seriesId) { if let sid = task.seriesId { await model.loadSeries(sid) } }
         } else {
@@ -45,7 +48,7 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private func statusLine(_ t: TodoTask) -> some View {
-        HStack(spacing: 8) {
+        FlowLayout(spacing: 8) {
             switch t.status {
             case .todo:
                 if t.isOverdue { Label("逾期", systemImage: "exclamationmark.circle.fill").foregroundStyle(.red) }
@@ -78,10 +81,10 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func field(_ name: String, _ value: String?, _ icon: String) -> some View {
         if let value {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 Image(systemName: icon).frame(width: 16).foregroundStyle(.secondary)
                 Text(name).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
-                Text(value).textSelection(.enabled)
+                Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
         }
@@ -90,14 +93,13 @@ struct TaskDetailView: View {
     @ViewBuilder
     private func seriesBlock(_ sid: String, task: TodoTask) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            FlowLayout(spacing: 8) {
                 Image(systemName: "repeat").foregroundStyle(.secondary)
                 if let s = model.seriesById[sid] {
                     Text([s.rule.label, s.scheduledTime, s.status == .stopped ? "已停止" : nil].compactMap { $0 }.joined(separator: " · "))
                 } else {
                     Text("重复任务")
                 }
-                Spacer()
                 if model.seriesById[sid]?.status != .stopped {
                     Button("停止系列") { confirmStop = true }
                         .controlSize(.small)
@@ -136,31 +138,49 @@ struct TaskDetailView: View {
         }
     }
 
-    private func actions(_ t: TodoTask) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func actions(_ task: TodoTask) -> some View {
+        VStack(spacing: 10) {
             HStack(spacing: 8) {
-                if t.status == .todo {
-                    Button { model.complete(t); model.pop() } label: { Label("完成", systemImage: "checkmark") }
-                        .buttonStyle(.borderedProminent)
-                    Button { model.snooze(t) } label: { Label("稍后提醒", systemImage: "zzz") }
-                    Button { model.moveToTomorrow(t) } label: { Label("明天", systemImage: "arrow.turn.down.right") }
-                } else {
-                    Button { model.reopen(t) } label: { Label("重新打开", systemImage: "arrow.uturn.backward") }
-                        .buttonStyle(.borderedProminent)
-                }
-            }
-            HStack(spacing: 8) {
-                Button { model.edit(t) } label: { Label("编辑", systemImage: "pencil") }
-                if t.status == .todo {
-                    Button(role: .destructive) { model.cancel(t); model.pop() } label: { Label("取消", systemImage: "xmark") }
-                    if t.isSeriesInstance {
-                        Button { model.skip(t); model.pop() } label: { Label("跳过", systemImage: "forward") }
+                Button { model.edit(task) } label: { Label("编辑", systemImage: "pencil") }
+                    .buttonStyle(CueButtonStyle())
+                if task.status == .todo {
+                    Menu {
+                        ForEach([10, 30, 60], id: \.self) { minutes in
+                            Button("\(minutes) 分钟后") { model.snooze(task, minutes: minutes) }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Label("稍后提醒", systemImage: "bell.badge")
+                            Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+                        }
+                            .font(.system(size: 12, weight: .medium)).padding(.horizontal, 12).frame(height: 32)
+                            .background(Color.primary.opacity(0.055), in: Capsule())
                     }
-                }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel("稍后提醒")
+                    Spacer(minLength: 0)
+                    Menu {
+                        Button("改期到明天") { model.moveToTomorrow(task) }
+                        if task.isSeriesInstance {
+                            Button("跳过本次") { model.skip(task); model.pop() }
+                        }
+                        Divider()
+                        Button("取消任务", role: .destructive) { model.cancel(task); model.pop() }
+                    } label: { Image(systemName: "ellipsis").frame(width: 30, height: 32) }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30)
+                    .accessibilityLabel("更多任务操作")
+                } else { Spacer() }
             }
+            Button {
+                if task.status == .todo { model.complete(task); model.pop() }
+                else { model.reopen(task) }
+            } label: {
+                Label(task.status == .todo ? "标记完成" : "重新打开", systemImage: task.status == .todo ? "checkmark" : "arrow.uturn.backward")
+                    .frame(maxWidth: .infinity).padding(.vertical, 3)
+            }
+            .buttonStyle(CueButtonStyle(prominent: true))
+            .disabled(model.completingTaskIDs.contains(task.id))
         }
-        .controlSize(.regular)
         .disabled(!model.canWrite)
-        .padding(.top, 4)
     }
 }

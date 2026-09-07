@@ -9,19 +9,25 @@ final class SidePanelWindow: NSPanel {
 }
 
 @MainActor
-final class SidePanelController {
+final class SidePanelController: NSObject, NSWindowDelegate {
     let window: SidePanelWindow
     private let model: AppModel
+    private let defaults: UserDefaults
     private var presentationRevision = 0
     private var observers: [NSObjectProtocol] = []
     var onShow: (() -> Void)?
 
     var isVisible: Bool { window.isVisible }
 
-    init(model: AppModel) {
+    init(model: AppModel, defaults: UserDefaults = .standard) {
         self.model = model
-        window = SidePanelWindow(contentRect: NSRect(x: 0, y: 0, width: Theme.panelWidth, height: Theme.panelHeight),
-                                 styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
+        self.defaults = defaults
+        window = SidePanelWindow(contentRect: NSRect(x: 0, y: 0, width: Prefs.panelWidth(in: defaults), height: Theme.panelHeight),
+                                 styleMask: [.borderless, .resizable, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
+        super.init()
+        window.delegate = self
+        window.minSize = NSSize(width: Theme.panelMinWidth, height: Theme.panelHeight)
+        window.maxSize = NSSize(width: Theme.panelMaxWidth, height: Theme.panelHeight)
         window.isFloatingPanel = true
         window.becomesKeyOnlyIfNeeded = true
         window.hidesOnDeactivate = false
@@ -30,16 +36,25 @@ final class SidePanelController {
         window.isMovableByWindowBackground = true
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.hasShadow = true
+        // Tahoe's window shadow adds a rectangular rim even to transparent,
+        // borderless panels. Let the native glass define the visible perimeter.
+        if #available(macOS 26.0, *) { window.hasShadow = false }
+        else { window.hasShadow = true }
         window.isReleasedWhenClosed = false
         window.animationBehavior = .utilityWindow
         window.setAccessibilityLabel("TodoCue 任务面板")
 
         let root = PanelRootView().environmentObject(model)
         let hosting = NSHostingView(rootView: root)
+        // The window proposes the width; long content must not impose an intrinsic minimum.
+        hosting.sizingOptions = []
         hosting.frame = window.contentView!.bounds
         hosting.autoresizingMask = [.width, .height]
-        window.contentView = PanelBackgroundView(hosting: hosting)
+        let background = PanelBackgroundView(hosting: hosting)
+        background.resizeHandle.onResize = { [weak self] width, finished in
+            self?.resize(to: width, persist: finished)
+        }
+        window.contentView = background
 
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.repositionIfVisible() }
@@ -57,11 +72,52 @@ final class SidePanelController {
     private func frame(on screen: NSScreen) -> NSRect {
         let vf = screen.visibleFrame
         let m = Theme.panelMargin
-        let w = min(Theme.panelWidth, vf.width - 2 * m)
+        let w = PanelGeometry.width(Prefs.panelWidth(in: defaults), available: vf.width - 2 * m)
         let h = min(Theme.panelHeight, vf.height - 2 * m)
         let x = vf.maxX - m - w
         let y = vf.maxY - m - h
         return NSRect(x: x, y: y, width: w, height: h)
+    }
+
+    func resize(to width: CGFloat, persist: Bool = true) {
+        let screen = window.screen ?? targetScreen()
+        let resized = PanelGeometry.resized(window.frame, to: width, in: screen.visibleFrame)
+        window.setFrame(resized, display: true)
+        if persist { Prefs.savePanelWidth(resized.width, in: defaults) }
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        Prefs.savePanelWidth(window.frame.width, in: defaults)
+        repositionIfVisible()
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        // SwiftUI lays out the field on the next pass; its active AppKit field editor
+        // otherwise keeps the old text-container width until editing ends.
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  let editor = self.window.firstResponder as? NSTextView,
+                  editor.isFieldEditor,
+                  let field = editor.delegate as? NSTextField,
+                  field.maximumNumberOfLines != 1,
+                  field.cell?.usesSingleLineMode != true else { return }
+            self.window.contentView?.layoutSubtreeIfNeeded()
+            Self.synchronizeFieldEditor(editor)
+        }
+    }
+
+    static func synchronizeFieldEditor(_ editor: NSTextView) {
+        guard let container = editor.textContainer,
+              abs(container.containerSize.width - editor.bounds.width) > 0.5 else { return }
+        container.containerSize.width = editor.bounds.width
+        editor.needsDisplay = true
+    }
+
+    private func updateSizeLimits(on screen: NSScreen) {
+        let available = screen.visibleFrame.insetBy(dx: Theme.panelMargin, dy: Theme.panelMargin)
+        let height = min(Theme.panelHeight, available.height)
+        window.minSize = NSSize(width: min(Theme.panelMinWidth, available.width), height: height)
+        window.maxSize = NSSize(width: min(Theme.panelMaxWidth, available.width), height: height)
     }
 
     func show(focusInput: Bool = false) {
@@ -69,7 +125,9 @@ final class SidePanelController {
         window.alphaValue = 1
         let wasVisible = window.isVisible
         if !wasVisible {
-            window.setFrame(frame(on: targetScreen()), display: true)
+            let screen = targetScreen()
+            updateSizeLimits(on: screen)
+            window.setFrame(frame(on: screen), display: true)
             if Theme.reduceMotion {
                 window.alphaValue = 1
                 window.orderFrontRegardless()
@@ -117,51 +175,58 @@ final class SidePanelController {
     private func repositionIfVisible() {
         guard window.isVisible else { return }
         let screen = window.screen ?? targetScreen()
-        var f = window.frame
-        let target = frame(on: screen)
+        updateSizeLimits(on: screen)
         // Keep the user's dragged position when possible, but clamp into the visible area.
-        let vf = screen.visibleFrame
-        if !vf.contains(f) {
-            f.size.width = min(f.width, target.width)
-            f.size.height = min(f.height, target.height)
-            f.origin.x = min(max(f.minX, vf.minX + Theme.panelMargin), vf.maxX - Theme.panelMargin - f.width)
-            f.origin.y = min(max(f.minY, vf.minY + Theme.panelMargin), vf.maxY - Theme.panelMargin - f.height)
-            window.setFrame(f, display: true)
+        let fitted = PanelGeometry.fitted(window.frame, in: screen.visibleFrame)
+        if fitted != window.frame {
+            window.setFrame(fitted, display: true)
         }
     }
 
 }
 
-/// Frosted background with rounded corners, thin edge and soft shadow.
+/// One native glass plane for the floating utility. Content uses quiet, readable fills.
 final class PanelBackgroundView: NSView {
-    private let effect = NSVisualEffectView()
+    let resizeHandle = PanelResizeHandle()
+    private let foreground = NSView()
+    private var fallbackEffect: NSVisualEffectView?
     private var accessibilityObserver: NSObjectProtocol?
 
     init(hosting: NSView) {
         super.init(frame: hosting.frame)
         wantsLayer = true
-        layer?.masksToBounds = false
+        foreground.frame = bounds
+        foreground.autoresizingMask = [.width, .height]
 
-        effect.frame = bounds
-        effect.autoresizingMask = [.width, .height]
-        effect.material = Theme.reduceTransparency ? .windowBackground : .popover
-        effect.blendingMode = .behindWindow
-        effect.state = .active
-        effect.wantsLayer = true
-        effect.layer?.cornerRadius = Theme.panelCorner
-        effect.layer?.cornerCurve = .continuous
-        effect.layer?.masksToBounds = true
-        effect.layer?.borderWidth = 0.5
-        effect.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.6).cgColor
-        addSubview(effect)
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView(frame: bounds)
+            glass.style = .regular
+            glass.cornerRadius = Theme.panelCorner
+            glass.autoresizingMask = [.width, .height]
+            glass.contentView = foreground
+            addSubview(glass)
+        } else {
+            let effect = NSVisualEffectView(frame: bounds)
+            effect.material = .popover
+            effect.blendingMode = .behindWindow
+            effect.state = .active
+            effect.autoresizingMask = [.width, .height]
+            effect.wantsLayer = true
+            effect.layer?.cornerRadius = Theme.panelCorner
+            effect.layer?.masksToBounds = true
+            fallbackEffect = effect
+            addSubview(effect)
+            addSubview(foreground)
+        }
 
-        hosting.frame = bounds
+        hosting.frame = foreground.bounds
         hosting.autoresizingMask = [.width, .height]
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Theme.panelCorner
         hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
-        addSubview(hosting)
+        foreground.addSubview(hosting)
+        foreground.addSubview(resizeHandle)
         updateMaterial()
         accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
@@ -170,23 +235,28 @@ final class PanelBackgroundView: NSView {
         }
     }
 
+    override func layout() {
+        super.layout()
+        resizeHandle.frame = NSRect(x: 0, y: Theme.panelCorner, width: 10, height: max(0, bounds.height - 2 * Theme.panelCorner))
+    }
+
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         updateMaterial()
     }
 
     private func updateMaterial() {
+        // NSGlassEffectView handles system accessibility changes itself.
+        guard let effect = fallbackEffect else { return }
         effectiveAppearance.performAsCurrentDrawingAppearance {
             effect.isHidden = Theme.reduceTransparency
             layer?.cornerRadius = Theme.panelCorner
             layer?.backgroundColor = Theme.reduceTransparency ? NSColor.windowBackgroundColor.cgColor : NSColor.clear.cgColor
-            effect.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
         }
     }
 
     deinit {
         if let accessibilityObserver { NSWorkspace.shared.notificationCenter.removeObserver(accessibilityObserver) }
     }
-
     required init?(coder: NSCoder) { nil }
 }

@@ -19,6 +19,7 @@
     "dev:serve": "tsx packages/cli/src/index.ts serve",
     "todocue": "node packages/cli/dist/index.js",
     "macos:build": "scripts/build-macos.sh",
+    "macos:dmg": "node scripts/package-macos.mjs",
     "install:local": "npm run build && node packages/cli/dist/index.js install"
   },
   "devDependencies": {

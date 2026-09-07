@@ -3,7 +3,9 @@ import AppKit
 import TodoCueKit
 
 enum Theme {
-    static let panelWidth: CGFloat = 380
+    static let panelWidth: CGFloat = 340
+    static let panelMinWidth: CGFloat = 300
+    static let panelMaxWidth: CGFloat = 600
     static var panelHeight: CGFloat {
         #if DEBUG
         if let raw = ProcessInfo.processInfo.environment["TODOCUE_PREVIEW_HEIGHT"], let value = Double(raw) {
@@ -13,7 +15,7 @@ enum Theme {
         return 680
     }
     static let panelMargin: CGFloat = 12
-    static let panelCorner: CGFloat = 22
+    static let panelCorner: CGFloat = 28
     static let notchExpandedWidth: CGFloat = 440
     static let notchMaxHeight: CGFloat = 300
     static let overdue = Color(nsColor: NSColor(name: nil) { appearance in
@@ -23,8 +25,23 @@ enum Theme {
     })
 
     static func accent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(nsColor: .systemMint) : Color(red: 0.0, green: 0.55, blue: 0.45)
+        scheme == .dark ? Color(red: 0.48, green: 0.85, blue: 0.74) : Color(red: 0.03, green: 0.43, blue: 0.35)
     }
+
+    static let surface = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 1, alpha: 0.055) : NSColor(white: 1, alpha: 0.72)
+    })
+    static let insetSurface = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 1, alpha: 0.065) : NSColor(white: 1, alpha: 0.55)
+    })
+    // Keep the dark glass shell quiet without creating an opaque inner well.
+    static let shellTint = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 0, alpha: 0.32) : .clear
+    })
+    static var interaction: Animation { reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.26, dampingFraction: 0.86) }
 
     static var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     static var reduceTransparency: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency }
@@ -68,14 +85,18 @@ struct QuietIconButtonStyle: ButtonStyle {
 
     private struct IconBody: View {
         let configuration: ButtonStyle.Configuration
+        @Environment(\.isEnabled) private var enabled
         @State private var hovering = false
         var body: some View {
             configuration.label
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 30, height: 30)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .contentShape(Circle())
                 .background(Color.primary.opacity(configuration.isPressed ? 0.10 : (hovering ? 0.06 : 0)),
-                            in: RoundedRectangle(cornerRadius: 8))
+                            in: Circle())
+                .opacity(enabled ? 1 : 0.4)
+                .scaleEffect(configuration.isPressed && !Theme.reduceMotion ? 0.94 : 1)
+                .animation(Theme.interaction, value: configuration.isPressed)
                 .onHover { hovering = $0 }
         }
     }

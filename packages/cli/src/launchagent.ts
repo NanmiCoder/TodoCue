@@ -14,13 +14,14 @@ export interface LaunchAgentSpec {
   home: string;
   logDir: string;
   port?: number;
+  notifierPath?: string;
 }
 
 export function renderPlist(spec: LaunchAgentSpec): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const env: Record<string, string> = { TODOCUE_HOME: spec.home, PATH: "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin" };
   if (spec.port) env.TODOCUE_PORT = String(spec.port);
-  if (process.env.TODOCUE_NOTIFIER) env.TODOCUE_NOTIFIER = process.env.TODOCUE_NOTIFIER;
+  if (spec.notifierPath ?? process.env.TODOCUE_NOTIFIER) env.TODOCUE_NOTIFIER = spec.notifierPath ?? process.env.TODOCUE_NOTIFIER!;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -61,13 +62,26 @@ async function launchctl(args: string[]): Promise<{ ok: boolean; out: string }> 
 
 const domain = () => `gui/${process.getuid?.() ?? 501}`;
 
+/** launchd can briefly return EIO while a just-removed job is being disposed. */
+export async function bootstrapWithRetry(
+  invoke: () => Promise<{ ok: boolean; out: string }>,
+  pause: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<{ ok: boolean; out: string }> {
+  let result = await invoke();
+  for (let retry = 1; retry <= 3 && !result.ok && /Bootstrap failed: 5|Input\/output error/i.test(result.out); retry++) {
+    await pause(retry * 500);
+    result = await invoke();
+  }
+  return result;
+}
+
 export async function installLaunchAgent(paths: RuntimePaths, spec: Omit<LaunchAgentSpec, "label" | "plistPath" | "home" | "logDir">): Promise<string> {
   const full: LaunchAgentSpec = { ...spec, label: paths.launchAgentLabel, plistPath: paths.launchAgentPlist, home: paths.home, logDir: paths.logs };
   fs.mkdirSync(path.dirname(full.plistPath), { recursive: true });
   // Unload any previous version before rewriting.
   await launchctl(["bootout", `${domain()}/${full.label}`]);
   fs.writeFileSync(full.plistPath, renderPlist(full), { mode: 0o644 });
-  const res = await launchctl(["bootstrap", domain(), full.plistPath]);
+  const res = await bootstrapWithRetry(() => launchctl(["bootstrap", domain(), full.plistPath]));
   if (!res.ok && !/already loaded|service already bootstrapped/i.test(res.out)) {
     throw new Error(`launchctl bootstrap failed: ${res.out}`);
   }

@@ -48,6 +48,8 @@ final class AppModel: ObservableObject {
 
     @Published private(set) var connection: ConnectionInfo?
     @Published private(set) var connectionState: ConnectionState = .connecting
+    @Published private(set) var isPreparingRuntime = false
+    @Published private(set) var runtimeSetupError: String?
     @Published private(set) var context: ContextInfo?
     @Published private(set) var today: TodayResult = .empty
     @Published private(set) var next: NextResult?
@@ -106,10 +108,27 @@ final class AppModel: ObservableObject {
     func start() {
         loadConnection()
         watchConnectionFile()
+        prepareBundledRuntime()
     }
 
     func reconnect() {
         loadConnection()
+        prepareBundledRuntime()
+    }
+
+    private func prepareBundledRuntime() {
+        guard RuntimeBootstrap.isBundled(), !isPreparingRuntime else { return }
+        isPreparingRuntime = true
+        runtimeSetupError = nil
+        Task {
+            defer { isPreparingRuntime = false }
+            do {
+                try await RuntimeBootstrap.prepare()
+                loadConnection()
+            } catch {
+                runtimeSetupError = error.localizedDescription
+            }
+        }
     }
 
     private func loadConnection() {
@@ -503,6 +522,7 @@ final class AppModel: ObservableObject {
         preserveDraft()
         routes = []
         quickAddFocusRequest += 1
+        onOpenPanel?(true)
     }
 
     /// Esc: close top layer first; close the panel only from the root (unless pinned).
