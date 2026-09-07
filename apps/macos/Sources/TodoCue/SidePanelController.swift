@@ -195,6 +195,11 @@ final class PanelBackgroundView: NSView {
     init(hosting: NSView) {
         super.init(frame: hosting.frame)
         wantsLayer = true
+        // The active glass effect can paint into the window's square corners.
+        // Clip the entire shell, including its material, rather than only the content.
+        layer?.cornerRadius = Theme.panelCorner
+        layer?.cornerCurve = .continuous
+        layer?.masksToBounds = true
         foreground.frame = bounds
         foreground.autoresizingMask = [.width, .height]
 
@@ -213,6 +218,7 @@ final class PanelBackgroundView: NSView {
             effect.autoresizingMask = [.width, .height]
             effect.wantsLayer = true
             effect.layer?.cornerRadius = Theme.panelCorner
+            effect.layer?.cornerCurve = .continuous
             effect.layer?.masksToBounds = true
             fallbackEffect = effect
             addSubview(effect)
@@ -250,7 +256,6 @@ final class PanelBackgroundView: NSView {
         guard let effect = fallbackEffect else { return }
         effectiveAppearance.performAsCurrentDrawingAppearance {
             effect.isHidden = Theme.reduceTransparency
-            layer?.cornerRadius = Theme.panelCorner
             layer?.backgroundColor = Theme.reduceTransparency ? NSColor.windowBackgroundColor.cgColor : NSColor.clear.cgColor
         }
     }
