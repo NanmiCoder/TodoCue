@@ -2,7 +2,7 @@
 
 ## 使用 DMG
 
-1. 打开与 Mac 芯片匹配的 DMG（`arm64` 为 Apple Silicon，`x64` 为 Intel）。
+1. 在 [最新 Release](https://github.com/NanmiCoder/TodoCue/releases/latest) 的 **Assets** 中下载并打开与 Mac 芯片匹配的 DMG（`arm64` 为 Apple Silicon，`x64` 为 Intel）。
 2. 将 `TodoCue.app` 拖到 `Applications`。
 3. 从 `/Applications/TodoCue.app` 打开。首次启动会自动配置后台服务与 CLI；不需要另行安装 Node。
 4. 在 App 设置的“通知”中请求授权，允许 TodoCueNotifier 通知。

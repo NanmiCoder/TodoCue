@@ -148,3 +148,11 @@ npm run macos:dmg
 - 四份 Apple 公证回执（两个架构各自的 App 和 DMG）均为 `Accepted`。
 - 下载后的两个 DMG 校验和一致；本机重新验证 DMG 与包内 App 的签名、公证票据和 Gatekeeper 均通过。主程序、通知辅助程序及内置 Node 的架构分别为 arm64 / x86_64，主 App 与通知辅助程序的版本均为 `0.1.0`。
 - 手动试跑的安装包保存在 Actions artifacts，不创建公开 Release。推送正式版本标签才会进入发布步骤。
+
+### 首次正式发布（2026-09-07）
+
+推送 `v0.1.0` 标签后，[正式发布工作流](https://github.com/NanmiCoder/TodoCue/actions/runs/34127825697) 的验证、双架构构建、公证和发布任务全部成功。
+
+- [TodoCue v0.1.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.0) 已发布并设为 Latest，正文与 `release-notes/v0.1.0.md` 一致。
+- Release 的 Assets 包含 `TodoCue-0.1.0-macOS-arm64.dmg`、`TodoCue-0.1.0-macOS-x64.dmg` 和 `SHA256SUMS`。
+- 仓库当前为 Private，查看 Release 和下载资产需要登录有仓库访问权限的 GitHub 账号。未登录访问返回 404；Release 发布状态不改变仓库可见性。

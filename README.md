@@ -2,6 +2,8 @@
 
 本地任务运行时 + macOS 桌面体验。人通过刘海快览和右侧悬浮面板管理任务，Agent 通过 CLI、MCP 和 Local API 操作同一份数据。
 
+[下载最新版 macOS 安装包](https://github.com/NanmiCoder/TodoCue/releases/latest) · [发布说明](release-notes/)
+
 ```
 macOS UI / CLI / MCP  →  Local API (127.0.0.1, token)  →  Task Engine  →  SQLite (~/.todocue)
 ```
@@ -20,7 +22,7 @@ macOS UI / CLI / MCP  →  Local API (127.0.0.1, token)  →  Task Engine  →  
 
 ## 安装使用（macOS）
 
-打开 DMG，将 **TodoCue.app 拖入 Applications**，再从应用程序中打开。App 自带 Node、CLI 和通知辅助程序，首次启动自动配置后台服务；需要提醒时，在设置中允许通知。
+在 [GitHub Releases](https://github.com/NanmiCoder/TodoCue/releases/latest) 页面的 **Assets** 中下载 DMG：Apple Silicon 选择 `arm64`，Intel 选择 `x64`。打开 DMG，将 **TodoCue.app 拖入 Applications**，再从应用程序中打开。App 自带 Node、CLI 和通知辅助程序，首次启动自动配置后台服务；需要提醒时，在设置中允许通知。
 
 任务数据固定保存在用户主目录下的 **`~/.todocue/todocue.sqlite`**。删除、覆盖或重新安装 App 不会删除该目录，重新打开后继续使用原有任务。设置页可以打开数据文件夹。安装、备份和卸载说明见 [macOS 安装](docs/macos-install.md)。
 
