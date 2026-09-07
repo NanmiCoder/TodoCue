@@ -4,12 +4,27 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { checkVersions, checkRelease } from './release.mjs';
+import { signingIdentity, notarize } from './macos-signing.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'apps/macos/build');
-const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+const version = checkVersions(root);
 const arch = process.arch;
 if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(arch)) throw new Error('Build on an arm64 or x64 Mac.');
+const release = process.argv.includes('--release');
+const profile = process.env.TODOCUE_NOTARY_PROFILE;
+const keychain = process.env.TODOCUE_SIGN_KEYCHAIN;
+if (release) {
+  checkRelease(root, process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME : undefined);
+  if (!profile) throw new Error('Release builds require TODOCUE_NOTARY_PROFILE; refusing an unnotarized release.');
+}
+const identity = signingIdentity(execFileSync('/usr/bin/security',
+  ['find-identity', '-v', '-p', 'codesigning', ...(keychain ? [keychain] : [])], { encoding: 'utf8' }), {
+  override: process.env.TODOCUE_SIGN_IDENTITY, required: release, teamId: process.env.APPLE_TEAM_ID,
+});
+if (profile && identity === '-') throw new Error('Notarization requires a Developer ID Application signing identity.');
+const notaryOptions = { profile, keychain, logDirectory: path.join(out, 'notarization') };
 const nodeVersion = '26.7.0';
 // Pinned official Node distribution checksums, not a Homebrew binary with external dylib dependencies.
 const nodeHashes = {
@@ -82,13 +97,9 @@ if (!execFileSync('/usr/bin/file', [appExecutable], { encoding: 'utf8' }).includ
 }
 
 // Sign every executable inside-out; native addons share the Node executable's team identity.
-let identity = process.env.TODOCUE_SIGN_IDENTITY;
-if (!identity) {
-  const identities = execFileSync('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
-  identity = identities.match(/([A-F0-9]{40}) "Developer ID Application:[^"]+"/)?.[1] ?? '-';
-}
 const sign = (target, entitlements) => run('/usr/bin/codesign', [
   '--force', '--sign', identity, ...(identity === '-' ? [] : ['--timestamp']), '--options', 'runtime',
+  ...(keychain ? ['--keychain', keychain] : []),
   ...(entitlements ? ['--entitlements', entitlements] : []), target,
 ]);
 console.log(`Signing ${identity === '-' ? 'with an ad-hoc identity' : 'with Developer ID'}…`);
@@ -110,6 +121,20 @@ await server.close();
 console.log('Bundled Node, SQLite and MCP loaded successfully.');
 `], { cwd: runtime, env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME } });
 
+// Staple the app before placing it in the DMG so it retains its ticket after copying.
+if (profile) {
+  const archive = path.join(out, `TodoCue-${version}-${arch}-notarization.zip`);
+  try {
+    run('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, archive]);
+    notarize(archive, notaryOptions);
+    run('/usr/bin/xcrun', ['stapler', 'staple', app]);
+    run('/usr/bin/xcrun', ['stapler', 'validate', app]);
+    run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', app]);
+  } finally {
+    fs.rmSync(archive, { force: true });
+  }
+}
+
 const staging = fs.mkdtempSync(path.join(out, 'dmg-stage-'));
 const dmg = path.join(out, `TodoCue-${version}-macOS-${arch}.dmg`);
 try {
@@ -117,11 +142,16 @@ try {
   fs.symlinkSync('/Applications', path.join(staging, 'Applications'));
   fs.writeFileSync(path.join(staging, '安装说明.txt'), `TodoCue ${version}\n\n将 TodoCue.app 拖入 Applications，然后从应用程序中打开。\n首次打开会自动配置后台服务与 CLI，不需要安装 Node。\n\n数据保存在 ~/.todocue/todocue.sqlite。\n删除或重新安装 App 不会删除此目录；请保留它以继续使用原有任务。\n\n若需要提醒，请在 App 设置中允许通知。\nAgent skill 随 App 附带，位于 Contents/Resources/skills/todocue。\n`);
   run('/usr/bin/hdiutil', ['create', '-volname', `TodoCue ${version}`, '-srcfolder', staging, '-ov', '-format', 'UDZO', dmg]);
-  if (identity !== '-') run('/usr/bin/codesign', ['--force', '--sign', identity, '--timestamp', dmg]);
-  if (process.env.TODOCUE_NOTARY_PROFILE) {
-    run('/usr/bin/xcrun', ['notarytool', 'submit', dmg, '--keychain-profile', process.env.TODOCUE_NOTARY_PROFILE, '--wait']);
+  if (identity !== '-') sign(dmg);
+  if (profile) {
+    notarize(dmg, notaryOptions);
     run('/usr/bin/xcrun', ['stapler', 'staple', dmg]);
+    run('/usr/bin/xcrun', ['stapler', 'validate', dmg]);
+    run('/usr/sbin/spctl', ['--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=2', dmg]);
   }
+  if (identity !== '-') run('/usr/bin/codesign', ['--verify', '--strict', dmg]);
+  // Hash the final stapled file, not the pre-notarization image.
+  fs.writeFileSync(`${dmg}.sha256`, `${createHash('sha256').update(fs.readFileSync(dmg)).digest('hex')}  ${path.basename(dmg)}\n`);
 } finally {
   fs.rmSync(staging, { recursive: true, force: true });
 }

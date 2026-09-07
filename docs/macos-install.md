@@ -67,4 +67,6 @@ npm run macos:dmg
 
 官方 Node 版本与 SHA-256 固定在 `scripts/package-macos.mjs`，生产依赖来自 npm 锁文件；构建会检查主程序仍为原生 Mach-O、验证签名，并在受限 PATH 下加载内置 Node、SQLite 和 MCP。
 
-构建默认选择本机可用的 Developer ID；可以通过 `TODOCUE_SIGN_IDENTITY` 指定签名身份。没有 Developer ID 时使用临时签名。公开下载分发需要公证：将已有凭据保存为 notarytool keychain profile，然后设置 `TODOCUE_NOTARY_PROFILE` 运行打包；脚本会提交 DMG 并装订票据，凭据不会写进项目。
+构建默认选择本机可用的 Developer ID；可以通过 `TODOCUE_SIGN_IDENTITY` 指定签名身份。没有 Developer ID 时使用临时签名。公开下载分发需要公证：将已有凭据保存为 notarytool keychain profile，然后设置 `TODOCUE_NOTARY_PROFILE` 运行打包；脚本会分别公证 App 和 DMG、装订票据并验证，凭据不会写进项目。
+
+GitHub Actions 的 Tag 自动发布、五个 Secrets 和版本同步步骤见 [GitHub 发布指南](github-release.md)。正式 CI 构建启用 `--release`，缺少正确的签名身份或公证配置时会直接失败。

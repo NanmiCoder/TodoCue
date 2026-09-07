@@ -1,0 +1,167 @@
+name: Release macOS
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate version, notes and signing configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.contract.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '26.7.0'
+          cache: npm
+      - name: Validate release contract
+        id: contract
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { checkRelease } from './scripts/release.mjs';
+          const tag = process.env.GITHUB_REF_TYPE === 'tag' ? process.env.GITHUB_REF_NAME : undefined;
+          const release = checkRelease(undefined, tag);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${release.version}\n`);
+          console.log(`Validated ${release.tag}, notes: ${release.notes}`);
+          NODE
+      - name: Check required secrets before starting macOS runners
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=()
+          for name in MACOS_CERTIFICATE MACOS_CERTIFICATE_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Missing repository secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run test:release
+      - run: npm test
+      - run: npm run build
+
+  build:
+    name: Build, sign and notarize (${{ matrix.arch }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 100
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '26.7.0'
+          architecture: ${{ matrix.arch }}
+          cache: npm
+      - name: Verify native architecture and SDK
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          node -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Wrong runner architecture")'
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
+          swift --version
+      - run: npm ci
+      - run: swift test --package-path apps/macos
+      - name: Import Developer ID and notarization credentials
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/ci-import-apple-signing.sh
+      - name: Package signed and notarized DMG
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run macos:dmg -- --release
+      - name: Upload verified installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-release-${{ matrix.arch }}
+          path: |
+            apps/macos/build/TodoCue-${{ needs.validate.outputs.version }}-macOS-${{ matrix.arch }}.dmg
+            apps/macos/build/TodoCue-${{ needs.validate.outputs.version }}-macOS-${{ matrix.arch }}.dmg.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload Apple notarization diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: notarization-${{ matrix.arch }}
+          path: apps/macos/build/notarization/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Delete temporary signing credentials
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/todocue-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/todocue-signing.keychain-db"
+          fi
+          rm -f "$RUNNER_TEMP/todocue-signing.p12"
+
+  publish:
+    name: Publish complete release
+    if: github.event_name == 'push'
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: macos-release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify complete asset set and checksums
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          cd release-assets
+          for arch in arm64 x64; do
+            file="TodoCue-${RELEASE_VERSION}-macOS-${arch}.dmg"
+            test -s "$file"
+            test -s "$file.sha256"
+            sha256sum --check "$file.sha256"
+          done
+          sha256sum "TodoCue-${RELEASE_VERSION}-macOS-arm64.dmg" "TodoCue-${RELEASE_VERSION}-macOS-x64.dmg" > SHA256SUMS
+      - name: Upload to a draft, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: bash scripts/ci-publish-release.sh

@@ -35,7 +35,7 @@ npm run macos:dmg          # 生成自带运行时的 App 和当前架构 DMG
 # 将 DMG 中的 TodoCue.app 拖入 Applications 后打开
 ```
 
-`npm run macos:dmg` 从锁文件安装生产依赖，下载并校验固定版本的官方 Node，使用可用的 Developer ID 签名（没有则使用临时签名），生成 `apps/macos/build/TodoCue-<version>-macOS-<arch>.dmg`。设置 `TODOCUE_NOTARY_PROFILE` 可使用已配置的 keychain profile 提交公证并装订票据。仅本机 Swift 开发构建仍可用 `npm run macos:build`。
+`npm run macos:dmg` 从锁文件安装生产依赖，下载并校验固定版本的官方 Node，使用可用的 Developer ID 签名（没有则使用临时签名），生成 `apps/macos/build/TodoCue-<version>-macOS-<arch>.dmg`。设置 `TODOCUE_NOTARY_PROFILE` 可使用已配置的 keychain profile 为 App 和 DMG 提交公证并装订票据。仅本机 Swift 开发构建仍可用 `npm run macos:build`。
 
 安装版 App 首次启动写入 `~/.todocue/bin/todocue`、尝试链接到可写的 PATH 目录，并安装 LaunchAgent `com.todocue.runtime`。关闭面板或退出 App 后，后台服务仍负责提醒。CLI、后台 Node 和辅助程序都来自已安装的 App。
 
@@ -54,6 +54,10 @@ todocue --json ...     # 所有业务命令支持 JSON 输出
 ```
 
 开发时不装服务：`npm run dev:serve`（前台运行时），`TODOCUE_HOME=/tmp/x` 可隔离数据。
+
+## GitHub Release
+
+推送 `vX.Y.Z` 标签会触发 macOS 发布工作流，构建 Apple Silicon 和 Intel 两个已签名、公证的 DMG，全部成功后发布到 GitHub Release。版本与发布说明由仓库维护；GitHub Secrets 配置、证书导出和发版命令见 [发布指南](docs/github-release.md)。
 
 ## 运行时行为
 

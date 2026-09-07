@@ -20,6 +20,9 @@
     "todocue": "node packages/cli/dist/index.js",
     "macos:build": "scripts/build-macos.sh",
     "macos:dmg": "node scripts/package-macos.mjs",
+    "release": "node scripts/release.mjs",
+    "release:check": "node scripts/release.mjs --check",
+    "test:release": "node --test scripts/tests/*.test.mjs",
     "install:local": "npm run build && node packages/cli/dist/index.js install"
   },
   "devDependencies": {

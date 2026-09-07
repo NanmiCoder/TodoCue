@@ -88,7 +88,7 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .medium)).padding(16).cueSurface()
                 HStack(spacing: 6) {
                     CueMark().scaleEffect(0.7).frame(width: 14, height: 14)
-                    Text("TodoCue · \(model.connection?.runtimeVersion ?? "0.1.0")")
+                    Text("TodoCue · \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版")")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity).padding(.vertical, 10)
             }

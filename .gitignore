@@ -8,3 +8,6 @@ apps/macos/*.xcodeproj
 *.log
 coverage/
 .ui-review/
+*.p12
+*.p8
+*.keychain-db
