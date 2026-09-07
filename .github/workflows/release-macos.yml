@@ -55,9 +55,7 @@ jobs:
             exit 1
           fi
       - run: npm ci
-      - run: npm run test:release
-      - run: npm test
-      - run: npm run build
+      - run: npm run check
 
   build:
     name: Build, sign and notarize (${{ matrix.arch }})

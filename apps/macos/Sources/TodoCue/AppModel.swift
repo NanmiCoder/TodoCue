@@ -72,6 +72,7 @@ final class AppModel: ObservableObject {
     @Published var savedDraft: TaskDraft?
 
     // Wiring to the AppKit shell.
+    var onReminderCue: ((ReminderCue) -> Void)?
     var onOpenPanel: ((Bool) -> Void)?
     var onClosePanel: (() -> Void)?
     var onCollapseNotch: (() -> Void)?
@@ -203,6 +204,13 @@ final class AppModel: ObservableObject {
 
     private func handle(_ ev: RuntimeEvent) {
         switch ev.type {
+        case .reminderFired:
+            guard let client, let taskId = ev.related?["taskId"] else { return }
+            Task {
+                guard let envelope = try? await client.task(taskId),
+                      let cue = ReminderCue.from(ev, task: envelope.task) else { return }
+                onReminderCue?(cue)
+            }
         case .dayChanged, .runtimeStarted:
             Task { await refreshAll() }
         case .taskCreated, .taskUpdated, .seriesCreated, .seriesUpdated, .reminderUpdated:
@@ -339,6 +347,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func actOnCue(_ cue: ReminderCue, snooze: Bool) async -> Bool {
+        guard let client else { return false }
+        let task = self.task(cue.task.id) ?? cue.task
+        return await perform(snooze ? "稍后提醒" : "完成", {
+            if snooze { return try await client.snooze(task.id, expectedVersion: task.version) }
+            return try await client.complete(task.id, expectedVersion: task.version)
+        }) != nil
+    }
+
     func undoComplete(_ id: String) {
         toast = nil
         Task { _ = await perform("撤销", { try await self.client!.reopen(id) }) }
@@ -412,7 +429,7 @@ final class AppModel: ObservableObject {
                 merge(t)
                 showToast(Toast(message: "已保存"))
             } else {
-                let env = try await client.createTask(draft.createPayload())
+                let env = try await client.createTask(draft.createPayload(), idempotencyKey: draft.saveIdempotencyKey)
                 merge(env.task)
                 if let s = env.series { seriesById[s.id] = s }
                 showToast(Toast(message: env.series == nil ? "已添加「\(env.task.title)」" : "已创建重复任务"))

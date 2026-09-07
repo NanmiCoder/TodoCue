@@ -24,6 +24,17 @@ public enum ReminderStatus: String, Codable, Sendable {
     case pending, submitted, failed, missed, cancelled
 }
 
+public struct TaskAttachment: Codable, Identifiable, Hashable, Sendable {
+    public var id: String
+    public var taskId: String
+    public var name: String
+    public var mediaType: String
+    public var size: Int
+    public var sha256: String
+    public var createdAt: String
+    public var isImage: Bool { mediaType.hasPrefix("image/") }
+}
+
 public struct TodoTask: Codable, Identifiable, Hashable, Sendable {
     public var id: String
     public var title: String
@@ -44,6 +55,16 @@ public struct TodoTask: Codable, Identifiable, Hashable, Sendable {
     public var version: Int
     public var createdAt: String
     public var updatedAt: String
+    private var storedAttachments: [TaskAttachment]?
+    public var attachments: [TaskAttachment] {
+        get { storedAttachments ?? [] }
+        set { storedAttachments = newValue }
+    }
+    enum CodingKeys: String, CodingKey {
+        case id, title, notes, project, priority, estimateMinutes, scheduledDate, scheduledAt, dueDate, dueAt,
+             reminderAt, timezone, status, completedAt, seriesId, occurrenceDate, version, createdAt, updatedAt
+        case storedAttachments = "attachments"
+    }
 
     public init(id: String, title: String, notes: String? = nil, project: String? = nil, priority: Priority = .none,
                 estimateMinutes: Int? = nil, scheduledDate: String? = nil, scheduledAt: String? = nil,
@@ -231,6 +252,7 @@ public enum RuntimeEventType: String, Codable, Sendable {
     case seriesCreated = "series.created"
     case seriesUpdated = "series.updated"
     case reminderUpdated = "reminder.updated"
+    case reminderFired = "reminder.fired"
     case dayChanged = "day.changed"
     case runtimeStarted = "runtime.started"
 }

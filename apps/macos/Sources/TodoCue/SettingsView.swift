@@ -24,7 +24,7 @@ struct SettingsView: View {
                     Divider().opacity(0.3)
                     settingToggle("刘海快览", isOn: $notchEnabled)
                         .onChange(of: notchEnabled) { _, value in Prefs.isNotchEnabled = value }
-                    Text("鼠标停在刘海上展开今日任务，点一下刘海可固定并直接输入。")
+                    Text("鼠标停在刘海上展开今日任务，点一下可固定输入。提醒到来时，Cue 会轻轻弹出，支持完成或稍后提醒。")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                     settingToggle("收起时显示今日剩余", isOn: $notchSummary)
                         .onChange(of: notchSummary) { _, value in Prefs.notchShowsSummary = value }

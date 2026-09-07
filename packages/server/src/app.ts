@@ -3,6 +3,8 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { ZodError, type ZodType } from "zod";
 import {
   API_PREFIX,
+  ATTACHMENT_BODY_LIMIT,
+  AddAttachmentsInput,
   CreateSeriesInput,
   CreateTaskInput,
   ErrorCodes,
@@ -171,18 +173,41 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.get(`${API_PREFIX}/context`, async () => engine.context());
 
   app.get(`${API_PREFIX}/tasks`, async (req) => ({ tasks: engine.listTasks(parse(ListTasksQuery, normalizeQuery(req.query))) }));
-  app.post(`${API_PREFIX}/tasks`, async (req, reply) => {
+  app.post(`${API_PREFIX}/tasks`, { bodyLimit: ATTACHMENT_BODY_LIMIT }, async (req, reply) => {
     const res = engine.createTask(parse(CreateTaskInput, req.body));
     reply.code(201);
     return { task: res.task, series: res.series };
   });
   app.get(`${API_PREFIX}/tasks/:id`, async (req) => engine.getTaskDetail(idOf(req)));
-  app.patch(`${API_PREFIX}/tasks/:id`, async (req) => ({ task: engine.updateTask(idOf(req), parse(UpdateTaskInput, req.body)) }));
+  app.patch(`${API_PREFIX}/tasks/:id`, { bodyLimit: ATTACHMENT_BODY_LIMIT }, async (req) => ({ task: engine.updateTask(idOf(req), parse(UpdateTaskInput, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/complete`, async (req) => ({ task: engine.completeTask(idOf(req), parse(VersionedAction, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/reopen`, async (req) => ({ task: engine.reopenTask(idOf(req), parse(VersionedAction, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/cancel`, async (req) => ({ task: engine.cancelTask(idOf(req), parse(VersionedAction, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/skip`, async (req) => ({ task: engine.skipTask(idOf(req), parse(VersionedAction, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/snooze`, async (req) => ({ task: engine.snoozeTask(idOf(req), parse(SnoozeInput, req.body)) }));
+
+  app.get(`${API_PREFIX}/tasks/:id/attachments`, async (req) => ({ attachments: engine.getTask(idOf(req)).attachments }));
+  app.post(`${API_PREFIX}/tasks/:id/attachments`, { bodyLimit: ATTACHMENT_BODY_LIMIT }, async (req, reply) => {
+    const input = parse(AddAttachmentsInput, req.body);
+    const task = engine.updateTask(idOf(req), { addAttachments: input.files, expectedVersion: input.expectedVersion });
+    reply.code(201);
+    return { task };
+  });
+  const attachmentIdOf = (req: FastifyRequest) => (req.params as { attachmentId: string }).attachmentId;
+  app.get(`${API_PREFIX}/tasks/:id/attachments/:attachmentId`, async (req) => {
+    const { attachment, data } = engine.attachments.get(idOf(req), attachmentIdOf(req));
+    return { attachment, dataBase64: data.toString("base64") };
+  });
+  app.get(`${API_PREFIX}/tasks/:id/attachments/:attachmentId/content`, async (req, reply) => {
+    const { attachment, data } = engine.attachments.get(idOf(req), attachmentIdOf(req));
+    reply.header("X-Content-Type-Options", "nosniff").header("Cache-Control", "private, no-store")
+      .header("Content-Disposition", `attachment; filename="attachment"; filename*=UTF-8''${encodeURIComponent(attachment.name)}`)
+      .type(attachment.mediaType);
+    return data;
+  });
+  app.delete(`${API_PREFIX}/tasks/:id/attachments/:attachmentId`, async (req) => ({
+    task: engine.updateTask(idOf(req), { ...parse(VersionedAction, req.body), removeAttachmentIds: [attachmentIdOf(req)] }),
+  }));
 
   app.get(`${API_PREFIX}/today`, async () => engine.todayView());
   app.get(`${API_PREFIX}/next`, async () => engine.nextView());

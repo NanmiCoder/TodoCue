@@ -60,6 +60,7 @@ export interface ReminderRow {
 
 export function taskFromRow(r: TaskRow): Task {
   return {
+    attachments: [],
     id: r.id,
     title: r.title,
     notes: r.notes,

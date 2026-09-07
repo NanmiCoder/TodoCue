@@ -1,7 +1,10 @@
+import { readAttachments } from "../attachments.js";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import {
+  AttachmentUpload,
+  MAX_ATTACHMENTS,
   CreateSeriesInput,
   CreateTaskInput,
   ListRemindersQuery,
@@ -99,6 +102,36 @@ export function buildMcpServer(getClient: () => TodoCueClient): McpServer {
     },
     async ({ id, ...patch }) => run(() => c().updateTask(id, patch)),
   );
+  server.registerTool("todocue_add_attachments", {
+    title: "Attach images or files",
+    description: "Copy multiple files into a task. Supply local paths on this MCP host OR files with name/mediaType/dataBase64. Atomic batch; max 10 MiB/file, 20 files and 30 MiB/task. Use idempotencyKey for safe retries.",
+    inputSchema: z.object({ id: z.string(), paths: z.array(z.string()).min(1).max(MAX_ATTACHMENTS).optional(),
+      files: z.array(AttachmentUpload).min(1).max(MAX_ATTACHMENTS).optional(), expectedVersion: z.number().int().optional(), idempotencyKey: z.string().optional() }),
+  }, async ({ id, paths, files, expectedVersion, idempotencyKey }) => run(async () => {
+    if (!!paths === !!files) throw TodoCueError.validation("provide exactly one of paths or files");
+    return c().addAttachments(id, { files: paths ? await readAttachments(paths) : files!, expectedVersion }, { idempotencyKey });
+  }));
+  server.registerTool("todocue_list_attachments", {
+    title: "List attachments", description: "List a task's attachment ids, filenames, media types, sizes and checksums.", inputSchema: Id, annotations: { readOnlyHint: true },
+  }, async ({ id }) => run(() => c().listAttachments(id)));
+  server.registerTool("todocue_get_attachment", {
+    title: "Read attachment", description: "Read attachment bytes as base64 and metadata. Images in PNG/JPEG/GIF/WebP also return image content for visual inspection.",
+    inputSchema: z.object({ id: z.string(), attachmentId: z.string() }), annotations: { readOnlyHint: true },
+  }, async ({ id, attachmentId }) => {
+    try {
+      const res = await c().getAttachment(id, attachmentId);
+      if (["image/png", "image/jpeg", "image/gif", "image/webp"].includes(res.attachment.mediaType)) {
+        return { content: [{ type: "text" as const, text: JSON.stringify(res.attachment) },
+          { type: "image" as const, data: res.dataBase64, mimeType: res.attachment.mediaType }] };
+      }
+      return text(res);
+    } catch (e) { return run(() => Promise.reject(e)); }
+  });
+  server.registerTool("todocue_remove_attachment", {
+    title: "Remove attachment", description: "Remove one attachment from a task; original source files are unaffected.",
+    inputSchema: z.object({ id: z.string(), attachmentId: z.string(), expectedVersion: z.number().int().optional() }),
+    annotations: { destructiveHint: true },
+  }, async ({ id, attachmentId, expectedVersion }) => run(() => c().removeAttachment(id, attachmentId, { expectedVersion })));
   server.registerTool(
     "todocue_complete_task",
     { title: "Complete task", description: "Mark a task done; pending reminders are cancelled.", inputSchema: IdVersioned },

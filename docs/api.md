@@ -7,7 +7,7 @@ CLI, MCP and the macOS client are all thin clients of this API.
 
 - Runtime writes `~/.todocue/connection.json` (mode 0600, honours `TODOCUE_HOME`):
   ```json
-  { "baseUrl": "http://127.0.0.1:47831", "token": "<random>", "pid": 123, "startedAt": "…Z", "runtimeVersion": "0.1.0" }
+  { "baseUrl": "http://127.0.0.1:47831", "token": "<random>", "pid": 123, "startedAt": "…Z", "runtimeVersion": "0.1.1" }
   ```
 - Every request except `GET /v1/health` needs `Authorization: Bearer <token>`.
 - Default port `47831` (`TODOCUE_PORT` overrides). All routes are under `/v1`.
@@ -39,6 +39,7 @@ CLI, MCP and the macOS client are all thin clients of this API.
   "timezone": "Asia/Shanghai",
   "status": "todo|done|cancelled|skipped", "completedAt": null,
   "seriesId": null, "occurrenceDate": null,
+  "attachments": [],
   "version": 1, "createdAt": "…Z", "updatedAt": "…Z"
 }
 ```
@@ -53,6 +54,11 @@ CLI, MCP and the macOS client are all thin clients of this API.
 | POST | `/v1/tasks` | CreateTaskInput (see below) | `201 { task, series? }` |
 | GET | `/v1/tasks/:id` | – | `{ task, series?, reminder? }` |
 | PATCH | `/v1/tasks/:id` | UpdateTaskInput (`expectedVersion?`, any field; `null` clears) | `{ task }` |
+| GET | `/v1/tasks/:id/attachments` | – | `{ attachments: Attachment[] }` |
+| POST | `/v1/tasks/:id/attachments` | `{ files: AttachmentUpload[], expectedVersion? }` | `201 { task }` |
+| GET | `/v1/tasks/:id/attachments/:attachmentId` | – | `{ attachment, dataBase64 }` |
+| GET | `/v1/tasks/:id/attachments/:attachmentId/content` | – | Binary file, authenticated, `no-store`, download disposition |
+| DELETE | `/v1/tasks/:id/attachments/:attachmentId` | `{ expectedVersion? }` | `{ task }` |
 | POST | `/v1/tasks/:id/complete` | `{ expectedVersion? }` | `{ task }` |
 | POST | `/v1/tasks/:id/reopen` | `{ expectedVersion? }` | `{ task }` (undo; past reminders are not re-sent) |
 | POST | `/v1/tasks/:id/cancel` | `{ expectedVersion? }` | `{ task }` |
@@ -132,7 +138,7 @@ id: 42
 event: task.updated
 data: {"seq":42,"type":"task.updated","at":"…Z","id":"t_…"}
 ```
-Event types: `task.created`, `task.updated`, `series.created`, `series.updated`, `reminder.updated`
+Event types: `reminder.fired`, `task.created`, `task.updated`, `series.created`, `series.updated`, `reminder.updated`
 (`related.taskId`), `day.changed`, `runtime.started`. A `: ping` comment is sent every 15s.
 Clients subscribe first, then load snapshots; on reconnect they must re-sync (`/v1/today`, `/v1/tasks`).
 
@@ -140,3 +146,55 @@ Clients subscribe first, then load snapshots; on reconnect they must re-sync (`/
 
 The notification helper opens `todocue://task/<taskId>` on click; the macOS app registers the scheme
 and reveals the task in the side panel.
+
+## Attachments
+
+Create tasks with `attachments: AttachmentUpload[]`. Patch with `addAttachments` and/or
+`removeAttachmentIds`; omitted fields preserve existing attachments. Text edits, removals and uploads
+commit in one transaction, increment the task version once and emit `task.updated`. Upload POST/PATCH
+supports the usual `Idempotency-Key` and `expectedVersion` semantics.
+
+```json
+{
+  "title": "整理灵感",
+  "attachments": [
+    { "name": "idea.png", "mediaType": "image/png", "dataBase64": "<standard padded base64>" },
+    { "name": "notes.txt", "mediaType": "text/plain", "dataBase64": "<standard padded base64>" }
+  ]
+}
+```
+
+`mediaType` is optional: common filename extensions are inferred, otherwise `application/octet-stream`.
+Filename must be a plain basename, up to 255 characters, without path separators/control characters.
+Limits: 20 files per task, 10 MiB per file, 30 MiB total decoded bytes per task. Upload-capable routes
+accept up to 42 MiB JSON; other routes retain their 1 MiB limit. Empty files are allowed.
+
+Every task snapshot includes metadata only:
+
+```json
+{ "id": "a_…", "taskId": "t_…", "name": "idea.png", "mediaType": "image/png",
+  "size": 1234, "sha256": "<64 hex chars>", "createdAt": "…Z" }
+```
+
+Bytes are copied into SQLite BLOBs with their metadata; deleting/moving the original file does not
+break the attachment. Database backups include them. Schema v1 is backed up before migration to v2.
+JSON exports retain `version: 1` and add an `attachments` array of metadata plus `dataBase64`, while
+legacy tasks decode with empty attachments. There is no JSON import endpoint.
+
+Attachments on recurring creation belong to the **first instance only**. Add files to later instances
+explicitly; series generation never duplicates attachment bytes automatically.
+
+## Reminder Cue events
+
+The scheduler emits `reminder.fired` once per reminder, independently of system notification success:
+
+```json
+{ "seq": 43, "type": "reminder.fired", "at": "…Z", "id": "r_…",
+  "related": { "taskId": "t_…", "fireAt": "…Z", "count": "1", "late": "false" } }
+```
+
+Missed reminders may be grouped (`count > 1`, `late: "true"`); `id` and `taskId` identify the first
+current reminder in the group. Notification retries do not emit another Cue. Snoozing creates a new
+reminder and can produce a new Cue. The macOS client ignores stale/replayed events, cancelled/completed
+or rescheduled tasks, disabled notch UI, and full screen when quiet mode is enabled. App must be running
+on a Mac with a notch for a Cue to appear; the background system notification path remains independent.

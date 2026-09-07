@@ -23,6 +23,10 @@ struct TaskDraft: Equatable {
     var version: Int?
     var isSeriesInstance = false
 
+    var existingAttachments: [TaskAttachment] = []
+    var pendingAttachments: [PendingAttachment] = []
+    var removedAttachmentIds: Set<String> = []
+    var saveIdempotencyKey = UUID().uuidString
     var title = ""
     var notes = ""
     var project = ""
@@ -47,6 +51,7 @@ struct TaskDraft: Equatable {
     init() {}
 
     init(editing t: TodoTask) {
+        existingAttachments = t.attachments
         editingTaskId = t.id
         version = t.version
         isSeriesInstance = t.isSeriesInstance
@@ -76,13 +81,16 @@ struct TaskDraft: Equatable {
     var isEditing: Bool { editingTaskId != nil }
 
     var hasContent: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.isEmpty || !project.isEmpty || priority != .none || !estimate.isEmpty || scheduledMode != .none || dueMode != .none || reminderOn || repeatKind != .none
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.isEmpty || !project.isEmpty || priority != .none || !estimate.isEmpty || scheduledMode != .none || dueMode != .none || reminderOn || repeatKind != .none || !pendingAttachments.isEmpty || !removedAttachmentIds.isEmpty
     }
 
     func validate() -> String? {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请输入标题" }
         if !estimate.isEmpty, Int(estimate) == nil || Int(estimate)! < 0 { return "预计耗时需要是非负整数分钟" }
         if repeatKind == .weekly, weekdays.isEmpty { return "每周重复至少选择一天" }
+        let kept = existingAttachments.filter { !removedAttachmentIds.contains($0.id) }
+        if kept.count + pendingAttachments.count > AttachmentLimits.count { return "每个任务最多 20 个附件" }
+        if kept.reduce(0, { $0 + $1.size }) + pendingAttachments.reduce(0, { $0 + $1.data.count }) > AttachmentLimits.totalBytes { return "附件总大小不能超过 30 MB" }
         return nil
     }
 
@@ -115,6 +123,7 @@ struct TaskDraft: Equatable {
     func createPayload() -> TaskPayload {
         var p = TaskPayload()
         commonFields(into: &p)
+        if !pendingAttachments.isEmpty { p.fields["attachments"] = .array(pendingAttachments.map(\.payload)) }
         p.fields["timezone"] = .string(TimeZone.current.identifier)
         if repeatKind == .none {
             timeFields(into: &p)
@@ -133,6 +142,8 @@ struct TaskDraft: Equatable {
         var p = TaskPayload()
         commonFields(into: &p)
         timeFields(into: &p)
+        if !pendingAttachments.isEmpty { p.fields["addAttachments"] = .array(pendingAttachments.map(\.payload)) }
+        if !removedAttachmentIds.isEmpty { p.fields["removeAttachmentIds"] = .array(removedAttachmentIds.sorted().map(JSONValue.string)) }
         return p
     }
 }

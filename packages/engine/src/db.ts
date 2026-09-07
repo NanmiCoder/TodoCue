@@ -96,6 +96,26 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    name: "task_attachments_and_reminder_cues",
+    up(db) {
+      db.exec(`
+        CREATE TABLE attachments (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          media_type TEXT NOT NULL,
+          size INTEGER NOT NULL CHECK(size >= 0 AND size <= 10485760),
+          sha256 TEXT NOT NULL,
+          content BLOB NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX attachments_task_idx ON attachments(task_id);
+        ALTER TABLE reminders ADD COLUMN cue_emitted_at TEXT;
+      `);
+    },
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = migrations[migrations.length - 1]!.version;

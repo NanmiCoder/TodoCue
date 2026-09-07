@@ -91,6 +91,9 @@ struct TaskMetadataView: View {
                     .lineLimit(1).truncationMode(.middle)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if !task.attachments.isEmpty {
+                Label("\(task.attachments.count)", systemImage: "paperclip").accessibilityLabel("\(task.attachments.count) 个附件")
+            }
             if task.hasReminder { Image(systemName: "bell").accessibilityLabel("已设置提醒") }
             if task.isSeriesInstance { Image(systemName: "repeat").accessibilityLabel("重复任务") }
         }

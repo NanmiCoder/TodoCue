@@ -1,4 +1,6 @@
 import type { Command } from "commander";
+import fs from "node:fs/promises";
+import { readAttachments } from "../attachments.js";
 import { randomUUID } from "node:crypto";
 import type { CreateTaskInput, Priority, UpdateTaskInput } from "@todocue/shared";
 import { formatLocal } from "@todocue/engine";
@@ -10,6 +12,7 @@ type Ctx = { client: () => TodoCueClient; out: () => OutputOptions };
 
 function timeOptions(cmd: Command): Command {
   return cmd
+    .option("--attach <file>", "attach a local file (repeat for multiple files)", (value: string, previous: string[]) => [...previous, value], [] as string[])
     .option("-n, --notes <text>", "notes")
     .option("-p, --project <name>", "project")
     .option("-P, --priority <level>", "none|low|medium|high")
@@ -38,6 +41,7 @@ export function registerTaskCommands(program: Command, ctx: Ctx): void {
     const client = ctx.client();
     const context = await client.context();
     const input: CreateTaskInput = { title: titleParts.join(" ") };
+    if (opts.attach?.length) input.attachments = await readAttachments(opts.attach);
     if (opts.notes) input.notes = opts.notes;
     if (opts.project) input.project = opts.project;
     if (opts.priority) input.priority = opts.priority as Priority;
@@ -149,6 +153,7 @@ export function registerTaskCommands(program: Command, ctx: Ctx): void {
     const client = ctx.client();
     const context = await client.context();
     const patch: UpdateTaskInput = {};
+    if (opts.attach?.length) patch.addAttachments = await readAttachments(opts.attach);
     if (opts.title) patch.title = opts.title;
     if (opts.notes) patch.notes = opts.notes;
     if (opts.clearNotes) patch.notes = null;
@@ -202,6 +207,29 @@ export function registerTaskCommands(program: Command, ctx: Ctx): void {
       if (opts.until) body.until = resolveInstant(opts.until, await client.context());
       const res = await client.snoozeTask(id, body);
       print(ctx.out(), res, () => `snoozed until ${formatLocal(res.task.reminderAt!, res.task.timezone)}\n${formatTaskLine(res.task)}`);
+    });
+
+  const attachments = program.command("attachments").description("task images and files (10 MiB/file, 20 files/30 MiB per task)");
+  attachments.command("list <taskId>").action(async (id: string) => {
+    const res = await ctx.client().listAttachments(id);
+    print(ctx.out(), res, () => res.attachments.map((a) => `${a.id}  ${a.name}  ${a.mediaType}  ${a.size} bytes`).join("\n") || "(no attachments)");
+  });
+  attachments.command("add <taskId> <files...>").option("--expect <version>").option("--idempotency-key <key>")
+    .action(async (id: string, files: string[], opts) => {
+      const res = await ctx.client().addAttachments(id, { files: await readAttachments(files), expectedVersion: opts.expect ? Number(opts.expect) : undefined },
+        { idempotencyKey: opts.idempotencyKey ?? randomUUID() });
+      print(ctx.out(), res, () => `attached; ${res.task.attachments.length} file(s)\n${formatTaskLine(res.task)}`);
+    });
+  attachments.command("save <taskId> <attachmentId> <destination>").description("save bytes to a new file; never overwrite an existing file")
+    .action(async (id: string, attachmentId: string, destination: string) => {
+      const res = await ctx.client().getAttachment(id, attachmentId);
+      await fs.writeFile(destination, Buffer.from(res.dataBase64, "base64"), { flag: "wx", mode: 0o600 });
+      print(ctx.out(), { attachment: res.attachment, destination }, () => `saved ${res.attachment.name} to ${destination}`);
+    });
+  attachments.command("remove <taskId> <attachmentId>").option("--expect <version>")
+    .action(async (id: string, attachmentId: string, opts) => {
+      const res = await ctx.client().removeAttachment(id, attachmentId, { expectedVersion: opts.expect ? Number(opts.expect) : undefined });
+      print(ctx.out(), res, () => `removed attachment; ${res.task.attachments.length} file(s) remain`);
     });
 
   const series = program.command("series").description("recurring series");

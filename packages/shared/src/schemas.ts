@@ -56,6 +56,34 @@ export const Weekday = z.number().int().min(1).max(7).describe("ISO weekday: 1=M
 // Entities
 // ---------------------------------------------------------------------------
 
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_TASK_ATTACHMENT_BYTES = 30 * 1024 * 1024;
+export const MAX_ATTACHMENTS = 20;
+export const ATTACHMENT_BODY_LIMIT = 42 * 1024 * 1024;
+
+export const Attachment = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  name: z.string(),
+  mediaType: z.string(),
+  size: z.number().int().nonnegative(),
+  sha256: z.string(),
+  createdAt: InstantUtc,
+});
+export type Attachment = z.infer<typeof Attachment>;
+
+export const AttachmentUpload = z.object({
+  name: z.string().trim().min(1).max(255).regex(/^[^\x00-\x1f\x7f/\\]+$/, "use a filename without path separators or control characters").refine((name) => name !== "." && name !== "..", "invalid filename"),
+  mediaType: z.string().max(127).regex(/^[a-zA-Z0-9!#$&^_.+-]+\/[a-zA-Z0-9!#$&^_.+-]+$/).optional(),
+  dataBase64: z.string().max(4 * Math.ceil(MAX_ATTACHMENT_BYTES / 3)).describe("Standard padded base64 file bytes; max 10 MiB per file"),
+}).strict();
+export type AttachmentUpload = z.infer<typeof AttachmentUpload>;
+export const AddAttachmentsInput = z.object({
+  files: z.array(AttachmentUpload).min(1).max(MAX_ATTACHMENTS),
+  expectedVersion: z.number().int().optional(),
+}).strict();
+export type AddAttachmentsInput = z.infer<typeof AddAttachmentsInput>;
+
 export const Task = z.object({
   id: z.string(),
   title: z.string(),
@@ -80,6 +108,7 @@ export const Task = z.object({
   version: z.number().int(),
   createdAt: InstantUtc,
   updatedAt: InstantUtc,
+  attachments: z.array(Attachment).default([]),
 });
 export type Task = z.infer<typeof Task>;
 
@@ -138,6 +167,7 @@ const nullableText = z.string().max(4000).nullable().optional();
 export const CreateTaskInput = z
   .object({
     title: z.string().trim().min(1).max(500),
+    attachments: z.array(AttachmentUpload).max(MAX_ATTACHMENTS).optional(),
     notes: nullableText,
     project: z.string().trim().max(100).nullable().optional(),
     priority: Priority.optional(),
@@ -162,6 +192,8 @@ export type CreateTaskInput = z.infer<typeof CreateTaskInput>;
 
 export const UpdateTaskInput = z
   .object({
+    addAttachments: z.array(AttachmentUpload).max(MAX_ATTACHMENTS).optional(),
+    removeAttachmentIds: z.array(z.string()).max(MAX_ATTACHMENTS).optional(),
     expectedVersion: z.number().int().optional(),
     title: z.string().trim().min(1).max(500).optional(),
     notes: nullableText,
@@ -294,6 +326,7 @@ export type ContextInfo = z.infer<typeof ContextInfo>;
 // ---------------------------------------------------------------------------
 
 export const EventType = z.enum([
+  "reminder.fired",
   "task.created",
   "task.updated",
   "series.created",
@@ -364,6 +397,7 @@ export const ExportBundle = z.object({
   tasks: z.array(Task),
   series: z.array(Series),
   reminders: z.array(Reminder),
+  attachments: z.array(Attachment.extend({ dataBase64: z.string() })).default([]),
 });
 export type ExportBundle = z.infer<typeof ExportBundle>;
 

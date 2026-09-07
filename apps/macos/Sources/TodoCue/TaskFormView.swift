@@ -6,6 +6,7 @@ struct TaskFormView: View {
     @State var draft: TaskDraft
     @State private var error: String?
     @State private var saving = false
+    @State private var importingAttachments = false
     @State private var scheduleExpanded: Bool
     @FocusState private var titleFocused: Bool
 
@@ -35,6 +36,8 @@ struct TaskFormView: View {
                         .textFieldStyle(.plain)
                         .padding(16)
                         .cueSurface()
+
+                        AttachmentEditorView(draft: $draft, loading: $importingAttachments)
 
                         EditorSection(title: "任务属性", icon: "slider.horizontal.3") {
                             EditorFieldRow(title: "项目", icon: "folder") {
@@ -114,7 +117,7 @@ struct TaskFormView: View {
                     Button(draft.isEditing ? "保存更改" : "添加任务", action: save)
                         .buttonStyle(CueButtonStyle(prominent: true))
                         .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(saving || !model.canWrite)
+                        .disabled(saving || importingAttachments || !model.canWrite)
                         .help("⌘Return 保存")
                 }
             }
@@ -177,7 +180,7 @@ struct TaskFormView: View {
     }
 
     private func save() {
-        guard !saving else { return }
+        guard !saving, !importingAttachments else { return }
         error = draft.validate()
         guard error == nil else { return }
         saving = true

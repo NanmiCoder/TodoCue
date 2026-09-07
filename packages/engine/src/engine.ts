@@ -22,6 +22,7 @@ import {
   type NextResult,
   type EventType,
 } from "@todocue/shared";
+import { AttachmentStore } from "./attachments.js";
 import type { SqliteDatabase } from "./db.js";
 import { newReminderId, newSeriesId, newTaskId } from "./ids.js";
 import {
@@ -74,6 +75,7 @@ export class TaskEngine {
   readonly clock: Clock;
   readonly timezone: string;
   readonly horizonDays: number;
+  readonly attachments: AttachmentStore;
 
   private listeners = new Set<EventListener>();
   private seq = 0;
@@ -82,6 +84,7 @@ export class TaskEngine {
 
   constructor(opts: EngineOptions) {
     this.db = opts.db;
+    this.attachments = new AttachmentStore(this.db);
     this.clock = opts.clock ?? systemClock;
     this.horizonDays = opts.horizonDays ?? 30;
     this.timezone = this.resolveTimezone(opts.timezone);
@@ -204,8 +207,10 @@ export class TaskEngine {
   private requireTask(id: string): Task {
     const row = this.taskRow(id);
     if (!row) throw TodoCueError.notFound("task", id);
-    return taskFromRow(row);
+    return this.hydrateTask(row);
   }
+
+  private hydrateTask = (row: TaskRow): Task => ({ ...taskFromRow(row), attachments: this.attachments.list(row.id) });
 
   getTask(id: string): Task {
     return this.requireTask(id);
@@ -288,10 +293,24 @@ export class TaskEngine {
 
   createTask(rawInput: CreateTaskInput): { task: Task; series: Series | null } {
     const input = CreateTaskInput.parse(rawInput);
+    return this.tx(() => {
+      const result = this.createTaskRecord(input);
+      if (input.attachments?.length) {
+        // Recurrence attachments belong to the first instance, never implicitly to future tasks.
+        this.attachments.add(result.task.id, input.attachments, this.nowIso());
+        result.task.attachments = this.attachments.list(result.task.id);
+      }
+      return result;
+    });
+  }
+
+  private createTaskRecord(rawInput: CreateTaskInput): { task: Task; series: Series | null } {
+    const input = CreateTaskInput.parse(rawInput);
     if (input.repeat) return this.createRepeatingTask(input);
     const tz = input.timezone ? assertTimezone(input.timezone) : this.timezone;
     const nowIso = this.nowIso();
     const draft: Task = {
+      attachments: [],
       id: newTaskId(),
       title: input.title,
       notes: input.notes ?? null,
@@ -368,6 +387,9 @@ export class TaskEngine {
       if (patch.priority !== undefined) draft.priority = patch.priority;
       if (patch.estimateMinutes !== undefined) draft.estimateMinutes = patch.estimateMinutes;
       this.applyTimeFields(draft, patch);
+      if (patch.removeAttachmentIds?.length) this.attachments.remove(id, patch.removeAttachmentIds);
+      if (patch.addAttachments?.length) this.attachments.add(id, patch.addAttachments, this.nowIso());
+      draft.attachments = this.attachments.list(id);
       this.bump(draft);
       this.writeTask(draft);
       this.queueEvent({ type: "task.updated", id: draft.id });
@@ -496,7 +518,7 @@ export class TaskEngine {
     const rows = this.db
       .prepare(`SELECT * FROM tasks WHERE ${where.join(" AND ")} ORDER BY created_at ASC`)
       .all(...params) as TaskRow[];
-    let tasks = rows.map(taskFromRow);
+    let tasks = rows.map(this.hydrateTask);
     const includeUnscheduled = q.includeUnscheduled ?? true;
     if (q.from || q.to || !includeUnscheduled) {
       tasks = tasks.filter((t) => {
@@ -604,7 +626,7 @@ export class TaskEngine {
 
   private openTasks(): Task[] {
     const rows = this.db.prepare("SELECT * FROM tasks WHERE status = 'todo'").all() as TaskRow[];
-    return rows.map(taskFromRow);
+    return rows.map(this.hydrateTask);
   }
 
   todayView(): TodayResult {
@@ -629,7 +651,7 @@ export class TaskEngine {
     const completedRows = this.db
       .prepare("SELECT * FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL ORDER BY completed_at DESC")
       .all() as TaskRow[];
-    const completed = completedRows.map(taskFromRow).filter((t) => localDateOf(t.completedAt!, this.timezone) === today);
+    const completed = completedRows.map(this.hydrateTask).filter((t) => localDateOf(t.completedAt!, this.timezone) === today);
     return { date: today, timezone: this.timezone, now: nowIso, remaining: items.length, items, completed };
   }
 
@@ -695,7 +717,7 @@ export class TaskEngine {
     const rows = this.db
       .prepare("SELECT * FROM tasks WHERE series_id = ? ORDER BY occurrence_date ASC")
       .all(seriesId) as TaskRow[];
-    return rows.map(taskFromRow);
+    return rows.map(this.hydrateTask);
   }
 
   private writeSeries(s: Series, insert: boolean): void {
@@ -771,7 +793,7 @@ export class TaskEngine {
         .all(id, today) as TaskRow[];
       const cancelled: string[] = [];
       for (const row of rows) {
-        const t = taskFromRow(row);
+        const t = this.hydrateTask(row);
         const c: Task = { ...t, status: "cancelled" };
         this.bump(c);
         this.writeTask(c);
@@ -821,6 +843,7 @@ export class TaskEngine {
       // Do not create reminders that are already in the past at generation time.
       if (reminderAt && reminderAt <= nowIso) reminderAt = null;
       const task: Task = {
+        attachments: [],
         id: newTaskId(),
         title: series.title,
         notes: series.notes,
@@ -918,6 +941,23 @@ export class TaskEngine {
     return rows.map(reminderFromRow);
   }
 
+  /** Independent of system notification authorization/retries, delivered once per persisted reminder. */
+  emitReminderCue(ids: string[], late: boolean): void {
+    this.tx(() => {
+      const pending: { id: string; task_id: string; fire_at: string }[] = [];
+      for (const id of ids) {
+        const row = this.db.prepare(`SELECT r.id, r.task_id, r.fire_at FROM reminders r JOIN tasks t ON t.id = r.task_id
+          WHERE r.id = ? AND r.cue_emitted_at IS NULL AND r.status = 'pending'
+            AND t.status = 'todo' AND t.reminder_at = r.fire_at`).get(id) as { id: string; task_id: string; fire_at: string } | undefined;
+        if (!row) continue;
+        this.db.prepare("UPDATE reminders SET cue_emitted_at = ? WHERE id = ?").run(this.nowIso(), id);
+        pending.push(row);
+      }
+      if (pending.length) this.queueEvent({ type: "reminder.fired", id: pending[0]!.id,
+        related: { taskId: pending[0]!.task_id, count: String(pending.length), late: String(late), fireAt: pending[0]!.fire_at } });
+    });
+  }
+
   markReminderSubmitted(id: string, channel: string, status: "submitted" | "missed" = "submitted"): void {
     const nowIso = this.nowIso();
     const row = this.db.prepare("SELECT task_id FROM reminders WHERE id = ?").get(id) as { task_id: string } | undefined;
@@ -955,7 +995,7 @@ export class TaskEngine {
     const map = new Map<string, Task>();
     if (ids.length === 0) return map;
     const rows = this.db.prepare(`SELECT * FROM tasks WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as TaskRow[];
-    for (const r of rows) map.set(r.id, taskFromRow(r));
+    for (const r of rows) map.set(r.id, this.hydrateTask(r));
     return map;
   }
 
@@ -999,10 +1039,10 @@ export class TaskEngine {
   }
 
   exportBundle(): ExportBundle {
-    const tasks = (this.db.prepare("SELECT * FROM tasks ORDER BY created_at").all() as TaskRow[]).map(taskFromRow);
+    const tasks = (this.db.prepare("SELECT * FROM tasks ORDER BY created_at").all() as TaskRow[]).map(this.hydrateTask);
     const series = (this.db.prepare("SELECT * FROM series ORDER BY created_at").all() as SeriesRow[]).map(seriesFromRow);
     const reminders = (this.db.prepare("SELECT * FROM reminders ORDER BY created_at").all() as ReminderRow[]).map(reminderFromRow);
-    return { format: "todocue-export", version: 1, exportedAt: this.nowIso(), timezone: this.timezone, tasks, series, reminders };
+    return { format: "todocue-export", version: 1, exportedAt: this.nowIso(), timezone: this.timezone, tasks, series, reminders, attachments: this.attachments.export() };
   }
 
   projects(): string[] {

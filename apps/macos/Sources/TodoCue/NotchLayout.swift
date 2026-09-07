@@ -33,6 +33,16 @@ enum NotchLayout {
         return CGRect(x: x, y: screen.maxY - h, width: w, height: h)
     }
 
+    /// Fullscreen windows may start below the camera/menu-bar safe area. Coordinates are AppKit's.
+    static func coversScreen(_ window: CGRect, screen: CGRect, topInset: CGFloat) -> Bool {
+        let tolerance: CGFloat = 2
+        let topGap = screen.maxY - window.maxY
+        return abs(window.minX - screen.minX) <= tolerance
+            && abs(window.width - screen.width) <= tolerance
+            && abs(window.minY - screen.minY) <= tolerance
+            && topGap >= -tolerance && topGap <= max(0, topInset) + tolerance
+    }
+
     /// Rows under the next card: open tasks in section order, without the next task, capped to `limit`.
     static func select(items: [TodayItem], nextId: String?, limit: Int) -> Selection {
         let order: [TodaySection] = [.overdue, .must, .scheduled]

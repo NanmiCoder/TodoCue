@@ -148,6 +148,10 @@ public struct APIClient: Sendable {
         try await action(id, "snooze", expectedVersion: expectedVersion, extra: ["until": .string(TCDate.iso(until))])
     }
 
+    public func attachmentData(_ attachment: TaskAttachment) async throws -> Data {
+        try await raw("GET", "/v1/tasks/\(attachment.taskId)/attachments/\(attachment.id)/content")
+    }
+
     public func series(status: SeriesStatus? = nil) async throws -> [Series] {
         var q: [URLQueryItem] = []
         if let status { q.append(.init(name: "status", value: status.rawValue)) }

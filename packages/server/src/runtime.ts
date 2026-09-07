@@ -96,7 +96,7 @@ export async function startRuntime(opts: RuntimeOptions = {}): Promise<RunningRu
   const scheduler = new Scheduler({ engine, notifier, tickMs: opts.tickMs, log: (m) => logger.info(m) });
   const token = opts.memory ? newSecret() : loadOrCreateToken(paths, newSecret);
   const host = opts.host ?? "127.0.0.1";
-  const port = opts.memory && opts.port === undefined ? 0 : resolvePort(opts.port);
+  const port = opts.port === 0 || (opts.memory && opts.port === undefined) ? 0 : resolvePort(opts.port);
 
   let baseUrl = "";
   const app = buildApp({

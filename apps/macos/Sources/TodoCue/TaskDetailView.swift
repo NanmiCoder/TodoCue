@@ -27,6 +27,20 @@ struct TaskDetailView: View {
                         }
                         .padding(.horizontal, 16).padding(.vertical, 12)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Label("附件\(task.attachments.isEmpty ? "" : " · \(task.attachments.count)")", systemImage: "paperclip")
+                                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                                Spacer()
+                                Button("添加 / 管理") { model.edit(task) }.buttonStyle(CueButtonStyle()).disabled(!model.canWrite)
+                                    .accessibilityLabel("管理任务附件")
+                            }
+                            if task.attachments.isEmpty {
+                                Text("把图片、文档和灵感放在一起。") .font(.system(size: 12)).foregroundStyle(.secondary)
+                            } else {
+                                AttachmentGallery(attachments: task.attachments)
+                            }
+                        }.padding(16).cueSurface()
                         EditorSection(title: "安排", icon: "calendar") { fields(task) }
                         if let sid = task.seriesId { seriesBlock(sid, task: task) }
                         reminderLine(task).padding(.horizontal, 6)

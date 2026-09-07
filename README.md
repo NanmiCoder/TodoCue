@@ -41,18 +41,18 @@
 
 ## 下载与安装
 
-当前版本 **[v0.1.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.0)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
+当前版本 **[v0.1.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.1)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
 
 | 你的 Mac | 安装包 |
 | --- | --- |
-| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.0/TodoCue-0.1.0-macOS-arm64.dmg) |
-| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.0/TodoCue-0.1.0-macOS-x64.dmg) |
+| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.1/TodoCue-0.1.1-macOS-arm64.dmg) |
+| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.1/TodoCue-0.1.1-macOS-x64.dmg) |
 
 打开 DMG → 将 **TodoCue.app 拖入 Applications** → 从应用程序中启动。
 
 App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无需另装运行时。需要提醒时，在设置中允许通知。更新时下载新 DMG 并替换 App；当前尚无 App 内自动更新。
 
-[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.0/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
+[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.1/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
 ## 让 Agent 和你操作同一份待办
 

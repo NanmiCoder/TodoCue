@@ -4,6 +4,15 @@ import TodoCueKit
 /// Shared state between the notch controller and its SwiftUI content.
 @MainActor
 final class NotchState: ObservableObject {
+    @Published var cue: ReminderCue?
+    @Published var cueHovered = false
+    @Published var cueBusy = false
+    @Published var cueError: String?
+    var onCueDismiss: (() -> Void)?
+    var onCueOpen: (() -> Void)?
+    var onCueComplete: (() -> Void)?
+    var onCueSnooze: (() -> Void)?
+    var onCueSize: ((CGSize) -> Void)?
     @Published var expanded = false
     /// Stays open until Esc, a click outside or the pin button; hovering alone never pins.
     @Published var pinned = false
@@ -39,28 +48,37 @@ struct NotchRootView: View {
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
 
-    private var corner: CGFloat { state.expanded ? Theme.notchCorner : Theme.notchCollapsedCorner }
+    private var corner: CGFloat { (state.expanded || state.cue != nil) ? Theme.notchCorner : Theme.notchCollapsedCorner }
 
     var body: some View {
         ZStack(alignment: .top) {
             NotchShape(corner: corner).fill(Color.black)
-            NotchShape(corner: corner).stroke(Color.white.opacity(state.expanded ? 0.12 : 0), lineWidth: 1)
-            if !state.expanded && state.wingWidth > 0 {
+            NotchShape(corner: corner).stroke(Color.white.opacity((state.expanded || state.cue != nil) ? 0.12 : 0), lineWidth: 1)
+            if !state.expanded && state.cue == nil && state.wingWidth > 0 {
                 NotchSummaryView(state: state, model: model).transition(.opacity)
+            }
+            if let cue = state.cue {
+                NotchReminderView(cue: cue, state: state, model: model)
+                    .id(cue.id)
+                    .frame(width: 460).fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGSize.self, of: { $0.size }, action: { state.onCueSize?($0) })
+                    .padding(.top, state.notchHeight)
+                    .transition(state.reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
             NotchCardView(state: state, model: model)
                 .frame(width: Theme.notchExpandedWidth)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGSize.self, of: { $0.size }, action: { state.report(contentSize: $0) })
                 .padding(.top, state.notchHeight)
-                .opacity(state.expanded ? 1 : 0)
-                .allowsHitTesting(state.expanded)
-                .accessibilityHidden(!state.expanded)
+                .opacity(state.expanded && state.cue == nil ? 1 : 0)
+                .allowsHitTesting(state.expanded && state.cue == nil)
+                .accessibilityHidden(!state.expanded || state.cue != nil)
         }
         // Explicit minimums keep the shell at the window size; the card overflows downward until the window grows.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         .clipShape(NotchShape(corner: corner))
         .animation(state.reduceMotion ? .easeInOut(duration: 0.15) : Theme.expand, value: state.expanded)
+        .animation(state.reduceMotion ? .easeOut(duration: 0.12) : Theme.expand, value: state.cue?.id)
         .environmentObject(model)
         .preferredColorScheme(.dark)
         .environment(\.accent, Theme.accent(.dark))

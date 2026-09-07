@@ -84,7 +84,7 @@ git push origin main v0.1.1
 
 ## 工作流做什么
 
-1. 在 Linux runner 检查标签、版本镜像、发布说明及五个 Secrets，运行 TypeScript 和发布脚本测试。
+1. 在 Linux runner 检查标签、版本镜像、发布说明及五个 Secrets，运行 TypeScript、发布脚本测试及真实 CLI/MCP/HTTP 冒烟门禁。
 2. 使用 `macos-26` 构建 `arm64`，`macos-15-intel` 构建 `x64`；两边固定 Xcode 26.2 和 Node 26.7.0，并运行 Swift 测试。
 3. 在临时钥匙串中导入 `.p12`，确认身份类型和 Team ID，验证并保存公证凭据。证书导入遵循 [GitHub macOS runner 指南](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)。
 4. 从锁文件安装依赖，使用固定 SHA-256 的官方 Node，给 SQLite 扩展、Node、通知辅助程序和主 App 逐层签名。
@@ -156,3 +156,9 @@ npm run macos:dmg
 - [TodoCue v0.1.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.0) 已发布并设为 Latest，正文与 `release-notes/v0.1.0.md` 一致。
 - Release 的 Assets 包含 `TodoCue-0.1.0-macOS-arm64.dmg`、`TodoCue-0.1.0-macOS-x64.dmg` 和 `SHA256SUMS`。
 - 首次发布时仓库为 Private；同日已按维护者要求改为 Public，Release 与安装包现可公开访问。
+
+### 日常质量门禁
+
+主分支推送与 PR 运行 `.github/workflows/quality.yml`：Linux 上执行 `npm run check`，macOS 上执行 Swift 测试。版本发布也执行同一套运行时门禁，两种架构分别运行 Swift 测试。
+
+本地统一入口为 `npm run check:macos`；其中 `test:smoke` 使用临时数据库和随机端口，启动真实 CLI/MCP 子进程，验收附件上传、图片读取、提醒事件与持久化重启。它不会读写日常 TodoCue 数据。涉及原生 UI 的变更还需完成 Computer Use 验收；[0.1.1 验收记录](qa/v0.1.1.md) 是本次版本的人工门禁记录。

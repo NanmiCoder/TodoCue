@@ -3,6 +3,8 @@ import {
   ErrorCodes,
   TodoCueError,
   type ConnectionInfo,
+  type AddAttachmentsInput,
+  type Attachment,
   type ContextInfo,
   type CreateSeriesInput,
   type CreateTaskInput,
@@ -118,6 +120,18 @@ export class TodoCueClient {
   }
   snoozeTask(id: string, body: SnoozeInput = {}, opts?: RequestOptions) {
     return this.request<{ task: Task }>("POST", `/tasks/${encodeURIComponent(id)}/snooze`, body, opts);
+  }
+  listAttachments(id: string) {
+    return this.request<{ attachments: Attachment[] }>("GET", `/tasks/${encodeURIComponent(id)}/attachments`);
+  }
+  addAttachments(id: string, input: AddAttachmentsInput, opts?: RequestOptions) {
+    return this.request<{ task: Task }>("POST", `/tasks/${encodeURIComponent(id)}/attachments`, input, opts);
+  }
+  getAttachment(id: string, attachmentId: string) {
+    return this.request<{ attachment: Attachment; dataBase64: string }>("GET", `/tasks/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`);
+  }
+  removeAttachment(id: string, attachmentId: string, body: VersionedAction = {}) {
+    return this.request<{ task: Task }>("DELETE", `/tasks/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, body);
   }
   today() {
     return this.request<TodayResult>("GET", "/today");

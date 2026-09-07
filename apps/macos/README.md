@@ -124,3 +124,17 @@ Debug bundles accept `TODOCUE_PREVIEW_APPEARANCE=light|dark` and `TODOCUE_PREVIE
 visual checks. These options never change system preferences and are excluded from release builds.
 
 See `../../docs/ui-review.md` for the observed issues, actual Computer use checks and limitations.
+
+## Attachments and reminder Cue
+
+The create/edit form imports multiple files and pastes clipboard images. Files are copied through the
+same authenticated runtime API as CLI/MCP. Images use downsampled thumbnails (1 column for one,
+3 for three, 2×2 for four); originals use Quick Look and a Save As context action. Import/save limits
+and atomic add/remove patches are shared with the runtime. Recurring tasks attach only to their first instance.
+
+`reminder.fired` drives a separate non-key notch card with complete, snooze and open actions. The card
+queues reminders, suppresses stale/replayed events, dismisses after 9 seconds without hover and respects
+notch/fullscreen settings and Reduce Motion. A notched display and a running App are required.
+
+Run `npm run check:macos` at the repository root for all gates. Computer Use evidence and the tested
+platform boundary are recorded in [0.1.1 QA](../../docs/qa/v0.1.1.md).

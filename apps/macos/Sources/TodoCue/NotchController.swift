@@ -57,6 +57,11 @@ final class NotchController {
     private var targetFrame: NSRect?
     private var observers: [NSObjectProtocol] = []
     private var cancellables: Set<AnyCancellable> = []
+    private var cueQueue = ReminderCueQueue()
+    private var cueTimer: Timer?
+    private var cueDeadline = Date.distantPast
+    private var nextCueTask: Task<Void, Never>?
+    var activeCue: ReminderCue? { state.cue }
     var isPanelVisible: (() -> Bool)?
 
     private let hoverDelay: TimeInterval = 0.2
@@ -64,6 +69,18 @@ final class NotchController {
 
     init(model: AppModel) {
         self.model = model
+        model.onReminderCue = { [weak self] cue in self?.receiveCue(cue) }
+        state.onCueDismiss = { [weak self] in self?.dismissCue() }
+        state.onCueOpen = { [weak self] in
+            guard let self, let cue = self.state.cue else { return }
+            self.dismissCue(showNext: false)
+            self.model.reveal(taskId: cue.task.id)
+        }
+        state.onCueComplete = { [weak self] in self?.actOnCue(snooze: false) }
+        state.onCueSnooze = { [weak self] in self?.actOnCue(snooze: true) }
+        state.onCueSize = { [weak self] size in
+            Task { @MainActor in self?.sizeCue(height: size.height) }
+        }
         state.onOpenTask = { [weak self] id in self?.model.reveal(taskId: id) }
         state.onOpenAll = { [weak self] in self?.model.openToday() }
         state.onNewTask = { [weak self] in self?.model.newTask() }
@@ -94,6 +111,9 @@ final class NotchController {
     }
 
     func stop() {
+        nextCueTask?.cancel()
+        cueTimer?.invalidate()
+        cueQueue.clear()
         stopPolling()
         removeMonitors()
         window?.orderOut(nil)
@@ -130,7 +150,7 @@ final class NotchController {
         updateWings(remaining: model.remaining, online: model.connectionState.isOnline, animated: false)
         if window == nil {
             ensureWindow()
-        } else if changed && state.expanded {
+        } else if changed && (state.expanded || state.cue != nil) {
             collapse(immediately: true)
         } else {
             placeCollapsed(animated: false)
@@ -139,6 +159,10 @@ final class NotchController {
     }
 
     private func teardownWindow() {
+        nextCueTask?.cancel()
+        cueTimer?.invalidate()
+        cueQueue.clear()
+        state.cue = nil
         window?.orderOut(nil)
         window = nil
         geometry = nil
@@ -191,7 +215,7 @@ final class NotchController {
     }
 
     private func placeCollapsed(animated: Bool) {
-        guard let window, !state.expanded else { return }
+        guard let window, !state.expanded, state.cue == nil else { return }
         let target = collapsedFrame()
         guard window.frame != target || targetFrame != target else { return }
         place(window, at: target, duration: animated ? 0.2 : 0)
@@ -281,6 +305,10 @@ final class NotchController {
     /// survives the pointer leaving. A click in another TodoCue window closes it.
     private func localMouseDown(_ event: NSEvent) -> NSEvent? {
         guard let window else { return event }
+        if state.cue != nil {
+            if event.window !== window { dismissCue() }
+            return event
+        }
         if event.window === window {
             if !state.expanded {
                 expand(pinned: true)
@@ -298,6 +326,7 @@ final class NotchController {
     }
 
     private func outsideMouseDown() {
+        if state.cue != nil { dismissCue(); return }
         if state.expanded { collapse(immediately: false) }
     }
 
@@ -331,6 +360,7 @@ final class NotchController {
     }
 
     private func poll() {
+        guard state.cue == nil else { stopPolling(); return }
         guard let window else { stopPolling(); return }
         let loc = NSEvent.mouseLocation
         let inHot = collapsedFrame().contains(loc)
@@ -358,8 +388,8 @@ final class NotchController {
     }
 
     /// Fullscreen heuristic: the frontmost app owns an on-screen window covering the whole notch screen.
-    private func shouldAutoExpand() -> Bool {
-        guard isPanelVisible?() != true else { return false }
+    private func shouldAutoExpand(forReminder: Bool = false) -> Bool {
+        guard forReminder || isPanelVisible?() != true else { return false }
         guard Prefs.disableNotchInFullscreen, let geo = geometry else { return true }
         guard let front = NSWorkspace.shared.frontmostApplication, front != NSRunningApplication.current else { return true }
         let pid = front.processIdentifier
@@ -367,8 +397,11 @@ final class NotchController {
         for w in list {
             guard (w[kCGWindowOwnerPID as String] as? Int32) == pid,
                   let b = w[kCGWindowBounds as String] as? [String: CGFloat],
-                  let width = b["Width"], let height = b["Height"] else { continue }
-            if abs(width - geo.screenFrame.width) < 2 && abs(height - geo.screenFrame.height) < 2 { return false }
+                  let width = b["Width"], let height = b["Height"], let x = b["X"], let y = b["Y"] else { continue }
+            // WindowServer uses a top-left origin on the primary display; AppKit uses bottom-left.
+            let primaryTop = NSScreen.screens.first?.frame.maxY ?? geo.screenFrame.maxY
+            let frame = CGRect(x: x, y: primaryTop - y - height, width: width, height: height)
+            if NotchLayout.coversScreen(frame, screen: geo.screenFrame, topInset: geo.notchHeight) { return false }
         }
         return true
     }
@@ -376,6 +409,7 @@ final class NotchController {
     // MARK: - Expand / collapse
 
     private func expand(pinned: Bool) {
+        guard state.cue == nil else { return }
         guard let window, geometry != nil else { return }
         if state.expanded {
             if pinned { pin(focusInput: true) }
@@ -410,6 +444,7 @@ final class NotchController {
     }
 
     func collapse(immediately: Bool) {
+        if state.cue != nil { dismissCue(showNext: false); return }
         guard let window, state.expanded else { return }
         let wasKey = window.isKeyWindow
         state.expanded = false
@@ -432,6 +467,94 @@ final class NotchController {
             place(window, at: target, duration: immediately ? 0 : 0.2, timing: CAMediaTimingFunction(name: .easeIn))
         }
         if pollTimer == nil, isNearTop(NSEvent.mouseLocation) { startPolling() }
+        scheduleNextCue()
+    }
+
+    // MARK: - Reminder Cue: transient, actionable, and never takes the keyboard.
+
+    func receiveCue(_ cue: ReminderCue) {
+        guard Prefs.isNotchEnabled, geometry != nil, shouldAutoExpand(forReminder: true) else { return }
+        cueQueue.append(cue)
+        presentNextCue()
+    }
+
+    private func presentNextCue() {
+        guard state.cue == nil, !state.expanded, let window, Prefs.isNotchEnabled,
+              geometry != nil, shouldAutoExpand(forReminder: true) else { return }
+        while let cue = cueQueue.next() {
+            if let task = model.task(cue.task.id), task.status != .todo || task.reminderAt != cue.task.reminderAt { continue }
+            stopPolling()
+            state.reduceMotion = Theme.reduceMotion
+            state.cueHovered = false
+            state.cueError = nil
+            state.cueBusy = false
+            state.cue = cue
+            window.allowsKey = false
+            window.hasShadow = false
+            window.orderFrontRegardless()
+            sizeCue(height: 160)
+            cueDeadline = Date().addingTimeInterval(9)
+            cueTimer?.invalidate()
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.tickCue() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            cueTimer = timer
+            NSAccessibility.post(element: window, notification: .announcementRequested,
+                                 userInfo: [.announcement: "TodoCue 提醒：\(cue.task.title)", .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+            return
+        }
+    }
+
+    private func sizeCue(height: CGFloat) {
+        guard state.cue != nil, let window, let geo = geometry else { return }
+        let frame = NotchLayout.expandedFrame(notch: geo.notchRect, screen: geo.screenFrame,
+                                              contentHeight: height, width: 460, maxHeight: 320)
+        guard targetFrame != frame else { return }
+        place(window, at: frame, duration: 0.28, timing: CAMediaTimingFunction(controlPoints: 0.18, 0.85, 0.25, 1))
+    }
+
+    private func tickCue() {
+        guard let cue = state.cue else { return }
+        if let task = model.task(cue.task.id), task.status != .todo || task.reminderAt != cue.task.reminderAt {
+            if !state.cueBusy { dismissCue() }
+            return
+        }
+        if state.cueHovered || state.cueBusy { cueDeadline = Date().addingTimeInterval(9) }
+        if Date() >= cueDeadline { dismissCue() }
+    }
+
+    private func dismissCue(showNext: Bool = true) {
+        cueTimer?.invalidate()
+        cueTimer = nil
+        state.cue = nil
+        state.cueHovered = false
+        state.cueBusy = false
+        state.cueError = nil
+        rearmAfterLeave = true
+        placeCollapsed(animated: true)
+        if showNext { scheduleNextCue() } else { cueQueue.clear(); nextCueTask?.cancel() }
+    }
+
+    private func scheduleNextCue() {
+        nextCueTask?.cancel()
+        nextCueTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            self?.presentNextCue()
+        }
+    }
+
+    private func actOnCue(snooze: Bool) {
+        guard let cue = state.cue, !state.cueBusy else { return }
+        state.cueBusy = true
+        Task {
+            let success = await model.actOnCue(cue, snooze: snooze)
+            guard state.cue?.id == cue.id else { return }
+            state.cueBusy = false
+            if success { dismissCue() }
+            else { state.cueError = model.toast?.message ?? "暂时没能保存，请重试"; cueDeadline = Date().addingTimeInterval(12) }
+        }
     }
 
     private func togglePin() {

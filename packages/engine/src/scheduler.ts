@@ -121,6 +121,11 @@ export class Scheduler {
   }
 
   private async deliverOne(r: Reminder, task: Task, late = false): Promise<void> {
+    // Recheck after previous async deliveries: edits/cancellation can invalidate a queued reminder.
+    const current = this.engine.getTask(task.id);
+    if (current.status !== "todo" || current.reminderAt !== r.fireAt) return;
+    task = current;
+    this.engine.emitReminderCue([r.id], late);
     const when = formatLocal(r.fireAt, task.timezone, "HH:mm");
     const lines: string[] = [];
     if (late) lines.push(`错过的提醒（${formatLocal(r.fireAt, task.timezone, "M月d日 HH:mm")}）`);
@@ -147,6 +152,7 @@ export class Scheduler {
   }
 
   private async deliverSummary(missed: Reminder[], tasks: Map<string, Task>, nowIso: string): Promise<void> {
+    this.engine.emitReminderCue(missed.map((r) => r.id), true);
     const titles = missed.map((r) => tasks.get(r.taskId)?.title ?? r.taskId);
     const shown = titles.slice(0, 4).map((t) => `• ${t}`);
     if (titles.length > 4) shown.push(`… 及另外 ${titles.length - 4} 项`);

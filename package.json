@@ -23,7 +23,10 @@
     "release": "node scripts/release.mjs",
     "release:check": "node scripts/release.mjs --check",
     "test:release": "node --test scripts/tests/*.test.mjs",
-    "install:local": "npm run build && node packages/cli/dist/index.js install"
+    "install:local": "npm run build && node packages/cli/dist/index.js install",
+    "test:smoke": "node scripts/smoke.mjs",
+    "check": "npm run build && npm test && npm run test:release && npm run test:smoke && npm run release:check",
+    "check:macos": "npm run check && swift test --package-path apps/macos"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
