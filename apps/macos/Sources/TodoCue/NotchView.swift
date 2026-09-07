@@ -61,7 +61,8 @@ struct NotchRootView: View {
     }
 
     private var items: [TodayItem] {
-        Array(model.today.items.filter { $0.task.status == .todo }.prefix(3))
+        Array(model.today.items.filter { $0.task.status == .todo && $0.task.id != model.next?.next?.task.id }
+            .prefix(model.next?.next == nil ? 3 : 2))
     }
 
     private var content: some View {
@@ -89,8 +90,8 @@ struct NotchRootView: View {
             if let next = model.next?.next {
                 NotchNextRow(candidate: next, model: model, state: state)
             }
-            if items.isEmpty {
-                Text(model.connectionState == .noRuntime ? "运行时未启动" : "今天没有待办 🎉")
+            if items.isEmpty && model.next?.next == nil {
+                Text(model.connectionState == .noRuntime ? "运行时未启动" : "今天没有待办")
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.7))
                     .padding(.vertical, 6)
@@ -139,22 +140,10 @@ private struct NotchTaskRow: View {
     let item: TodayItem
     @ObservedObject var model: AppModel
     @ObservedObject var state: NotchState
-    @State private var checked = false
 
     var body: some View {
         HStack(spacing: 8) {
-            Button {
-                guard model.canWrite else { return }
-                checked = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { model.complete(item.task) }
-            } label: {
-                Image(systemName: checked ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 15))
-                    .foregroundStyle(checked ? Color(nsColor: .systemMint) : .white.opacity(0.5))
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.canWrite)
-            .accessibilityLabel("完成 \(item.task.title)")
+            CheckButton(task: item.task).environmentObject(model)
 
             Button { state.onOpenTask?(item.task.id) } label: {
                 VStack(alignment: .leading, spacing: 1) {
@@ -162,7 +151,6 @@ private struct NotchTaskRow: View {
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                        .strikethrough(checked)
                     Text(TaskMeta.line(for: item.task, includeProject: true))
                         .font(.system(size: 11))
                         .foregroundStyle(item.section == .overdue ? .red : .white.opacity(0.55))
@@ -188,7 +176,6 @@ private struct NotchTaskRow: View {
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 6)
-        .opacity(checked ? 0.4 : 1)
     }
 }
 

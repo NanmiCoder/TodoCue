@@ -6,7 +6,7 @@ struct PanelRootView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        VStack(spacing: 0) {
             VStack(spacing: 0) {
                 HeaderView()
                 if !model.connectionState.isOnline {
@@ -18,14 +18,14 @@ struct PanelRootView: View {
             }
             if let toast = model.toast {
                 ToastView(toast: toast)
-                    .padding(.bottom, 14)
+                    .padding(.vertical, 8)
                     .transition(Theme.reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(Theme.listChange, value: model.toast)
-        .animation(Theme.reduceMotion ? .easeInOut(duration: 0.15) : .easeInOut(duration: 0.2), value: model.routes)
+        .animation(Theme.reduceMotion ? nil : .easeInOut(duration: 0.18), value: model.routes.count)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(Theme.reduceTransparency ? 1 : 0.35))
         .todoCueAccent()
-        .frame(minWidth: 300, minHeight: 300)
     }
 
     @ViewBuilder
@@ -57,17 +57,18 @@ struct HeaderView: View {
                 Button { model.pop() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(QuietIconButtonStyle())
                 .keyboardShortcut("[", modifiers: .command)
                 .accessibilityLabel("返回")
             }
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(headerTitle)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: model.routes.isEmpty ? 18 : 15, weight: .semibold))
                 if model.routes.isEmpty {
-                    Text(model.remaining == 0 ? "今日已全部完成" : "剩余 \(model.remaining) 项")
+                    Text(model.today.date.isEmpty ? "任务随时在这里" : (model.remaining == 0 ? "今日没有待办" : "今天还有 \(model.remaining) 项"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+                        .monospacedDigit()
                         .contentTransition(.numericText())
                 }
             }
@@ -79,10 +80,10 @@ struct HeaderView: View {
                 Image(systemName: model.pinned ? "pin.fill" : "pin")
                     .font(.system(size: 13))
                     .foregroundStyle(model.pinned ? accent : .secondary)
-                    .frame(width: 24, height: 24)
+
             }
-            .buttonStyle(.plain)
-            .help(model.pinned ? "取消固定（点击外部会收起）" : "固定面板")
+            .buttonStyle(QuietIconButtonStyle())
+            .help(model.pinned ? "取消固定（允许 Esc 收起）" : "固定面板，防止 Esc 误收起")
             .accessibilityLabel(model.pinned ? "取消固定面板" : "固定面板")
 
             Menu {
@@ -93,19 +94,25 @@ struct HeaderView: View {
                 Button("设置…", action: model.showSettings)
                 Button("退出 TodoCue") { NSApp.terminate(nil) }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 30, height: 30)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .frame(width: 28)
+            .frame(width: 30)
             .accessibilityLabel("更多操作")
+            Button { model.onClosePanel?() } label: { Image(systemName: "xmark") }
+                .buttonStyle(QuietIconButtonStyle())
+                .foregroundStyle(.secondary)
+                .help("收起面板，任务与提醒继续运行")
+                .accessibilityLabel("收起面板")
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 16)
-        .padding(.bottom, 10)
+        .padding(.leading, 20)
+        .padding(.trailing, 12)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
     }
 
     private var headerTitle: String {
@@ -142,7 +149,7 @@ struct OfflineBanner: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
         .background(Color.orange.opacity(0.12))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -175,6 +182,6 @@ struct ToastView: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
         .padding(.horizontal, 16)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }

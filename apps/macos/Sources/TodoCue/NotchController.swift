@@ -23,6 +23,8 @@ final class NotchController {
     private let state = NotchState()
     private var geometry: NotchGeometry?
     private var globalMoveMonitor: Any?
+    private var localMoveMonitor: Any?
+    var isPanelVisible: (() -> Bool)?
     private var pollTimer: Timer?
     private var hoverStart: Date?
     private var leaveStart: Date?
@@ -59,6 +61,7 @@ final class NotchController {
     func stop() {
         pollTimer?.invalidate()
         if let m = globalMoveMonitor { NSEvent.removeMonitor(m) }
+        if let m = localMoveMonitor { NSEvent.removeMonitor(m) }
         window?.orderOut(nil)
     }
 
@@ -102,6 +105,10 @@ final class NotchController {
         geometry = nil
         pollTimer?.invalidate(); pollTimer = nil
         if let m = globalMoveMonitor { NSEvent.removeMonitor(m); globalMoveMonitor = nil }
+        if let m = localMoveMonitor { NSEvent.removeMonitor(m); localMoveMonitor = nil }
+        state.expanded = false
+        hoverStart = nil
+        leaveStart = nil
     }
 
     private func ensureWindow() {
@@ -136,7 +143,7 @@ final class NotchController {
         guard let geo = geometry else { return .zero }
         let n = geo.notchRect
         let width = max(Theme.notchExpandedWidth, n.width + 2 * hotZoneSlack)
-        let height = min(Theme.notchMaxHeight, max(contentSize.height, 40)) + n.height
+        let height = min(Theme.notchMaxHeight, max(contentSize.height, 40) + n.height)
         let cx = n.midX
         return NSRect(x: cx - width / 2, y: geo.screenFrame.maxY - height, width: width, height: height)
     }
@@ -156,6 +163,12 @@ final class NotchController {
     // MARK: - Hover detection
 
     private func ensureMonitors() {
+        if localMoveMonitor == nil {
+            localMoveMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
+                self?.mouseMoved()
+                return event
+            }
+        }
         if globalMoveMonitor == nil {
             globalMoveMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
                 Task { @MainActor in self?.mouseMoved() }
@@ -214,6 +227,7 @@ final class NotchController {
 
     /// Fullscreen heuristic: the frontmost app owns an on-screen window covering the whole notch screen.
     private func shouldAutoExpand() -> Bool {
+        guard isPanelVisible?() != true else { return false }
         guard Prefs.disableNotchInFullscreen, let geo = geometry else { return true }
         guard let front = NSWorkspace.shared.frontmostApplication, front != NSRunningApplication.current else { return true }
         let pid = front.processIdentifier

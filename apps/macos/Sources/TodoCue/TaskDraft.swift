@@ -76,7 +76,7 @@ struct TaskDraft: Equatable {
     var isEditing: Bool { editingTaskId != nil }
 
     var hasContent: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty || !notes.isEmpty || !project.isEmpty || scheduledMode != .none || dueMode != .none || reminderOn || repeatKind != .none
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.isEmpty || !project.isEmpty || priority != .none || !estimate.isEmpty || scheduledMode != .none || dueMode != .none || reminderOn || repeatKind != .none
     }
 
     func validate() -> String? {

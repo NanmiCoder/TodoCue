@@ -4,11 +4,23 @@ import TodoCueKit
 
 enum Theme {
     static let panelWidth: CGFloat = 380
-    static let panelHeight: CGFloat = 680
+    static var panelHeight: CGFloat {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["TODOCUE_PREVIEW_HEIGHT"], let value = Double(raw) {
+            return CGFloat(max(360, min(680, value)))
+        }
+        #endif
+        return 680
+    }
     static let panelMargin: CGFloat = 12
     static let panelCorner: CGFloat = 22
     static let notchExpandedWidth: CGFloat = 440
     static let notchMaxHeight: CGFloat = 300
+    static let overdue = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 1, green: 0.57, blue: 0.45, alpha: 1)
+            : NSColor(red: 0.7, green: 0.2, blue: 0.13, alpha: 1)
+    })
 
     static func accent(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? Color(nsColor: .systemMint) : Color(red: 0.0, green: 0.55, blue: 0.45)
@@ -46,6 +58,27 @@ struct AccentModifier: ViewModifier {
 
 extension View {
     func todoCueAccent() -> some View { modifier(AccentModifier()) }
+}
+
+/// Consistent pointer target and feedback for the panel's utility buttons.
+struct QuietIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        IconBody(configuration: configuration)
+    }
+
+    private struct IconBody: View {
+        let configuration: ButtonStyle.Configuration
+        @State private var hovering = false
+        var body: some View {
+            configuration.label
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 30, height: 30)
+                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .background(Color.primary.opacity(configuration.isPressed ? 0.10 : (hovering ? 0.06 : 0)),
+                            in: RoundedRectangle(cornerRadius: 8))
+                .onHover { hovering = $0 }
+        }
+    }
 }
 
 extension Priority {

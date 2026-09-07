@@ -7,3 +7,4 @@ apps/macos/build/
 apps/macos/*.xcodeproj
 *.log
 coverage/
+.ui-review/

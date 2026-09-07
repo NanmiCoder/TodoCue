@@ -61,13 +61,16 @@ final class AppModel: ObservableObject {
     @Published var routes: [Route] = []
     @Published var pinned = false
     @Published var quickAddFocusRequest = 0
+    @Published var quickAddText = ""
+    @Published private(set) var isQuickAdding = false
+    @Published private(set) var completingTaskIDs: Set<String> = []
     @Published private(set) var doctor: DoctorReport?
 
     /// Draft kept when an unsaved form is dismissed.
-    var savedDraft: TaskDraft?
+    @Published var savedDraft: TaskDraft?
 
     // Wiring to the AppKit shell.
-    var onOpenPanel: (() -> Void)?
+    var onOpenPanel: ((Bool) -> Void)?
     var onClosePanel: (() -> Void)?
     var onCollapseNotch: (() -> Void)?
 
@@ -264,6 +267,8 @@ final class AppModel: ObservableObject {
             connectionState = .offline("令牌无效，等待运行时重启")
         } else if case APIError.transport(let m) = error {
             connectionState = .offline(m)
+        } else {
+            connectionState = .offline(error.localizedDescription)
         }
     }
 
@@ -306,7 +311,9 @@ final class AppModel: ObservableObject {
     }
 
     func complete(_ task: TodoTask) {
+        guard canWrite, completingTaskIDs.insert(task.id).inserted else { return }
         Task {
+            defer { completingTaskIDs.remove(task.id) }
             if let t = await perform("完成", { try await self.client!.complete(task.id, expectedVersion: task.version) }) {
                 showToast(Toast(message: "已完成「\(t.title)」", undoTaskId: t.id))
             }
@@ -331,19 +338,7 @@ final class AppModel: ObservableObject {
     }
 
     func moveToTomorrow(_ task: TodoTask) {
-        var p = TaskPayload()
-        let tomorrow = TCDate.tomorrowString()
-        if let at = task.scheduledAt, let d = TCDate.parse(at), let nd = Calendar.current.date(byAdding: .day, value: 1, to: d) {
-            p.set("scheduledAt", TCDate.iso(nd))
-        } else if task.scheduledDate != nil || (task.dueDate == nil && task.dueAt == nil) {
-            p.set("scheduledDate", tomorrow)
-        }
-        if let at = task.dueAt, let d = TCDate.parse(at), d < Date(), let nd = Calendar.current.date(byAdding: .day, value: 1, to: d) {
-            p.set("dueAt", TCDate.iso(nd))
-        } else if let dd = task.dueDate, dd < TCDate.todayString() {
-            p.set("dueDate", tomorrow)
-        }
-        if p.fields.isEmpty { p.set("scheduledDate", tomorrow) }
+        let p = TaskRescheduling.tomorrow(task)
         Task {
             if await perform("改期", { try await self.client!.updateTask(task.id, p, expectedVersion: task.version) }) != nil {
                 showToast(Toast(message: "已改期到明天"))
@@ -366,13 +361,18 @@ final class AppModel: ObservableObject {
     }
 
     /// Quick add with only a title.
-    func quickAdd(_ title: String) {
-        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty else { return }
+    func quickAdd() {
+        let original = quickAddText
+        let t = original.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canWrite, !isQuickAdding, !t.isEmpty else { return }
+        isQuickAdding = true
         var p = TaskPayload()
         p.set("title", t)
+        p.set("scheduledDate", TCDate.todayString())
         Task {
+            defer { isQuickAdding = false }
             if await perform("添加", { try await self.client!.createTask(p).task }) != nil {
+                if quickAddText == original { quickAddText = "" }
                 showToast(Toast(message: "已添加「\(t)」"))
             }
         }
@@ -444,50 +444,71 @@ final class AppModel: ObservableObject {
         toast = t
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            try? await Task.sleep(nanoseconds: t.undoTaskId == nil ? 5_000_000_000 : 10_000_000_000)
             guard !Task.isCancelled else { return }
             if self?.toast?.id == t.id { self?.toast = nil }
         }
     }
 
-    func openPanel() { onOpenPanel?() }
+    func openPanel() { onOpenPanel?(false) }
 
     func reveal(taskId: String) {
+        preserveDraft()
         onCollapseNotch?()
         routes = [.detail(taskId)]
-        onOpenPanel?()
+        onOpenPanel?(false)
         if task(taskId) == nil { Task { await refreshLive() } }
     }
 
     func openToday() {
+        preserveDraft()
         onCollapseNotch?()
         routes = []
         tab = .today
-        onOpenPanel?()
+        onOpenPanel?(false)
     }
 
     func newTask() {
+        if case .form = routes.last { onOpenPanel?(true); return }
         routes = [.form(savedDraft ?? TaskDraft())]
-        onOpenPanel?()
+        onOpenPanel?(true)
     }
 
     func edit(_ task: TodoTask) {
-        routes.append(.form(TaskDraft(editing: task)))
+        let draft = savedDraft?.editingTaskId == task.id ? savedDraft! : TaskDraft(editing: task)
+        presentForm(draft)
+    }
+
+    func presentForm(_ draft: TaskDraft) {
+        routes.append(.form(draft))
+        onOpenPanel?(true)
     }
 
     func showSettings() {
         if routes.last != .settings { routes.append(.settings) }
-        onOpenPanel?()
+        onOpenPanel?(true)
         Task { await loadDoctor() }
     }
 
-    func pop() { if !routes.isEmpty { routes.removeLast() } }
+    func preserveDraft() {
+        if case .form(let d) = routes.last, d.hasContent { savedDraft = d }
+    }
+
+    func pop(preservingDraft: Bool = true) {
+        if preservingDraft { preserveDraft() }
+        if !routes.isEmpty { routes.removeLast() }
+    }
+
+    func focusQuickAdd() {
+        preserveDraft()
+        routes = []
+        quickAddFocusRequest += 1
+    }
 
     /// Esc: close top layer first; close the panel only from the root (unless pinned).
     func handleEscape() {
-        if let last = routes.last {
-            if case .form(let d) = last, d.hasContent { savedDraft = d }
-            routes.removeLast()
+        if !routes.isEmpty {
+            pop()
         } else if !pinned {
             onClosePanel?()
         }

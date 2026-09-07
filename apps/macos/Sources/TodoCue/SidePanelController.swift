@@ -12,8 +12,7 @@ final class SidePanelWindow: NSPanel {
 final class SidePanelController {
     let window: SidePanelWindow
     private let model: AppModel
-    private var clickMonitor: Any?
-    private var localClickMonitor: Any?
+    private var presentationRevision = 0
     private var observers: [NSObjectProtocol] = []
     var onShow: (() -> Void)?
 
@@ -22,9 +21,9 @@ final class SidePanelController {
     init(model: AppModel) {
         self.model = model
         window = SidePanelWindow(contentRect: NSRect(x: 0, y: 0, width: Theme.panelWidth, height: Theme.panelHeight),
-                                 styleMask: [.borderless, .fullSizeContentView], backing: .buffered, defer: false)
+                                 styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
         window.isFloatingPanel = true
-        window.becomesKeyOnlyIfNeeded = false
+        window.becomesKeyOnlyIfNeeded = true
         window.hidesOnDeactivate = false
         window.level = .floating
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
@@ -65,7 +64,9 @@ final class SidePanelController {
         return NSRect(x: x, y: y, width: w, height: h)
     }
 
-    func show() {
+    func show(focusInput: Bool = false) {
+        presentationRevision += 1
+        window.alphaValue = 1
         let wasVisible = window.isVisible
         if !wasVisible {
             window.setFrame(frame(on: targetScreen()), display: true)
@@ -85,15 +86,17 @@ final class SidePanelController {
                 }
             }
         }
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        installClickMonitor()
+        // Revealing a glanceable utility must not activate TodoCue or take another
+        // app's insertion point. Only an explicit editing action requests a key panel.
+        if focusInput { window.makeKeyAndOrderFront(nil) }
+        else { window.orderFrontRegardless() }
         onShow?()
     }
 
     func hide() {
         guard window.isVisible else { return }
-        removeClickMonitor()
+        presentationRevision += 1
+        let revision = presentationRevision
         if Theme.reduceMotion {
             window.orderOut(nil)
         } else {
@@ -101,9 +104,12 @@ final class SidePanelController {
                 ctx.duration = 0.18
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
                 window.animator().alphaValue = 0
-            }, completionHandler: { [window] in
-                window.orderOut(nil)
-                window.alphaValue = 1
+            }, completionHandler: { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.presentationRevision == revision else { return }
+                    self.window.orderOut(nil)
+                    self.window.alphaValue = 1
+                }
             })
         }
     }
@@ -124,38 +130,19 @@ final class SidePanelController {
         }
     }
 
-    private func installClickMonitor() {
-        removeClickMonitor()
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            Task { @MainActor in self?.handleOutsideClick(NSEvent.mouseLocation) }
-        }
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            if let self, event.window !== self.window {
-                Task { @MainActor in self.handleOutsideClick(NSEvent.mouseLocation) }
-            }
-            return event
-        }
-    }
-
-    private func handleOutsideClick(_ location: NSPoint) {
-        guard window.isVisible, !model.pinned else { return }
-        if !window.frame.contains(location) { hide() }
-    }
-
-    private func removeClickMonitor() {
-        if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
-        if let m = localClickMonitor { NSEvent.removeMonitor(m); localClickMonitor = nil }
-    }
 }
 
 /// Frosted background with rounded corners, thin edge and soft shadow.
 final class PanelBackgroundView: NSView {
+    private let effect = NSVisualEffectView()
+    private var accessibilityObserver: NSObjectProtocol?
+
     init(hosting: NSView) {
         super.init(frame: hosting.frame)
         wantsLayer = true
         layer?.masksToBounds = false
 
-        let effect = NSVisualEffectView(frame: bounds)
+        effect.frame = bounds
         effect.autoresizingMask = [.width, .height]
         effect.material = Theme.reduceTransparency ? .windowBackground : .popover
         effect.blendingMode = .behindWindow
@@ -175,6 +162,30 @@ final class PanelBackgroundView: NSView {
         hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
         addSubview(hosting)
+        updateMaterial()
+        accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.updateMaterial() }
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateMaterial()
+    }
+
+    private func updateMaterial() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            effect.isHidden = Theme.reduceTransparency
+            layer?.cornerRadius = Theme.panelCorner
+            layer?.backgroundColor = Theme.reduceTransparency ? NSColor.windowBackgroundColor.cgColor : NSColor.clear.cgColor
+            effect.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
+        }
+    }
+
+    deinit {
+        if let accessibilityObserver { NSWorkspace.shared.notificationCenter.removeObserver(accessibilityObserver) }
     }
 
     required init?(coder: NSCoder) { nil }

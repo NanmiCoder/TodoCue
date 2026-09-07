@@ -17,14 +17,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        // Per-process preview only; never changes the user's system appearance.
+        switch ProcessInfo.processInfo.environment["TODOCUE_PREVIEW_APPEARANCE"] {
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        default: break
+        }
+        #endif
         sidePanel = SidePanelController(model: model)
         notch = NotchController(model: model)
         statusItem = StatusItemController(model: model, delegate: self)
 
-        model.onOpenPanel = { [weak self] in self?.sidePanel.show() }
+        model.onOpenPanel = { [weak self] focusInput in self?.sidePanel.show(focusInput: focusInput) }
         model.onClosePanel = { [weak self] in self?.sidePanel.hide() }
         model.onCollapseNotch = { [weak self] in self?.notch.collapse(immediately: true) }
         sidePanel.onShow = { [weak self] in self?.notch.collapse(immediately: true) }
+        notch.isPanelVisible = { [weak self] in self?.sidePanel.isVisible ?? false }
 
         HotKeyCenter.shared.handler = { [weak self] in self?.togglePanel() }
         installKeyMonitor()
@@ -91,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard flags == .command, let ch = event.charactersIgnoringModifiers?.lowercased() else { return event }
             switch ch {
             case "n": self.model.newTask(); return nil
-            case "f": self.model.routes = []; self.model.quickAddFocusRequest += 1; return nil
+            case "f": self.model.focusQuickAdd(); return nil
             case "r": Task { await self.model.refreshAll() }; return nil
             case ",": self.model.showSettings(); return nil
             case "w": self.model.handleEscape(); return nil

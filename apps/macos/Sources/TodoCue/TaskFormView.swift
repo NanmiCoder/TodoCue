@@ -13,146 +13,169 @@ struct TaskFormView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    TextField("标题", text: $draft.title)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 14))
-                        .focused($titleFocused)
-                        .onSubmit(save)
-                        .accessibilityLabel("标题")
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("要做什么").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                        TextField("给任务起个名字", text: $draft.title, axis: .vertical)
+                            .lineLimit(2...4)
+                            .font(.system(size: 17, weight: .medium))
+                            .focused($titleFocused)
+                            .accessibilityLabel("标题")
+                        Divider().opacity(0.5)
+                        TextField("添加备注、链接或想法（可选）", text: $draft.notes, axis: .vertical)
+                            .lineLimit(2...5)
+                            .font(.system(size: 13))
+                            .accessibilityLabel("备注")
+                    }
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
 
-                    TextField("备注", text: $draft.notes, axis: .vertical)
-                        .lineLimit(2...6)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("备注")
-
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("项目").font(.system(size: 11)).foregroundStyle(.secondary)
-                            HStack(spacing: 4) {
-                                TextField("项目", text: $draft.project).textFieldStyle(.roundedBorder).accessibilityLabel("项目")
-                                if !model.projects.isEmpty {
-                                    Menu {
-                                        ForEach(model.projects, id: \.self) { p in Button(p) { draft.project = p } }
-                                    } label: { Image(systemName: "chevron.down") }
-                                    .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 18)
-                                    .accessibilityLabel("选择已有项目")
+                    VStack(alignment: .leading, spacing: 12) {
+                        formHeading("任务属性")
+                        HStack(spacing: 10) {
+                            Label("项目", systemImage: "folder").frame(width: 72, alignment: .leading)
+                            TextField("未分组", text: $draft.project)
+                                .textFieldStyle(.roundedBorder).accessibilityLabel("项目")
+                            if !model.projects.isEmpty {
+                                Menu {
+                                    ForEach(model.projects, id: \.self) { project in Button(project) { draft.project = project } }
+                                } label: { Image(systemName: "chevron.down") }
+                                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 18)
+                                .accessibilityLabel("选择已有项目")
+                            }
+                        }
+                        HStack {
+                            Label("优先级", systemImage: "flag").frame(width: 72, alignment: .leading)
+                            Picker("优先级", selection: $draft.priority) {
+                                ForEach(Priority.allCases, id: \.self) { Text($0.label).tag($0) }
+                            }.labelsHidden().frame(width: 82)
+                            Spacer(minLength: 8)
+                            TextField("—", text: $draft.estimate)
+                                .textFieldStyle(.roundedBorder).frame(width: 48)
+                                .accessibilityLabel("预计耗时分钟")
+                            Text("分钟").foregroundStyle(.secondary)
+                        }
+                    }
+                    Divider().opacity(0.4)
+                    VStack(alignment: .leading, spacing: 14) {
+                        formHeading("时间安排")
+                        if draft.repeatKind == .none {
+                            DateModeField(title: "计划", mode: $draft.scheduledMode, date: $draft.scheduledDate)
+                            DateModeField(title: "截止", mode: $draft.dueMode, date: $draft.dueDate)
+                            VStack(alignment: .leading, spacing: 9) {
+                                Toggle("提醒", isOn: $draft.reminderOn).toggleStyle(.switch).controlSize(.mini)
+                                if draft.reminderOn {
+                                    CompactDateField(title: "提醒", date: $draft.reminderDate, includesTime: true)
                                 }
                             }
                         }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("优先级").font(.system(size: 11)).foregroundStyle(.secondary)
-                            Picker("优先级", selection: $draft.priority) {
-                                ForEach(Priority.allCases, id: \.self) { Text($0.label).tag($0) }
-                            }
-                            .labelsHidden()
-                            .frame(width: 80)
+                        if !draft.isEditing { repeatSection }
+                        else if draft.isSeriesInstance {
+                            Label("重复任务 · 修改只影响本次", systemImage: "repeat")
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
                         }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("耗时(分)").font(.system(size: 11)).foregroundStyle(.secondary)
-                            TextField("30", text: $draft.estimate).textFieldStyle(.roundedBorder).frame(width: 56)
-                                .accessibilityLabel("预计耗时分钟")
-                        }
-                    }
-
-                    if draft.repeatKind == .none {
-                        DateModeField(title: "计划", mode: $draft.scheduledMode, date: $draft.scheduledDate)
-                        DateModeField(title: "截止", mode: $draft.dueMode, date: $draft.dueDate)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Toggle("提醒", isOn: $draft.reminderOn).toggleStyle(.checkbox).font(.system(size: 12, weight: .medium))
-                            if draft.reminderOn {
-                                DatePicker("提醒时间", selection: $draft.reminderDate, displayedComponents: [.date, .hourAndMinute])
-                                    .labelsHidden().datePickerStyle(.compact)
-                            }
-                        }
-                    }
-
-                    if !draft.isEditing {
-                        repeatSection
-                    } else if draft.isSeriesInstance {
-                        Label("这是重复任务的一个实例，修改只影响本次。", systemImage: "repeat")
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-
-                    if let error {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.system(size: 12)).foregroundStyle(.orange)
                     }
                 }
+                .font(.system(size: 12))
                 .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding(.vertical, 18)
             }
-            Divider().opacity(0.5)
-            HStack {
-                Button("取消") { model.handleEscape() }.keyboardShortcut(.cancelAction)
-                Spacer()
-                if !model.canWrite { Text("离线，无法保存").font(.system(size: 11)).foregroundStyle(.secondary) }
-                Button(draft.isEditing ? "保存" : "添加", action: save)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(saving || !model.canWrite)
+            .disabled(saving)
+            Divider().opacity(0.4)
+            VStack(alignment: .leading, spacing: 10) {
+                if let error {
+                    Label(error, systemImage: "exclamationmark.circle")
+                        .font(.system(size: 12)).foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack {
+                    Text(model.canWrite ? "返回会保留草稿" : "离线，草稿已保留")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    if saving { ProgressView().controlSize(.small) }
+                    Button(draft.isEditing ? "保存更改" : "添加任务", action: save)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .disabled(saving || !model.canWrite)
+                        .help("⌘Return 保存")
+                }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.vertical, 14)
         }
-        .onAppear { titleFocused = true }
+        .task {
+            // Wait until the hosting view is attached to the key panel.
+            await Task.yield()
+            titleFocused = true
+        }
+        .defaultFocus($titleFocused, true)
         .onChange(of: draft) { _, new in
-            // Keep the draft in the route so Esc can preserve it.
             if case .form = model.routes.last { model.routes[model.routes.count - 1] = .form(new) }
         }
     }
 
+    private func formHeading(_ title: String) -> some View {
+        Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     private var repeatSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("重复").font(.system(size: 12, weight: .medium))
+                Text("重复")
+                Spacer()
                 Picker("重复", selection: $draft.repeatKind) {
                     ForEach(RepeatKind.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden()
+                }.labelsHidden().frame(width: 136)
             }
             if draft.repeatKind == .weekly {
                 HStack(spacing: 4) {
-                    ForEach(1...7, id: \.self) { d in
+                    ForEach(1...7, id: \.self) { day in
                         let names = ["一", "二", "三", "四", "五", "六", "日"]
-                        Toggle(names[d - 1], isOn: Binding(
-                            get: { draft.weekdays.contains(d) },
-                            set: { on in if on { draft.weekdays.insert(d) } else { draft.weekdays.remove(d) } }
+                        Toggle(names[day - 1], isOn: Binding(
+                            get: { draft.weekdays.contains(day) },
+                            set: { on in if on { draft.weekdays.insert(day) } else { draft.weekdays.remove(day) } }
                         ))
                         .toggleStyle(.button).controlSize(.small)
-                        .accessibilityLabel("周\(names[d - 1])")
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("周\(names[day - 1])")
                     }
                 }
             }
             if draft.repeatKind != .none {
-                HStack(spacing: 12) {
-                    DatePicker("开始", selection: $draft.repeatStart, displayedComponents: .date).datePickerStyle(.compact)
-                }
-                HStack(spacing: 12) {
-                    Toggle("时间", isOn: $draft.repeatTimeOn).toggleStyle(.checkbox)
+                CompactDateField(title: "开始", date: $draft.repeatStart)
+                HStack {
+                    Toggle("固定时间", isOn: $draft.repeatTimeOn).toggleStyle(.switch).controlSize(.mini)
                     if draft.repeatTimeOn {
                         DatePicker("时间", selection: $draft.repeatTime, displayedComponents: .hourAndMinute).labelsHidden()
                     }
-                    Toggle("提醒", isOn: $draft.repeatReminderOn).toggleStyle(.checkbox)
+                }
+                HStack {
+                    Toggle("每次提醒", isOn: $draft.repeatReminderOn).toggleStyle(.switch).controlSize(.mini)
                     if draft.repeatReminderOn {
                         DatePicker("提醒", selection: $draft.repeatReminderTime, displayedComponents: .hourAndMinute).labelsHidden()
                     }
                 }
-                Text("每日或每周生成实例，未来 30 天自动补齐；修改规则请停止后重新创建。")
+                Text("按所选日期自动重复，每次可单独编辑或跳过。")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
-        .font(.system(size: 12))
     }
 
     private func save() {
         guard !saving else { return }
-        error = nil
+        error = draft.validate()
+        guard error == nil else { return }
         saving = true
+        let submitted = draft
         Task {
-            let err = await model.save(draft)
+            let err = await model.save(submitted)
             saving = false
-            if let err { error = err } else { model.pop() }
+            if let err { error = err }
+            else if case .form(let current) = model.routes.last, current == submitted {
+                model.pop(preservingDraft: false)
+            }
         }
     }
 }
@@ -163,18 +186,60 @@ struct DateModeField: View {
     @Binding var date: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Text(title).font(.system(size: 12, weight: .medium)).frame(width: 32, alignment: .leading)
+                Text(title)
+                Spacer()
                 Picker(title, selection: $mode) {
                     ForEach(DateMode.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden()
+                }.labelsHidden().frame(width: 136)
             }
             if mode != .none {
-                DatePicker(title, selection: $date, displayedComponents: mode == .date ? [.date] : [.date, .hourAndMinute])
-                    .labelsHidden().datePickerStyle(.compact)
+                CompactDateField(title: title, date: $date, includesTime: mode == .dateTime)
             }
         }
+    }
+}
+
+/// Native text/time entry plus a calendar that remains inside the panel's interaction scope.
+struct CompactDateField: View {
+    let title: String
+    @Binding var date: Date
+    var includesTime = false
+    @State private var calendarOpen = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            DatePicker(title, selection: $date, displayedComponents: includesTime ? [.date, .hourAndMinute] : .date)
+                .labelsHidden().datePickerStyle(.compact)
+                .accessibilityLabel(title + "日期")
+            Spacer(minLength: 0)
+            Button { calendarOpen.toggle() } label: { Image(systemName: "calendar") }
+                .buttonStyle(QuietIconButtonStyle())
+                .accessibilityLabel("选择" + title + "日期")
+                .popover(isPresented: $calendarOpen, arrowEdge: .trailing) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("选择" + title + "日期").font(.system(size: 13, weight: .semibold))
+                        DatePicker(title, selection: $date, displayedComponents: .date)
+                            .datePickerStyle(.graphical).labelsHidden()
+                        HStack {
+                            Button("今天") { setDay(Date()) }
+                            Button("明天") { setDay(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()) }
+                            Spacer()
+                            Button("完成") { calendarOpen = false }.buttonStyle(.borderedProminent)
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(16)
+                    .frame(width: 280)
+                    .todoCueAccent()
+                }
+        }
+    }
+
+    private func setDay(_ day: Date) {
+        let c = Calendar.current
+        let time = c.dateComponents([.hour, .minute], from: date)
+        date = c.date(bySettingHour: time.hour ?? 9, minute: time.minute ?? 0, second: 0, of: day) ?? day
     }
 }

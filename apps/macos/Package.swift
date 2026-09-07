@@ -24,6 +24,7 @@ let package = Package(
             linkerSettings: [.linkedFramework("UserNotifications")]
         ),
         .testTarget(name: "TodoCueKitTests", dependencies: ["TodoCueKit"], path: "Tests/TodoCueKitTests"),
+        .testTarget(name: "TodoCueTests", dependencies: ["TodoCue"], path: "Tests/TodoCueTests"),
     ],
     swiftLanguageVersions: [.v5]
 )

@@ -71,9 +71,11 @@ Expected install locations searched by `todocue install` / `doctor`:
 - **Fullscreen heuristic**: auto-expand is suppressed when the frontmost app owns an on-screen window
   whose size equals the notch screen's full frame (`CGWindowListCopyWindowInfo`). Toggle in settings.
 - **Side panel**: 380×680 pt, 12 pt from the top-right of the visible frame of the screen under the mouse,
-  clamped on small screens; draggable; Esc / click-outside closes unless pinned; Esc closes the form first
-  (draft kept in memory and restored on ⌘N). Repositions on screen/space changes.
-- Keyboard: ⌘N new task, ⌘F focus quick add, ⌘R refresh, ⌘, settings, ⌘[ back, ⌘W/Esc close layer, ⌘Z undo in toast.
+  clamped on small screens; draggable; The panel stays visible when you work in another app. Showing it does not activate TodoCue;
+  only an explicit editing action requests keyboard input. Close with the × button or Esc while the
+  panel has keyboard focus. Pin protects the root panel from accidental Esc (× still closes it).
+  Back / Esc from a form preserves the draft; ⌘N or “继续草稿” restores it. Repositions on screen/space changes.
+- Keyboard: ⌘N new task, ⌘F focus quick add, ⌘R refresh, ⌘, settings, ⌘[ back, ⌘W/Esc close layer, ⌘Z undo in toast, ⌘Return save form (Return remains available for multiline text).
 - Global hotkey: Carbon `RegisterEventHotKey`, unbound by default, recorded in settings, stored in UserDefaults.
 - Login item: `SMAppService.mainApp`; a login-item launch (`keyAELaunchedAsLogInItem`) stays in the menu bar.
 
@@ -87,3 +89,17 @@ Expected install locations searched by `todocue install` / `doctor`:
 - Notch geometry comes from `auxiliaryTopLeftArea` / `auxiliaryTopRightArea`; if those are unavailable a
   180 pt centered notch is assumed.
 - The upcoming tab is derived client-side from `/v1/tasks?from=<tomorrow>&includeUnscheduled=false`.
+
+## UI review (2026-09-07)
+
+The Today tab highlights the next task once and excludes it from the remaining groups without changing
+the total count. Tabs stay above the scroll region; completed tasks scroll with the list. Quick add
+explicitly schedules a task for today, preserves unsent text across navigation, and clears it only after
+success. Form content, task attributes and schedule are separate sections. Calendar popovers and the
+form validation message remain usable in a short panel. Undo feedback stays visible for 10 seconds and
+does not cover the quick-add field.
+
+Debug bundles accept `TODOCUE_PREVIEW_APPEARANCE=light|dark` and `TODOCUE_PREVIEW_HEIGHT=460` for per-process
+visual checks. These options never change system preferences and are excluded from release builds.
+
+See `../../docs/ui-review.md` for the observed issues, actual Computer use checks and limitations.
