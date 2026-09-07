@@ -379,22 +379,27 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Quick add with only a title.
+    /// Quick add from the panel field.
     func quickAdd() {
         let original = quickAddText
-        let t = original.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canWrite, !isQuickAdding, !t.isEmpty else { return }
+        Task {
+            if await quickAdd(title: original), quickAddText == original { quickAddText = "" }
+        }
+    }
+
+    /// Creates a task with only a title, planned for today. Returns true when it was saved.
+    @discardableResult
+    func quickAdd(title: String) async -> Bool {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canWrite, !isQuickAdding, !t.isEmpty else { return false }
         isQuickAdding = true
+        defer { isQuickAdding = false }
         var p = TaskPayload()
         p.set("title", t)
         p.set("scheduledDate", TCDate.todayString())
-        Task {
-            defer { isQuickAdding = false }
-            if await perform("添加", { try await self.client!.createTask(p).task }) != nil {
-                if quickAddText == original { quickAddText = "" }
-                showToast(Toast(message: "已添加「\(t)」"))
-            }
-        }
+        guard await perform("添加", { try await self.client!.createTask(p).task }) != nil else { return false }
+        showToast(Toast(message: "已添加「\(t)」"))
+        return true
     }
 
     /// Saves a form draft. Returns an error message to show inline, or nil on success.

@@ -74,10 +74,18 @@ Quick add expands in place; the All view searches task titles/projects/notes; de
 bottom; date/repeat options unfold only when needed. See [design rationale and validation](../../docs/design/liquid-glass.md).
 
 - **Notch quick-look** exists only on screens where `NSScreen.safeAreaInsets.top > 0`. The window is a
-  non-activating panel above the status bar; collapsed it is just the notch width + 10 pt each side.
-  Hover ≥ 200 ms expands (260 ms), leaving hot zone + panel for 350 ms collapses (180 ms).
-  Reduce Motion switches to short fades. Hover uses a global mouse-moved monitor plus a 50 ms poll while
-  the pointer is near the top edge (no Accessibility permission needed).
+  non-activating panel above the status bar. Collapsed it wraps the notch with 10 pt of slack plus a
+  44 pt wing on each side showing the cue mark and today's remaining count (wings fold away when the day
+  is clear; `收起时显示今日剩余` turns them off). Hover ≥ 200 ms expands a 560 pt card (up to 560 pt tall)
+  with the header, the next step, up to 5 rows in section order (overdue, must, scheduled), and a quick-add
+  field; leaving card + bar for 350 ms collapses it. A click on the bar pins the card, makes the panel key
+  without activating TodoCue and focuses quick add; typing also pins. Esc clears the draft, then collapses;
+  a click outside, a Space change or opening the side panel collapses too. Rows offer complete, snooze
+  (10 min), move to tomorrow and open; the next card also offers them. Feedback toasts drop out under the
+  notch. The card is measured with `onGeometryChange` at a fixed width so the window height follows the
+  content instead of the other way round. Hover detection combines a tracking area on the bar (the
+  menu-bar region does not deliver global mouse-moved events), mouse-moved monitors and a 50 ms poll;
+  no Accessibility permission is needed. Reduce Motion switches to short fades.
 - **Fullscreen heuristic**: auto-expand is suppressed when the frontmost app owns an on-screen window
   whose size equals the notch screen's full frame (`CGWindowListCopyWindowInfo`). Toggle in settings.
 - **Side panel**: defaults to 340×680 pt, 12 pt from the top-right of the visible frame of the screen under the mouse.

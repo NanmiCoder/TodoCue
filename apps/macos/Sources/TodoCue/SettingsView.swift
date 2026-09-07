@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var notchEnabled = Prefs.isNotchEnabled
     @State private var noFullscreen = Prefs.disableNotchInFullscreen
+    @State private var notchSummary = Prefs.notchShowsSummary
     @State private var loginEnabled = false
     @State private var hotkey: HotKeyCombo? = HotKeyCenter.shared.combo
     @State private var recording = false
@@ -23,6 +24,11 @@ struct SettingsView: View {
                     Divider().opacity(0.3)
                     settingToggle("刘海快览", isOn: $notchEnabled)
                         .onChange(of: notchEnabled) { _, value in Prefs.isNotchEnabled = value }
+                    Text("鼠标停在刘海上展开今日任务，点一下刘海可固定并直接输入。")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    settingToggle("收起时显示今日剩余", isOn: $notchSummary)
+                        .onChange(of: notchSummary) { _, value in Prefs.notchShowsSummary = value }
+                        .disabled(!notchEnabled)
                     settingToggle("全屏时保持安静", isOn: $noFullscreen)
                         .onChange(of: noFullscreen) { _, value in Prefs.disableNotchInFullscreen = value }
                         .disabled(!notchEnabled)

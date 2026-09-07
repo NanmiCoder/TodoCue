@@ -15,6 +15,7 @@ enum Prefs {
 
     static let notchEnabled = "notchEnabled"
     static let notchDisableInFullscreen = "notchDisableInFullscreen"
+    static let notchSummary = "notchShowsSummary"
 
     static var isNotchEnabled: Bool {
         get { UserDefaults.standard.object(forKey: notchEnabled) as? Bool ?? true }
@@ -24,5 +25,11 @@ enum Prefs {
     static var disableNotchInFullscreen: Bool {
         get { UserDefaults.standard.object(forKey: notchDisableInFullscreen) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: notchDisableInFullscreen) }
+    }
+
+    /// Collapsed notch shows the cue mark and today's remaining count beside the camera.
+    static var notchShowsSummary: Bool {
+        get { UserDefaults.standard.object(forKey: notchSummary) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: notchSummary) }
     }
 }

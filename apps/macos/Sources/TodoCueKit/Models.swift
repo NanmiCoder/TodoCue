@@ -173,6 +173,10 @@ public struct TodayItem: Codable, Hashable, Identifiable, Sendable {
     public var reasons: [TodayReason]
     public var section: TodaySection
     public var id: String { task.id }
+
+    public init(task: TodoTask, reasons: [TodayReason], section: TodaySection) {
+        self.task = task; self.reasons = reasons; self.section = section
+    }
 }
 
 public struct TodayResult: Codable, Sendable {

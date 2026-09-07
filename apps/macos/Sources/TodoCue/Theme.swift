@@ -16,8 +16,13 @@ enum Theme {
     }
     static let panelMargin: CGFloat = 12
     static let panelCorner: CGFloat = 28
-    static let notchExpandedWidth: CGFloat = 440
-    static let notchMaxHeight: CGFloat = 300
+    static let notchExpandedWidth: CGFloat = 560
+    static let notchMaxHeight: CGFloat = 560
+    static let notchMaxRows = 5
+    static let notchSlack: CGFloat = 10
+    static let notchWingWidth: CGFloat = 44
+    static let notchCorner: CGFloat = 24
+    static let notchCollapsedCorner: CGFloat = 10
     static let overdue = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(red: 1, green: 0.57, blue: 0.45, alpha: 1)
