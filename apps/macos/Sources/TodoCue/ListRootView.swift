@@ -308,8 +308,10 @@ struct QuickAddView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 11)
+        // Fill and stroke must share the corner style, or the fill peeks past the stroke at the corners.
         .background(Theme.insetSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(focused ? accent.opacity(0.55) : Color.white.opacity(0.12), lineWidth: focused ? 1 : 0.5))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(focused ? accent.opacity(0.55) : Color.white.opacity(0.12), lineWidth: focused ? 1 : 0.5))
         .padding(.bottom, 12)
         .animation(Theme.interaction, value: focused || hasText)
         .onChange(of: model.quickAddFocusRequest) { _, _ in focused = true }
