@@ -1,6 +1,6 @@
 # TodoCue v0.1 实施计划与现状
 
-本文档是 `PLAN.md` 的落地版本：记录实际架构、实施顺序、验收情况与已知限制。接口契约见 `api.md`，Agent 接入见 `agents.md`。
+本文档是 `PLAN.md` 的落地版本：记录实际架构、实施顺序、验收情况与已知限制。接口契约见 `api.md`，Skills 安装见 [README](../README.md#安装-skills)。
 
 ## 1. 交付范围（已实现）
 

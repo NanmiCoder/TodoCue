@@ -4,12 +4,12 @@
 
 <p align="center">
   <strong>把事情记在手边，把注意力留给当下。</strong><br>
-  一个原生 macOS 待办工具。你用浮动面板，Agent 用 CLI 或 MCP，操作同一份本地任务。
+  一个原生 macOS 待办工具。你用浮动面板，Agent 用 Skills，操作同一份本地任务。
 </p>
 
 <p align="center">
   <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>下载 macOS 版</strong></a> ·
-  <a href="docs/agents.md">Agent 接入</a> ·
+  <a href="#安装-skills">安装 Skills</a> ·
   <a href="release-notes/">版本说明</a> ·
   <a href="LICENSE">MIT</a>
 </p>
@@ -54,23 +54,17 @@ App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无�
 
 [校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.1/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
-## 让 Agent 和你操作同一份待办
+## 安装 Skills
 
-把 [TodoCue skill](skills/todocue/SKILL.md) 安装给 Codex、Claude Code 或其他支持 skills 的本机 Agent，就可以这样描述：
-
-> 帮我把「整理本周进展」放到今天，归到工作项目，预计 25 分钟。
-
-Agent 通过 CLI 操作本地服务，结果会同步显示在 App 中。也可以直接在终端使用：
+先安装并打开一次 TodoCue，再用 [Vercel Skills CLI](https://github.com/vercel-labs/skills) 安装到本机 Agent（需 Node.js / npx），按提示选择 Codex、Claude Code 等客户端：
 
 ```bash
-todocue add "整理本周进展" -d today -p work -e 25
-todocue today
-todocue --json today
+npx skills add NanmiCoder/TodoCue --skill todocue -g
 ```
 
-偏好 MCP 的 Agent 可连接 `todocue mcp`。CLI、MCP 和桌面端共用同一套任务规则、同一份 SQLite 数据；Local API 只监听 `127.0.0.1`，使用本机令牌认证。
+安装后就可以说：「用 TodoCue 把整理本周进展放到今天，归到工作项目，预计 25 分钟。」Agent 通过 CLI 操作，结果同步显示在 App 中。
 
-[安装 skill 与 MCP 接入步骤](docs/agents.md) · [Local API 文档](docs/api.md)
+MCP 为可选入口，可通过 `todocue mcp` 接入；自建集成见 [Local API 文档](docs/api.md)。
 
 <details>
 <summary><strong>从源码构建与参与开发</strong></summary>
