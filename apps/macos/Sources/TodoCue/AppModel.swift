@@ -34,6 +34,7 @@ enum Route: Equatable {
     case form(TaskDraft)
     case settings
     case calendar
+    case completed
 }
 
 struct Toast: Equatable {
@@ -87,6 +88,17 @@ final class AppModel: ObservableObject {
     private var historyRequest: Task<Void, Never>?
     /// Todo ids as of the last board. Only an id *leaving* this set can invalidate fetched history.
     private var calendarTodoIDs: Set<String> = []
+    @Published private(set) var completedTasks: [TodoTask] = []
+    @Published private(set) var completedHasMore = false
+    @Published private(set) var isLoadingCompleted = false
+    @Published private(set) var completedLoadFailed = false
+    /// Until the history has been fetched once, live updates must not build a partial list that
+    /// would then look like the whole story.
+    private var completedLoaded = false
+    private var completedWindow = CompletedHistory.pageSize
+    private var completedRequest: Task<Void, Never>?
+    /// Local changes that landed while a fetch was in flight, replayed once it resolves.
+    private var completedPendingMerges: [TodoTask] = []
     @Published var pinned = false
     @Published var quickAddFocusRequest = 0
     @Published var quickAddText = ""
@@ -328,6 +340,9 @@ final class AppModel: ObservableObject {
         // Invalidate on content, never on arrival: an unconditional reset would refetch a
         // four-month window on every event and cancel the previous request each time, so a steady
         // stream of events — a bulk agent write, or series top-up — would starve it entirely.
+        // Without this a row's `version` goes stale the moment anything edits the task elsewhere,
+        // and reopening it 409s identically on every retry until the route is popped.
+        if isShowingCompleted, !isLoadingCompleted { loadCompleted() }
         if isShowingCalendar {
             let todoIDs = Set(allTasks.map(\.id))
             if !calendarTodoIDs.subtracting(todoIDs).isEmpty { loadedHistory = nil }
@@ -615,6 +630,7 @@ final class AppModel: ObservableObject {
             if t.status != .done { today.completed.removeAll { $0.id == t.id } }
             today.remaining = today.items.filter { $0.task.status == .todo }.count
             mergeCalendarHistory(t)
+            mergeCompleted(t)
         }
     }
 
@@ -813,6 +829,74 @@ final class AppModel: ObservableObject {
         if routes.last != .settings { routes.append(.settings) }
         onOpenPanel?(true)
         Task { await loadDoctor() }
+    }
+
+    // MARK: - Completed history
+
+    var isShowingCompleted: Bool { routes.contains(.completed) }
+    /// The zone the runtime decides dates in; the client must group the same way it does.
+    var runtimeTimezone: String { context?.timezone ?? TimeZone.current.identifier }
+    /// The runtime's own "today". Grouping uses the runtime zone, so the heading that says
+    /// 今天 has to be decided in that zone too, or a differently-configured runtime labels
+    /// today's group with an absolute date.
+    var runtimeToday: String { context?.today ?? TCDate.todayString() }
+
+    func showCompleted() {
+        preserveDraft()
+        if let index = routes.firstIndex(of: .completed) { routes.removeSubrange(routes.index(after: index)...) }
+        else { routes.append(.completed) }
+        onOpenPanel?(false)
+        loadCompleted(reset: true)
+    }
+
+    func loadCompleted(reset: Bool = false) {
+        guard let client else { return }
+        // A reset supersedes whatever is in flight; without cancelling, the older, larger fetch
+        // would land afterwards and silently undo the reset.
+        if reset {
+            completedRequest?.cancel()
+            completedWindow = CompletedHistory.pageSize
+        } else if isLoadingCompleted {
+            return
+        }
+        let window = min(completedWindow, CompletedHistory.maxWindow)
+        let probe = CompletedHistory.probe(window: window)
+        isLoadingCompleted = true
+        completedRequest = Task {
+            defer { isLoadingCompleted = false }
+            do {
+                let tasks = try await client.tasks(status: [.done], limit: probe)
+                guard !Task.isCancelled else { return }
+                completedHasMore = CompletedHistory.hasMore(window: window, received: tasks.count)
+                completedTasks = Array(tasks.prefix(window))
+                completedLoaded = true
+                completedLoadFailed = false
+                // Anything completed while this was in flight is newer than the response.
+                for pending in completedPendingMerges { mergeCompleted(pending) }
+                completedPendingMerges.removeAll()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                completedPendingMerges.removeAll()
+                completedLoadFailed = true
+            }
+        }
+    }
+
+    func loadMoreCompleted() {
+        guard completedHasMore, !isLoadingCompleted else { return }
+        completedWindow = min(completedWindow + CompletedHistory.pageSize, CompletedHistory.maxWindow)
+        loadCompleted()
+    }
+
+    /// Keeps the history in step with a local change, so reopening a task from this very list
+    /// removes it immediately instead of waiting for a refetch.
+    private func mergeCompleted(_ task: TodoTask) {
+        guard completedLoaded else { return }
+        // A response computed before this change is about to overwrite the list; replay then.
+        if isLoadingCompleted { completedPendingMerges.append(task) }
+        completedTasks = CompletedHistory.merging(completedTasks, with: task, hasMore: completedHasMore)
     }
 
     // MARK: - Calendar

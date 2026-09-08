@@ -323,7 +323,7 @@ private struct CalendarDayCell: View {
     /// Overdue and deadlines are drawn as a red number and a red bar; both must also be spoken,
     /// or the state is conveyed by colour alone.
     private var accessibilityLabel: String {
-        var label = CalendarRange.dayLabel(date, language: languagePreferences.language)
+        var label = TCDate.dateLabel(date, language: languagePreferences.language)
         if bucket.isEmpty { return L10n.tr("\(label)，没有安排") }
         if bucket.openCount > 0 { label = L10n.tr("\(label)，\(bucket.openCount) 件待办") }
         if bucket.hasOverdue { label = L10n.tr("\(label)，有逾期") }

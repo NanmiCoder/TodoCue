@@ -142,19 +142,37 @@ final class CalendarRangeTests: XCTestCase {
     func testDatesOutsideTheCurrentYearCarryTheirYear() {
         let today = "2026-09-08"
         // Near today the relative wording is unambiguous and shorter.
-        XCTAssertEqual(CalendarRange.dayLabel("2026-09-08", language: .english, today: today), "Today")
-        XCTAssertEqual(CalendarRange.dayLabel("2026-09-09", language: .english, today: today), "Tomorrow")
-        XCTAssertEqual(CalendarRange.dayLabel("2026-09-07", language: .english, today: today), "Yesterday")
+        XCTAssertEqual(TCDate.dateLabel("2026-09-08", language: .english, today: today), "Today")
+        XCTAssertEqual(TCDate.dateLabel("2026-09-09", language: .english, today: today), "Tomorrow")
+        XCTAssertEqual(TCDate.dateLabel("2026-09-07", language: .english, today: today), "Yesterday")
         // Same year: no year needed. Another year: it must be there, or paging to March 2027
         // produces a heading identical to March 2026.
-        XCTAssertFalse(CalendarRange.dayLabel("2026-03-04", language: .english, today: today).contains("2026"))
-        XCTAssertTrue(CalendarRange.dayLabel("2027-03-04", language: .english, today: today).contains("2027"))
-        XCTAssertTrue(CalendarRange.dayLabel("2027-03-04", language: .chinese, today: today).contains("2027"))
+        XCTAssertFalse(TCDate.dateLabel("2026-03-04", language: .english, today: today).contains("2026"))
+        XCTAssertTrue(TCDate.dateLabel("2027-03-04", language: .english, today: today).contains("2027"))
+        XCTAssertTrue(TCDate.dateLabel("2027-03-04", language: .chinese, today: today).contains("2027"))
         // The week title is the only year cue in the week span.
         XCTAssertTrue(CalendarRange.title(span: .week, anchor: "2027-03-04", firstWeekday: 2,
                                           language: .english, today: today).contains("2027"))
         XCTAssertFalse(CalendarRange.title(span: .week, anchor: "2026-09-09", firstWeekday: 2,
                                            language: .english, today: today).contains("2026"))
+    }
+
+    /// Every existing caller — the Upcoming headers, task metadata, drag hints, toasts, the notch —
+    /// relies on the zero-argument form. The relative wording moved from `Calendar.isDateInToday`
+    /// to a string comparison, so pin that the default path still says what it used to.
+    func testTheDefaultRelativeWordingStillMatchesTheRealToday() {
+        let today = TCDate.todayString()
+        XCTAssertEqual(TCDate.dateLabel(today), L10n.tr("今天"))
+        XCTAssertEqual(TCDate.dateLabel(TCDate.addingDays(1, to: today)), L10n.tr("明天"))
+        XCTAssertEqual(TCDate.dateLabel(TCDate.addingDays(-1, to: today)), L10n.tr("昨天"))
+        // Two days out is absolute, and inside the current year it carries no year.
+        let far = TCDate.addingDays(2, to: today)
+        let label = TCDate.dateLabel(far)
+        XCTAssertNotEqual(label, L10n.tr("今天"))
+        XCTAssertFalse(label.isEmpty)
+        // A malformed date is returned untouched rather than crashing or blanking a row.
+        XCTAssertEqual(TCDate.dateLabel("2026-02-30"), "2026-02-30")
+        XCTAssertEqual(TCDate.dateLabel("not-a-date"), "not-a-date")
     }
 
     func testFirstWeekdayDefersToTheRegionForEnglishButNotForChinese() {

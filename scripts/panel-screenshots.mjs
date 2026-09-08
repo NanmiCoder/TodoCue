@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Local calendar verification: isolated runtime + offscreen SwiftUI render. Never touches ~/.todocue.
+// Local panel verification (calendar, completed history, task list): isolated runtime +
+// offscreen SwiftUI render. Never touches ~/.todocue.
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,15 +10,17 @@ import { startRuntime } from '../packages/server/dist/index.js';
 import { MemoryNotifier } from '../packages/engine/dist/index.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const home = await fs.mkdtemp(path.join(os.tmpdir(), 'todocue-calendar-'));
+const home = await fs.mkdtemp(path.join(os.tmpdir(), 'todocue-panel-'));
 const runtimes = [];
 const fixtures = [];
 const texts = {
   en: { p: 'Product', daily: 'Daily standup', weekly: 'Gym session', today: 'Review the launch checklist',
         far: 'Renew the domain', done: 'Ship the release notes', split: 'Draft the quarterly report',
-        overdue: 'Reply to the design feedback' },
+        overdue: 'Reply to the design feedback', stale: 'Renew the old certificate',
+        extra: ['Ship the pricing page', 'Archive last quarter notes', 'Fix the login redirect'] },
   'zh-Hans': { p: '产品', daily: '每日站会', weekly: '去健身房', today: '检查产品发布清单',
-        far: '续费域名', done: '整理本次更新说明', split: '写季度报告', overdue: '回复设计评审的反馈' },
+        far: '续费域名', done: '整理本次更新说明', split: '写季度报告', overdue: '回复设计评审的反馈',
+        stale: '更新过期的证书', extra: ['上线定价页', '归档上季度记录', '修复登录跳转'] },
 };
 
 const shift = (d, n) => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
@@ -38,22 +41,36 @@ try {
     // History behind today.
     const old = engine.createTask({ title: t.done, scheduledDate: shift(today, -6) }).task;
     engine.completeTask(old.id, { expectedVersion: old.version });
+    // Finished today but scheduled years ago — belongs under today in the completed history,
+    // and under its plan date in the calendar.
+    const stale = engine.createTask({ title: t.stale, scheduledDate: '2020-01-01' }).task;
+    engine.completeTask(stale.id, { expectedVersion: stale.version });
+    // A couple more, finished on earlier days, so the history actually spans several groups.
+    // The engine stamps completedAt with "now", so backdate it directly — this is a throwaway
+    // database whose only purpose is producing evidence.
+    for (const [n, title] of t.extra.entries()) {
+      const task = engine.createTask({ title, project: t.p, scheduledDate: shift(today, -(n + 1)) }).task;
+      engine.completeTask(task.id, { expectedVersion: task.version });
+      const when = `${shift(today, -(n + 1))}T0${n + 1}:30:00.000Z`;
+      engine.db.prepare('UPDATE tasks SET completed_at = ? WHERE id = ?').run(when, task.id);
+    }
     // Recurring: real rows for 30 days, projected ghosts beyond.
     engine.createTask({ title: t.daily, repeat: { kind: 'daily' }, scheduledTime: '09:00', startDate: today });
     engine.createTask({ title: t.weekly, repeat: { kind: 'weekly', weekdays: [1, 3, 5] }, scheduledTime: '19:00', startDate: today });
 
-    fixtures.push({ language, today, connection: JSON.parse(await fs.readFile(path.join(home, language, 'connection.json'), 'utf8')) });
+    fixtures.push({ language, today, staleTitle: t.stale, searchTerm: t.extra[0],
+      connection: JSON.parse(await fs.readFile(path.join(home, language, 'connection.json'), 'utf8')) });
   }
   const manifest = path.join(home, 'fixtures.json');
   await fs.writeFile(manifest, JSON.stringify(fixtures));
-  const out = process.argv[2] ? path.resolve(process.argv[2]) : path.join(root, '.ui-review/calendar/shots');
+  const out = process.argv[2] ? path.resolve(process.argv[2]) : path.join(root, '.ui-review/panel/shots');
   // Clear only the renders. The directory also holds a hand-written README describing them.
   await fs.mkdir(out, { recursive: true });
   for (const name of await fs.readdir(out)) {
     if (name.endsWith('.png')) await fs.rm(path.join(out, name));
   }
-  const child = spawn('swift', ['test', '--package-path', 'apps/macos', '--filter', 'CalendarSnapshotTests'],
-    { cwd: root, stdio: 'inherit', env: { ...process.env, TODOCUE_HOME: home, TODOCUE_CALENDAR_FIXTURES: manifest, TODOCUE_CALENDAR_OUTPUT: out } });
+  const child = spawn('swift', ['test', '--package-path', 'apps/macos', '--filter', 'PanelSnapshotTests'],
+    { cwd: root, stdio: 'inherit', env: { ...process.env, TODOCUE_HOME: home, TODOCUE_PANEL_FIXTURES: manifest, TODOCUE_PANEL_OUTPUT: out } });
   const code = await new Promise((res, rej) => { child.on('error', rej); child.on('exit', res); });
   if (code !== 0) throw new Error(`capture failed (${code}); fixture home: ${home}`);
   console.log('shots ->', out);

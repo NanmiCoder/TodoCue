@@ -388,5 +388,16 @@ extension L10n {
         "添加到 {0}": "Add to {0}",
         "快速添加到今天": "Quick add to today",
         "添加到今天": "Add to today",
+        // Completed history
+        "已完成…": "Completed…",
+        "搜索已完成的任务": "Search completed tasks",
+        "正在加载已完成的任务": "Loading completed tasks",
+        "离线，暂时读不到已完成的任务": "Offline — completed tasks are unavailable",
+        "还没有完成的任务\n完成一件，这里就会记下来。": "Nothing finished yet\nComplete something and it will be kept here.",
+        "加载更早": "Load earlier",
+        "只搜索了已加载的 {0} 件": "Only searched the {0} loaded so far",
+        "没有找到相关任务": "No matching tasks",
+        "已到可查看的上限，最近 {0} 件": "That is the viewable limit — the {0} most recent",
+        "加载失败": "Could not load",
     ]
 }

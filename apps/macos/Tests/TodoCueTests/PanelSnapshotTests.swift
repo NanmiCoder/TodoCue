@@ -4,21 +4,29 @@ import AppKit
 import TodoCueKit
 @testable import TodoCue
 
-/// Opt-in offscreen render of the calendar route, driven by `scripts/calendar-screenshots.mjs`
+/// Opt-in offscreen render of the panel's read surfaces, driven by `scripts/panel-screenshots.mjs`
 /// against a disposable runtime. Uses `ImageRenderer` rather than a real panel so verification
 /// never opens a window, activates the app, or borrows the pointer.
-final class CalendarSnapshotTests: XCTestCase {
+final class PanelSnapshotTests: XCTestCase {
     struct Fixture: Decodable {
         let language: String
         let today: String
         let connection: ConnectionInfo
+        /// Planned in 2020, completed today — the case that forces completion-time grouping.
+        let staleTitle: String
+        let searchTerm: String
     }
 
-    @MainActor func testRenderCalendarScenes() async throws {
+    @MainActor private func wait(upTo seconds: Double, until done: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !done(), Date() < deadline { try await Task.sleep(nanoseconds: 30_000_000) }
+    }
+
+    @MainActor func testRenderPanelScenes() async throws {
         let env = ProcessInfo.processInfo.environment
-        guard let manifest = env["TODOCUE_CALENDAR_FIXTURES"], let output = env["TODOCUE_CALENDAR_OUTPUT"],
-              let home = env["TODOCUE_HOME"], home.contains("todocue-calendar-") else {
-            throw XCTSkip("Opt-in: run scripts/calendar-screenshots.mjs against a disposable runtime")
+        guard let manifest = env["TODOCUE_PANEL_FIXTURES"], let output = env["TODOCUE_PANEL_OUTPUT"],
+              let home = env["TODOCUE_HOME"], home.contains("todocue-panel-") else {
+            throw XCTSkip("Opt-in: run scripts/panel-screenshots.mjs against a disposable runtime")
         }
         _ = NSApplication.shared
         let fixtures = try JSONDecoder().decode([Fixture].self, from: Data(contentsOf: URL(fileURLWithPath: manifest)))
@@ -42,6 +50,8 @@ final class CalendarSnapshotTests: XCTestCase {
                 // Not a calendar scene: the task views and the calendar spans now share one
                 // segmented control, so this guards the existing tab bar against that refactor.
                 ("today-tabs", CGSize(width: 340, height: 680), .light, { model.routes = []; model.tab = .today }),
+                ("completed", CGSize(width: 340, height: 680), .light, { model.showCompleted() }),
+                ("completed-dark", CGSize(width: 300, height: 680), .dark, { model.showCompleted() }),
                 ("month-today", CGSize(width: 340, height: 680), .light, { model.showCalendar() }),
                 ("month-today-dark", CGSize(width: 340, height: 680), .dark, { model.showCalendar() }),
                 ("month-narrow", CGSize(width: 300, height: 680), .light, { model.showCalendar() }),
@@ -111,6 +121,45 @@ final class CalendarSnapshotTests: XCTestCase {
                     .appendingPathComponent("\(fixture.language)-\(name).png"))
             }
 
+            // The completed history end to end against the real runtime: proving the fetch worked
+            // matters more than the picture, since ImageRenderer cannot draw the scroll container.
+            model.routes = []
+            model.showCompleted()
+            try await wait(upTo: 5) { !model.isLoadingCompleted && !model.completedTasks.isEmpty }
+            XCTAssertGreaterThanOrEqual(model.completedTasks.count, 5, "the history must actually load")
+            XCTAssertFalse(model.completedLoadFailed)
+            XCTAssertTrue(model.completedTasks.allSatisfy { $0.status == .done })
+            // Newest first, which is what makes `limit` mean "the most recent N".
+            let stamps = model.completedTasks.map { $0.completedAt ?? $0.updatedAt }
+            XCTAssertEqual(stamps, stamps.sorted(by: >), "the runtime already orders these")
+            // Searching narrows the loaded set.
+            XCTAssertEqual(CompletedHistory.matching(model.completedTasks, query: fixture.staleTitle).count, 1)
+
+            for (name, size, scheme, text) in [("completed-list", CGSize(width: 340, height: 700), ColorScheme.light, ""),
+                                               ("completed-list-dark", CGSize(width: 300, height: 700), ColorScheme.dark, ""),
+                                               ("completed-search", CGSize(width: 340, height: 320), ColorScheme.light, fixture.searchTerm)] {
+                let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)!
+                NSApp.appearance = appearance
+                var image: NSImage?
+                appearance.performAsCurrentDrawingAppearance {
+                    let renderer = ImageRenderer(content:
+                        CompletedList(query: text)
+                            .environmentObject(model)
+                            .todoCueAccent()
+                            .environment(\.colorScheme, scheme)
+                            .padding(10)
+                            .frame(width: size.width, alignment: .leading)
+                            .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.96)))
+                    renderer.scale = 2
+                    image = renderer.nsImage
+                }
+                let rendered = try XCTUnwrap(image, name)
+                let rep = try XCTUnwrap(NSBitmapImageRep(data: rendered.tiffRepresentation!))
+                let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+                try png.write(to: URL(fileURLWithPath: output)
+                    .appendingPathComponent("\(fixture.language)-\(name).png"))
+            }
+
             // The week span stacks the same blocks; render them outside the scroll view too.
             for (name, size, scheme) in [("week-bare", CGSize(width: 340, height: 700), ColorScheme.light),
                                          ("week-bare-dark", CGSize(width: 300, height: 700), ColorScheme.dark)] {
@@ -149,11 +198,13 @@ final class CalendarSnapshotTests: XCTestCase {
                 setup()
                 // `showCalendar()` once left the span untouched, so every month scene silently
                 // rendered a week and the evidence was worthless. Never let that be silent again.
-                if name != "today-tabs" {
+                // `showCalendar()` once left the span untouched, so every month scene silently
+                // rendered a week and the evidence was worthless. Never let that be silent again.
+                if name.hasPrefix("month") || name.hasPrefix("week") {
                     XCTAssertEqual(model.calendarSpan, name.hasPrefix("week") ? .week : .month, name)
                 }
                 // History lands through an async fetch; give it a beat before rendering.
-                try await Task.sleep(nanoseconds: 400_000_000)
+                try await Task.sleep(nanoseconds: 700_000_000)
                 let appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)!
                 NSApp.appearance = appearance
                 var image: NSImage?
