@@ -17,7 +17,7 @@
 
 ## 渲染证据
 
-`node scripts/calendar-screenshots.mjs docs/design/evidence/2026-09-08-calendar` ——
+`node scripts/panel-screenshots.mjs docs/design/evidence/2026-09-08-panel` ——
 离屏 `ImageRenderer` 渲染，中英 × 明暗 × 300/340pt，明细见该目录 README。
 不开窗口、不抢焦点，数据库为一次性临时 `TODOCUE_HOME`。
 

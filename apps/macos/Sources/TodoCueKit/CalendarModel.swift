@@ -204,25 +204,6 @@ public enum CalendarRange {
         }
     }
 
-    /// The agenda's day heading. Relative wording near today, otherwise an absolute date that keeps
-    /// its year whenever the date is not in the current year — `TCDate.dateLabel` drops the year,
-    /// which is fine for lists bounded to the near future but ambiguous in a calendar.
-    public static func dayLabel(_ date: String, language: AppLanguage,
-                               today: String = TCDate.todayString()) -> String {
-        // Resolve against the passed language, not the global preference: taking `language` for the
-        // formatter and ignoring it for the words would make this untestable and quietly divergent.
-        switch CivilDate.between(today, date) {
-        case 0: return L10n.tr("今天", language: language)
-        case 1: return L10n.tr("明天", language: language)
-        case -1: return L10n.tr("昨天", language: language)
-        default: break
-        }
-        guard let parsed = TCDate.parseLocalDate(date) else { return date }
-        let formatter = DateFormatter()
-        formatter.locale = language.locale
-        formatter.setLocalizedDateFormatFromTemplate(date.prefix(4) == today.prefix(4) ? "MMM d EEE" : "y MMM d EEE")
-        return formatter.string(from: parsed)
-    }
 }
 
 /// Everything one calendar cell needs to render, precomputed once per visible range.

@@ -31,6 +31,7 @@ struct PanelRootView: View {
         case .form(let draft): TaskFormView(draft: draft).transition(.opacity)
         case .settings: SettingsView().transition(.opacity)
         case .calendar: CalendarView().transition(.opacity)
+        case .completed: CompletedView().transition(.opacity)
         case nil: ListRootView().transition(.opacity)
         }
     }
@@ -71,6 +72,7 @@ struct HeaderView: View {
                 .accessibilityLabel(model.pinned ? L10n.tr("取消固定面板") : L10n.tr("固定面板"))
                 Menu {
                     Button(L10n.tr("新建任务"), action: model.newTask).disabled(!model.canWrite)
+                    Button(L10n.tr("已完成…"), action: model.showCompleted)
                     Button(L10n.tr("刷新")) { Task { await model.refreshAll() } }
                     Button(L10n.tr("导出 JSON"), action: model.exportJSON).disabled(model.client == nil)
                     Divider()
@@ -116,6 +118,7 @@ struct HeaderView: View {
         case .form(let draft): return draft.isEditing ? L10n.tr("编辑任务") : L10n.tr("记下一件事")
         case .settings: return L10n.tr("偏好设置")
         case .calendar: return L10n.tr("日历")
+        case .completed: return L10n.tr("已完成")
         case nil:
             switch model.tab { case .today: return L10n.tr("今天"); case .upcoming: return L10n.tr("接下来"); case .all: return L10n.tr("所有任务") }
         }

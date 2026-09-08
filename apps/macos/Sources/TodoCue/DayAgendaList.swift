@@ -103,7 +103,7 @@ private struct DayAgendaHeader: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Text(CalendarRange.dayLabel(date, language: languagePreferences.language))
+            Text(TCDate.dateLabel(date, language: languagePreferences.language))
                 .font(.system(size: 13, weight: .semibold)).tracking(-0.2)
                 .foregroundStyle(date == TCDate.todayString() ? accent : Color.primary)
             Spacer(minLength: 4)

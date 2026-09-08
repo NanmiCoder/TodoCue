@@ -45,7 +45,13 @@ public enum TCDate {
 
     public static func localDateString(_ d: Date) -> String { dateOnly.string(from: d) }
 
-    public static func parseLocalDate(_ s: String) -> Date? { dateOnly.date(from: s) }
+    public static func parseLocalDate(_ s: String) -> Date? {
+        // `DateFormatter` rolls an impossible date over — 2026-02-30 comes back as March 2 — and the
+        // runtime validates `YYYY-MM-DD` by regex alone, so such a value is storable by any client.
+        // Rendering it as a different, real date is worse than refusing it.
+        guard CivilDate.parse(s) != nil else { return nil }
+        return dateOnly.date(from: s)
+    }
 
     public static func dateString(_ date: Date, timezone: String) -> String {
         let formatter = DateFormatter()
@@ -62,9 +68,9 @@ public enum TCDate {
         localDateString(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
     }
 
-    private static func display(_ date: Date, template: String) -> String {
+    private static func display(_ date: Date, template: String, language: AppLanguage? = nil) -> String {
         let formatter = DateFormatter()
-        formatter.locale = L10n.language.locale
+        formatter.locale = (language ?? L10n.language).locale
         formatter.setLocalizedDateFormatFromTemplate(template)
         return formatter.string(from: date)
     }
@@ -81,13 +87,21 @@ public enum TCDate {
         return display(d, template: "MMMd HHmm")
     }
 
-    /// Human label for a local date string.
-    public static func dateLabel(_ s: String) -> String {
+    /// Human label for a local date string: relative wording near today, otherwise an absolute
+    /// date that keeps its year whenever it is not the current one — the completed history and the
+    /// calendar both reach years away, where a bare "Jan 1" is indistinguishable from this year's.
+    public static func dateLabel(_ s: String, language: AppLanguage? = nil,
+                                 today: String = todayString()) -> String {
+        let language = language ?? L10n.language
+        switch s {
+        case today: return L10n.tr("今天", language: language)
+        case addingDays(1, to: today): return L10n.tr("明天", language: language)
+        case addingDays(-1, to: today): return L10n.tr("昨天", language: language)
+        default: break
+        }
         guard let d = parseLocalDate(s) else { return s }
-        if Calendar.current.isDateInToday(d) { return L10n.tr("今天") }
-        if Calendar.current.isDateInTomorrow(d) { return L10n.tr("明天") }
-        if Calendar.current.isDateInYesterday(d) { return L10n.tr("昨天") }
-        return dayWithWeekday(d)
+        return display(d, template: s.prefix(4) == today.prefix(4) ? "MMM d EEE" : "y MMM d EEE",
+                       language: language)
     }
 
     public static func addingDays(_ n: Int, to s: String) -> String {

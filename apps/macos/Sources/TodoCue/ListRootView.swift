@@ -250,15 +250,7 @@ struct AllListView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField(L10n.tr("搜索任务、项目或备注"), text: $query).textFieldStyle(.plain).accessibilityLabel(L10n.tr("搜索任务"))
-            if !query.isEmpty {
-                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                    .buttonStyle(.plain).accessibilityLabel(L10n.tr("清除搜索"))
-            }
-        }
-        .font(.system(size: 12)).padding(10).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+        SearchField(query: $query, placeholder: L10n.tr("搜索任务、项目或备注"), label: L10n.tr("搜索任务"))
         if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             Text(L10n.tr("清除搜索后可拖动调整顺序")).font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 4)
         }
@@ -388,6 +380,12 @@ struct CompletedTodayView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(expanded ? L10n.tr("收起今日已完成") : L10n.tr("展开今日已完成"))
+            .overlay(alignment: .trailing) {
+                // This section only ever holds today; the full history is one tap from here.
+                Button(L10n.tr("查看全部"), action: model.showCompleted)
+                    .buttonStyle(.plain).font(.system(size: 11))
+                    .foregroundStyle(.secondary).padding(.horizontal, 4)
+            }
             if expanded {
                 ForEach(model.today.completed) { task in TaskRowView(task: task) }
             }
