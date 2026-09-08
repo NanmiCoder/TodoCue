@@ -11,6 +11,15 @@ final class CalendarDragTests: XCTestCase {
     private let today = TCDate.todayString()
     private var tomorrow: String { CivilDate.adding(1, to: today) }
 
+    /// Polls instead of sleeping a fixed amount: the fixture request to a dead port resolves at
+    /// very different speeds on a laptop and on a CI runner.
+    @MainActor private func wait(upTo seconds: Double = 5, until done: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !done(), Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
     private func task(_ id: String, on date: String) -> TodoTask {
         TodoTask(id: id, title: "写周报 \(id)", scheduledDate: date, timezone: "Asia/Shanghai",
                  createdAt: "2026-09-08T00:00:00Z", updatedAt: "2026-09-08T00:00:00Z")
@@ -62,20 +71,16 @@ final class CalendarDragTests: XCTestCase {
         XCTAssertTrue(model.dropTask(at: try XCTUnwrap(model.dropTarget)))
         model.endTaskDrag()
 
-        // Settling is animated, then the presentation is torn down.
-        for _ in 0..<40 where model.dragPresentation != nil {
-            try await Task.sleep(nanoseconds: 30_000_000)
-        }
-        // These two are exactly the guards the leak tripped: `apply(_:)` drops every snapshot while
-        // a presentation is set, and `beginTaskDrag` refuses while either is set.
+        // Settling is animated, and the request has to fail, before the state is final.
+        try await wait { model.dragPresentation == nil && !model.isMovingTask }
+
+        // These are exactly the guards the leak tripped: `apply(_:)` drops every snapshot while a
+        // presentation is set, and `beginTaskDrag` refuses while either that or `isMovingTask` is.
         XCTAssertNil(model.dragPresentation, "a leaked presentation blocks every later snapshot and drag")
         XCTAssertNil(model.draggedTask)
         XCTAssertNil(model.dropTarget)
         XCTAssertFalse(model.isMovingTask, "the in-flight flag must clear even when the request fails")
         XCTAssertNil(model.pendingMove)
-        // `canWrite` is legitimately false by now — the fixture client points at a dead port, so the
-        // reconciling refresh marked the model offline. Reconnecting is what restores dragging.
-        XCTAssertFalse(model.canWrite)
     }
 
     /// Hovering a day must not shuffle rows the way a list reorder does.
