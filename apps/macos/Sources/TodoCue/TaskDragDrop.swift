@@ -2,33 +2,89 @@ import AppKit
 import SwiftUI
 import TodoCueKit
 
+/// Which surface a drag belongs to. The list views map onto `PanelTab`, whose `rawValue` is the
+/// server's `ListView` and is sent as `MoveTaskInput.view`; the calendar is client-only and
+/// reschedules by patching the task instead, so it must never borrow one of those names.
+enum DragSurface: Hashable {
+    case list(PanelTab)
+    case calendar
+
+    var tab: PanelTab? {
+        if case .list(let tab) = self { return tab }
+        return nil
+    }
+}
+
 struct TaskDrag {
     let task: TodoTask
-    let view: PanelTab
+    let surface: DragSurface
     let group: String
     let revision: Int
 }
 
 struct TaskDropTarget: Equatable {
-    let view: PanelTab
+    let surface: DragSurface
     let group: String
     let beforeId: String?
+}
+
+/// A calendar drop that would plan work after its own deadline; the reader confirms or cancels.
+struct PendingReschedule: Identifiable {
+    let id = UUID()
+    let task: TodoTask
+    let date: String
+}
+
+/// Restores the plan a calendar drag moved away from. Holds the two wire fields rather than a
+/// `TaskPayload`, which is not `Equatable` and so could not live on a `Toast`.
+struct UndoReschedule: Equatable {
+    let taskId: String
+    let scheduledDate: String?
+    let scheduledAt: String?
+    /// The version the reschedule produced. Undoing against it means a later edit from anywhere
+    /// else conflicts rather than being silently reverted.
+    let expectedVersion: Int
+
+    init(task: TodoTask, expectedVersion: Int) {
+        taskId = task.id
+        scheduledDate = task.scheduledDate
+        scheduledAt = task.scheduledAt
+        self.expectedVersion = expectedVersion
+    }
+
+    /// `set` writes an explicit null for nil, which is what clears the other half of the pair.
+    var payload: TaskPayload {
+        var payload = TaskPayload()
+        payload.set("scheduledDate", scheduledDate)
+        payload.set("scheduledAt", scheduledAt)
+        return payload
+    }
 }
 
 struct PendingTaskMove: Identifiable {
     let id = UUID()
     let drag: TaskDrag
     let target: TaskDropTarget
+    /// The wire `ListView`. Held explicitly so an ordering move cannot be built from a surface
+    /// that has no server-side name — the point of `DragSurface` was to keep that unrepresentable.
+    let view: PanelTab
+
+    init?(drag: TaskDrag, target: TaskDropTarget) {
+        guard let tab = drag.surface.tab else { return nil }
+        self.drag = drag
+        self.target = target
+        self.view = tab
+    }
 
     var message: String {
         guard drag.group != target.group else { return L10n.tr("已调整执行顺序") }
-        if target.view == .all { return L10n.tr("已移至「\(target.group.isEmpty ? L10n.tr("未分组") : target.group)」") }
+        if target.surface == .list(.all) { return L10n.tr("已移至「\(target.group.isEmpty ? L10n.tr("未分组") : target.group)」") }
         return L10n.tr("已改期至 \(TCDate.dateLabel(target.group))，截止与提醒保持原值")
     }
 
     func payload(allowPastDeadline: Bool) -> TaskPayload {
         var p = TaskPayload()
-        p.set("view", drag.view.rawValue)
+        p.set("view", view.rawValue)
         p.set("sourceGroup", drag.group)
         p.set("targetGroup", target.group)
         p.set("beforeId", target.beforeId)
@@ -46,14 +102,18 @@ struct TaskDragHandle: NSViewRepresentable {
     let enabled: Bool
     let model: AppModel
     let begin: () -> Bool
+    /// Calendar rows can only be moved to another day; list rows can also be reordered.
+    var reschedulesOnly = false
 
     func makeNSView(context: Context) -> HandleView { HandleView() }
     func updateNSView(_ view: HandleView, context: Context) {
         view.enabled = enabled
         view.model = model
         view.begin = begin
-        view.toolTip = enabled ? L10n.tr("拖动调整执行顺序；跨分组可修改项目或计划日期") : L10n.tr("当前无法拖动")
-        view.setAccessibilityLabel(L10n.tr("拖动 \(task.title)"))
+        view.toolTip = enabled
+            ? (reschedulesOnly ? L10n.tr("拖到另一天即可改期") : L10n.tr("拖动调整执行顺序；跨分组可修改项目或计划日期"))
+            : L10n.tr("当前无法拖动")
+        view.setAccessibilityLabel(reschedulesOnly ? L10n.tr("拖动 \(task.title) 改期") : L10n.tr("拖动 \(task.title)"))
         view.needsDisplay = true
         view.window?.invalidateCursorRects(for: view)
     }
@@ -145,21 +205,25 @@ struct TaskDragHandle: NSViewRepresentable {
 /// Background regions never intercept row buttons. Hit testing intersects bounds and visibleRect,
 /// so clipped rows and areas outside the scroll view cannot receive a drop.
 struct TaskDropRegion: NSViewRepresentable {
-    let view: PanelTab
+    let surface: DragSurface
     let group: String
     let beforeId: String?
     var afterId: String? = nil
     var isRow = false
     var isHeader = false
     var enabled = true
+    /// A region that measures but never accepts a drop. Calendar rows need a frame so the lifted
+    /// row can be positioned, while the only landing places are the day cells.
+    var droppable = true
 
     func makeNSView(context: Context) -> RegionView { RegionView() }
     func updateNSView(_ region: RegionView, context: Context) {
-        region.target = TaskDropTarget(view: view, group: group, beforeId: beforeId)
+        region.target = TaskDropTarget(surface: surface, group: group, beforeId: beforeId)
         region.afterId = afterId
         region.isRow = isRow
         region.isHeader = isHeader
         region.enabled = enabled
+        region.droppable = droppable
     }
     final class RegionView: NSView {
         private static let regions = NSHashTable<RegionView>.weakObjects()
@@ -168,6 +232,7 @@ struct TaskDropRegion: NSViewRepresentable {
         var isRow = false
         var isHeader = false
         var enabled = true
+        var droppable = true
         override var isFlipped: Bool { true }
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
         override func viewDidMoveToWindow() {
@@ -176,29 +241,29 @@ struct TaskDropRegion: NSViewRepresentable {
         }
         var slot: TaskDragSlot? {
             guard let target else { return nil }
-            return TaskDragSlot(view: target.view, group: target.group,
+            return TaskDragSlot(surface: target.surface, group: target.group,
                                 kind: isRow ? .row : isHeader ? .header : .end,
                                 taskID: isRow ? target.beforeId : nil)
         }
-        static func frames(in window: NSWindow, view: PanelTab) -> [TaskDragFrame] {
+        static func frames(in window: NSWindow, surface: DragSurface) -> [TaskDragFrame] {
             regions.allObjects.compactMap { region in
                 guard region.enabled, region.window === window, !region.isHiddenOrHasHiddenAncestor,
-                      let slot = region.slot, slot.view == view else { return nil }
+                      let slot = region.slot, slot.surface == surface else { return nil }
                 let rect = region.convert(region.bounds, to: nil)
                 return TaskDragFrame(slot: slot, rect: CGRect(x: rect.minX, y: -rect.maxY, width: rect.width, height: rect.height))
             }
         }
-        static func target(at point: NSPoint, in window: NSWindow, view: PanelTab) -> TaskDropTarget? {
+        static func target(at point: NSPoint, in window: NSWindow, surface: DragSurface) -> TaskDropTarget? {
             var nearest: (distance: CGFloat, target: TaskDropTarget)?
-            for region in regions.allObjects where region.enabled && region.window === window && !region.isHiddenOrHasHiddenAncestor {
-                guard let target = region.target, target.view == view else { continue }
+            for region in regions.allObjects where region.enabled && region.droppable && region.window === window && !region.isHiddenOrHasHiddenAncestor {
+                guard let target = region.target, target.surface == surface else { continue }
                 let local = region.convert(point, from: nil)
                 let visible = region.bounds.intersection(region.visibleRect)
                 guard !visible.isEmpty, local.x >= visible.minX, local.x <= visible.maxX else { continue }
                 if let clip = region.enclosingScrollView?.contentView,
                    !clip.bounds.contains(clip.convert(point, from: nil)) { continue }
                 let candidate = region.isRow && local.y > region.bounds.midY
-                    ? TaskDropTarget(view: view, group: target.group, beforeId: region.afterId) : target
+                    ? TaskDropTarget(surface: surface, group: target.group, beforeId: region.afterId) : target
                 if visible.contains(local) { return candidate }
                 // Bridge small stack gutters. Clearing the projection for the 2pt
                 // gap between rows would make neighbours snap back on every crossing.
@@ -214,16 +279,18 @@ struct DraggableTaskRow: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let task: TodoTask
-    let view: PanelTab
+    let surface: DragSurface
     let group: String
     let nextId: String?
     var enabled = true
     var reasons: [TodayReason] = []
     var showProject = true
     var compact = false
+    /// The calendar drags to change a date, not to reorder, so its rows are not landing places.
+    var reorderable = true
 
     private var canDrag: Bool { enabled && model.canWrite && !model.isMovingTask && task.status == .todo && !model.completingTaskIDs.contains(task.id) }
-    private var slot: TaskDragSlot { TaskDragSlot(view: view, group: group, kind: .row, taskID: task.id) }
+    private var slot: TaskDragSlot { TaskDragSlot(surface: surface, group: group, kind: .row, taskID: task.id) }
     private var lifted: TaskDragPresentation? {
         guard let presentation = model.dragPresentation, presentation.source == slot else { return nil }
         return presentation
@@ -231,7 +298,8 @@ struct DraggableTaskRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             TaskDragHandle(task: task, enabled: canDrag, model: model,
-                           begin: { model.beginTaskDrag(task, view: view, group: group) })
+                           begin: { model.beginTaskDrag(task, surface: surface, group: group) },
+                           reschedulesOnly: !reorderable)
                 .frame(width: 16, height: 30).padding(.top, compact ? 4 : 7)
                 .opacity(canDrag ? 0.65 : 0.2)
             TaskRowView(task: task, reasons: reasons, showProject: showProject, compact: compact)
@@ -265,7 +333,8 @@ struct DraggableTaskRow: View {
         }
         .zIndex(lifted == nil ? 0 : 10)
         // The measurement/hit region stays at its original layout position.
-        .background(TaskDropRegion(view: view, group: group, beforeId: task.id, afterId: nextId, isRow: true, enabled: enabled))
+        .background(TaskDropRegion(surface: surface, group: group, beforeId: task.id, afterId: nextId,
+                                   isRow: true, enabled: enabled, droppable: reorderable))
     }
 }
 
@@ -297,9 +366,9 @@ struct DraggableSectionHeader: View {
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
-        .offset(y: model.dragOffset(TaskDragSlot(view: view, group: group, kind: .header)))
-        .animation(Theme.dragShift, value: model.dragOffset(TaskDragSlot(view: view, group: group, kind: .header)))
-        .background(TaskDropRegion(view: view, group: group, beforeId: firstId, isHeader: true, enabled: enabled))
+        .offset(y: model.dragOffset(TaskDragSlot(surface: .list(view), group: group, kind: .header)))
+        .animation(Theme.dragShift, value: model.dragOffset(TaskDragSlot(surface: .list(view), group: group, kind: .header)))
+        .background(TaskDropRegion(surface: .list(view), group: group, beforeId: firstId, isHeader: true, enabled: enabled))
     }
 }
 
@@ -311,8 +380,8 @@ struct TaskGroupEnd: View {
     var enabled = true
     var body: some View {
         Color.clear.frame(height: 10).contentShape(Rectangle())
-            .offset(y: model.dragOffset(TaskDragSlot(view: view, group: group, kind: .end)))
-            .animation(Theme.dragShift, value: model.dragOffset(TaskDragSlot(view: view, group: group, kind: .end)))
-            .background(TaskDropRegion(view: view, group: group, beforeId: nil, enabled: enabled))
+            .offset(y: model.dragOffset(TaskDragSlot(surface: .list(view), group: group, kind: .end)))
+            .animation(Theme.dragShift, value: model.dragOffset(TaskDragSlot(surface: .list(view), group: group, kind: .end)))
+            .background(TaskDropRegion(surface: .list(view), group: group, beforeId: nil, enabled: enabled))
     }
 }

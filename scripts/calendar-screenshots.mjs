@@ -47,7 +47,11 @@ try {
   const manifest = path.join(home, 'fixtures.json');
   await fs.writeFile(manifest, JSON.stringify(fixtures));
   const out = process.argv[2] ? path.resolve(process.argv[2]) : path.join(root, '.ui-review/calendar/shots');
-  await fs.rm(out, { recursive: true, force: true });
+  // Clear only the renders. The directory also holds a hand-written README describing them.
+  await fs.mkdir(out, { recursive: true });
+  for (const name of await fs.readdir(out)) {
+    if (name.endsWith('.png')) await fs.rm(path.join(out, name));
+  }
   const child = spawn('swift', ['test', '--package-path', 'apps/macos', '--filter', 'CalendarSnapshotTests'],
     { cwd: root, stdio: 'inherit', env: { ...process.env, TODOCUE_HOME: home, TODOCUE_CALENDAR_FIXTURES: manifest, TODOCUE_CALENDAR_OUTPUT: out } });
   const code = await new Promise((res, rej) => { child.on('error', rej); child.on('exit', res); });

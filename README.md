@@ -55,7 +55,7 @@ Away from an Agent conversation, type a task title at the bottom of the panel an
   <img src="assets/readme/en/task-form-light.png" width="390" alt="Full task form with notes, project, priority, and estimate.">
 </p>
 
-- **Look further ahead.** Open the calendar from the panel header (⌘⇧K) to see what you have done, what is in flight, and what is scheduled months out. Switch between a month grid and a week list; pick a day to work through it. Repeating tasks beyond the 30-day generation horizon show as not-yet-created placeholders rather than an empty month.
+- **Look further ahead.** Open the calendar from the panel header (⌘⇧K) to see what you have done, what is in flight, and what is scheduled months out. Switch between a month grid and a week list; pick a day to work through it. Drag a task onto another day to reschedule it — the time of day is kept, the deadline and reminder are not touched — and add straight to the day you are looking at. Repeating tasks beyond the 30-day generation horizon show as not-yet-created placeholders rather than an empty month.
 - **Reorder as you go.** Drag a task and its neighbors move out of the way. Move between projects in All or dates in Upcoming; reorder within a group in Today. Undo a move or restore automatic sorting.
 - **Choose your language.** English and Simplified Chinese are available in Settings. The first launch follows your system language, with English as the fallback. Task content stays in its original language.
 - **Keep it close.** A native SwiftUI and AppKit floating panel with light and dark appearances. macOS 26 uses Liquid Glass; earlier systems use compatible materials.

@@ -182,6 +182,12 @@ struct ToastView: View {
                     .controlSize(.small)
                     .keyboardShortcut("z", modifiers: .command)
             }
+            if let undo = toast.undoReschedule {
+                Button(L10n.tr("撤销")) { model.undoReschedule(undo) }
+                    .controlSize(.small)
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!model.canWrite || model.isMovingTask)
+            }
             if let token = toast.undoOrderToken, let revision = toast.undoOrderRevision {
                 Button(L10n.tr("撤销")) { model.undoOrder(token: token, revision: revision) }
                     .controlSize(.small)

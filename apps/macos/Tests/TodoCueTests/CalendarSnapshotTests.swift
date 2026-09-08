@@ -54,6 +54,15 @@ final class CalendarSnapshotTests: XCTestCase {
                     model.showCalendar()
                     model.setCalendar(selected: CivilDate.adding(-6, to: fixture.today))
                 }),
+                // Mid-drag: a task lifted out of tomorrow, hovering two days later.
+                ("month-dragging", CGSize(width: 340, height: 680), .light, {
+                    model.showCalendar()
+                    if let task = model.allTasks.first(where: { $0.planDate == CivilDate.adding(1, to: fixture.today) }) {
+                        _ = model.beginTaskDrag(task, surface: .calendar, group: CivilDate.adding(1, to: fixture.today))
+                        model.dropTarget = TaskDropTarget(surface: .calendar,
+                                                          group: CivilDate.adding(3, to: fixture.today), beforeId: nil)
+                    }
+                }),
                 ("week", CGSize(width: 340, height: 680), .light, {
                     model.showCalendar()
                     model.setCalendar(span: .week)
@@ -117,7 +126,7 @@ final class CalendarSnapshotTests: XCTestCase {
                 appearance.performAsCurrentDrawingAppearance {
                     let renderer = ImageRenderer(content:
                         VStack(alignment: .leading, spacing: 12) {
-                            ForEach(days, id: \.self) { DayAgendaList(date: $0, hidesWhenEmpty: true) }
+                            ForEach(days, id: \.self) { DayAgendaList(date: $0, isWeekBlock: true) }
                         }
                         .environmentObject(model)
                         .todoCueAccent()
