@@ -1,3 +1,4 @@
+import TodoCueKit
 import AppKit
 
 /// A generous edge hit target without taking keyboard focus from a draft.
@@ -13,14 +14,17 @@ final class PanelResizeHandle: NSView {
     init(vertical: Bool = false) {
         self.vertical = vertical
         super.init(frame: .zero)
-        let dimension = vertical ? "高度" : "宽度"
-        toolTip = "拖动调整面板\(dimension)，双击恢复默认\(dimension)"
+        updateLanguage()
         setAccessibilityElement(true)
         setAccessibilityRole(.slider)
-        setAccessibilityLabel("面板\(dimension)")
-        setAccessibilityHelp(toolTip)
         setAccessibilityMinValue(vertical ? Theme.panelMinHeight : Theme.panelMinWidth)
         setAccessibilityMaxValue(vertical ? Theme.panelMaxHeight : Theme.panelMaxWidth)
+    }
+
+    func updateLanguage() {
+        toolTip = L10n.tr(vertical ? "拖动调整面板高度，双击恢复默认高度" : "拖动调整面板宽度，双击恢复默认宽度")
+        setAccessibilityLabel(L10n.tr(vertical ? "面板高度" : "面板宽度"))
+        setAccessibilityHelp(L10n.tr(vertical ? "拖动底边缘调整高度，双击恢复默认高度。" : "拖动左边缘调整宽度，双击恢复默认宽度。"))
     }
 
     required init?(coder: NSCoder) { nil }

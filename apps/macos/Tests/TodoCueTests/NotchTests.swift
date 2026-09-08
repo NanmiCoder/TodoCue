@@ -67,19 +67,19 @@ final class NotchTests: XCTestCase {
         let now = TCDate.parse("2026-09-07T06:00:00.000Z")!
         XCTAssertNil(NotchLayout.countdown(for: task("a"), now: now))
         XCTAssertEqual(NotchLayout.countdown(for: task("b", scheduledAt: "2026-09-07T06:25:00.000Z"), now: now),
-                       NotchLayout.Countdown(text: "还有 25 分钟", late: false))
+                       NotchLayout.Countdown(text: (L10n.language == .chinese ? "还有 25 分钟" : "In 25 min"), late: false))
         XCTAssertEqual(NotchLayout.countdown(for: task("c", scheduledAt: "2026-09-07T08:30:00.000Z"), now: now),
-                       NotchLayout.Countdown(text: "还有 2 小时 30 分", late: false))
+                       NotchLayout.Countdown(text: (L10n.language == .chinese ? "还有 2 小时 30 分" : "In 2 hr 30 min"), late: false))
         XCTAssertEqual(NotchLayout.countdown(for: task("d", scheduledAt: "2026-09-07T05:00:00.000Z"), now: now),
-                       NotchLayout.Countdown(text: "已过 1 小时", late: true))
+                       NotchLayout.Countdown(text: (L10n.language == .chinese ? "已过 1 小时" : "Elapsed: 1 hr"), late: true))
         XCTAssertEqual(NotchLayout.countdown(for: task("e", scheduledAt: "2026-09-07T06:00:20.000Z"), now: now),
-                       NotchLayout.Countdown(text: "就是现在", late: false))
+                       NotchLayout.Countdown(text: (L10n.language == .chinese ? "就是现在" : "Now"), late: false))
         XCTAssertEqual(NotchLayout.countdown(for: task("f", dueAt: "2026-09-07T05:50:00.000Z"), now: now),
-                       NotchLayout.Countdown(text: "已逾期 10 分钟", late: true))
+                       NotchLayout.Countdown(text: (L10n.language == .chinese ? "已逾期 10 分钟" : "Overdue by 10 min"), late: true))
         XCTAssertEqual(NotchLayout.countdown(for: task("g", dueAt: "2026-09-09T06:00:00.000Z"), now: now),
-                       NotchLayout.Countdown(text: "距截止 2 天", late: false))
+                       NotchLayout.Countdown(text: (L10n.language == .chinese ? "距截止 2 天" : "Due in 2 days"), late: false))
         XCTAssertEqual(NotchLayout.countdown(for: task("h", scheduledAt: "2026-09-07T07:00:00.000Z", dueAt: "2026-09-07T05:00:00.000Z"), now: now)?.text,
-                       "还有 1 小时", "a planned time wins over the deadline")
+                       (L10n.language == .chinese ? "还有 1 小时" : "In 1 hr"), "a planned time wins over the deadline")
     }
 
     @MainActor func testNotchWindowTakesKeyboardOnlyWhenAllowed() async {

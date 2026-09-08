@@ -29,7 +29,7 @@ final class DragDropTests: XCTestCase {
         XCTAssertTrue(model.beginTaskDrag(task(), view: .today, group: "2026-09-08:overdue"))
         let target = TaskDropTarget(view: .today, group: "2026-09-08:scheduled", beforeId: nil)
         model.dropTarget = target
-        XCTAssertEqual(model.dragHint, "此分组由截止日期决定，请编辑日期")
+        XCTAssertEqual(model.dragHint, L10n.tr("此分组由截止日期决定，请编辑日期"))
         XCTAssertFalse(model.dropTask(at: target))
         XCTAssertFalse(model.dropTask(at: TaskDropTarget(view: .all, group: "A", beforeId: nil)))
         model.handleEscape()

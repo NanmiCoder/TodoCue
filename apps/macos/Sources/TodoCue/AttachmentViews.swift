@@ -24,12 +24,12 @@ struct PendingAttachment: Identifiable, Equatable, Sendable {
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
             let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentTypeKey])
-            guard values.isRegularFile == true else { throw APIError.transport("请选择文件，暂不支持文件夹") }
-            guard (values.fileSize ?? 0) <= AttachmentLimits.fileBytes else { throw APIError.transport("「\(url.lastPathComponent)」超过 10 MB") }
+            guard values.isRegularFile == true else { throw APIError.transport(L10n.tr("请选择文件，暂不支持文件夹")) }
+            guard (values.fileSize ?? 0) <= AttachmentLimits.fileBytes else { throw APIError.transport(L10n.tr("「\(url.lastPathComponent)」超过 10 MB")) }
             let handle = try FileHandle(forReadingFrom: url)
             defer { try? handle.close() }
             let data = try handle.read(upToCount: AttachmentLimits.fileBytes + 1) ?? Data()
-            guard data.count <= AttachmentLimits.fileBytes else { throw APIError.transport("单个附件不能超过 10 MB") }
+            guard data.count <= AttachmentLimits.fileBytes else { throw APIError.transport(L10n.tr("单个附件不能超过 10 MB")) }
             return PendingAttachment(name: url.lastPathComponent, mediaType: values.contentType?.preferredMIMEType ?? "application/octet-stream", data: data)
         }.value
     }
@@ -49,6 +49,7 @@ enum AttachmentThumbnail {
 }
 
 struct AttachmentEditorView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @Binding var draft: TaskDraft
     @State private var choosing = false
     @Binding var loading: Bool
@@ -58,7 +59,7 @@ struct AttachmentEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("图片与附件", systemImage: "paperclip").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                Label(L10n.tr("图片与附件"), systemImage: "paperclip").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Text("\(kept.count + draft.pendingAttachments.count) / 20").font(.system(size: 11)).foregroundStyle(.tertiary)
             }
@@ -73,13 +74,13 @@ struct AttachmentEditorView: View {
                 }
             }
             HStack(spacing: 8) {
-                Button { choosing = true } label: { Label("添加附件", systemImage: "plus") }.buttonStyle(CueButtonStyle())
-                Button("粘贴图片", action: paste).buttonStyle(CueButtonStyle())
+                Button { choosing = true } label: { Label(L10n.tr("添加附件"), systemImage: "plus") }.buttonStyle(CueButtonStyle())
+                Button(L10n.tr("粘贴图片"), action: paste).buttonStyle(CueButtonStyle())
                 if loading { ProgressView().controlSize(.small) }
             }.disabled(loading)
-            Text("支持图片和文件 · 单个 10 MB，总计 30 MB")
+            Text(L10n.tr("支持图片和文件 · 单个 10 MB，总计 30 MB"))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
-            if draft.repeatKind != .none { Text("附件仅保存到首次任务。") .font(.system(size: 11)).foregroundStyle(.secondary) }
+            if draft.repeatKind != .none { Text(L10n.tr("附件仅保存到首次任务。")) .font(.system(size: 11)).foregroundStyle(.secondary) }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
         }
         .padding(16).cueSurface()
@@ -92,7 +93,7 @@ struct AttachmentEditorView: View {
     }
 
     private func add(_ urls: [URL]) {
-        guard kept.count + draft.pendingAttachments.count + urls.count <= AttachmentLimits.count else { error = "每个任务最多 20 个附件"; return }
+        guard kept.count + draft.pendingAttachments.count + urls.count <= AttachmentLimits.count else { error = L10n.tr("每个任务最多 20 个附件"); return }
         error = nil
         loading = true
         Task { @MainActor in
@@ -103,7 +104,7 @@ struct AttachmentEditorView: View {
                 for url in urls {
                     let item = try await PendingAttachment.read(url)
                     bytes += item.data.count
-                    guard bytes <= AttachmentLimits.totalBytes else { throw APIError.transport("附件总大小不能超过 30 MB") }
+                    guard bytes <= AttachmentLimits.totalBytes else { throw APIError.transport(L10n.tr("附件总大小不能超过 30 MB")) }
                     items.append(item)
                 }
                 draft.pendingAttachments.append(contentsOf: items)
@@ -114,19 +115,20 @@ struct AttachmentEditorView: View {
     private func paste() {
         guard let image = NSImage(pasteboard: .general), let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff), let data = rep.representation(using: .png, properties: [:]) else {
-            error = "剪贴板里还没有图片"; return
+            error = L10n.tr("剪贴板里还没有图片"); return
         }
-        guard data.count <= AttachmentLimits.fileBytes else { error = "图片超过 10 MB，请缩小后再添加"; return }
+        guard data.count <= AttachmentLimits.fileBytes else { error = L10n.tr("图片超过 10 MB，请缩小后再添加"); return }
         guard kept.count + draft.pendingAttachments.count < AttachmentLimits.count,
               kept.reduce(0, { $0 + $1.size }) + draft.pendingAttachments.reduce(0, { $0 + $1.data.count }) + data.count <= AttachmentLimits.totalBytes else {
-            error = "最多 20 个附件，总计 30 MB"; return
+            error = L10n.tr("最多 20 个附件，总计 30 MB"); return
         }
         error = nil
-        draft.pendingAttachments.append(PendingAttachment(name: "粘贴图片-\(draft.pendingAttachments.count + 1).png", mediaType: "image/png", data: data))
+        draft.pendingAttachments.append(PendingAttachment(name: L10n.tr("粘贴图片-\(draft.pendingAttachments.count + 1).png"), mediaType: "image/png", data: data))
     }
 }
 
 private struct PendingAttachmentTile: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let item: PendingAttachment
     let remove: () -> Void
     @State private var thumbnail: NSImage?
@@ -140,7 +142,7 @@ private struct PendingAttachmentTile: View {
             HStack(alignment: .top, spacing: 2) {
                 Text(item.name).lineLimit(2).font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: remove) { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain)
-                    .accessibilityLabel("移除待上传附件 \(item.name)")
+                    .accessibilityLabel(L10n.tr("移除待上传附件 \(item.name)"))
             }
         }
         .task(id: item.id) { thumbnail = AttachmentThumbnail.make(item.data) }
@@ -148,6 +150,7 @@ private struct PendingAttachmentTile: View {
 }
 
 struct AttachmentGallery: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let attachments: [TaskAttachment]
     var onRemove: ((TaskAttachment) -> Void)?
     private var images: [TaskAttachment] { attachments.filter(\.isImage) }
@@ -165,6 +168,7 @@ struct AttachmentGallery: View {
 }
 
 private struct AttachmentTile: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let attachment: TaskAttachment
     let imageTile: Bool
@@ -196,28 +200,28 @@ private struct AttachmentTile: View {
                         Image(systemName: "eye").foregroundStyle(.secondary)
                     }.padding(10).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
                 }
-            }.buttonStyle(.plain).disabled(busy).accessibilityLabel("预览附件 \(attachment.name)")
+            }.buttonStyle(.plain).disabled(busy).accessibilityLabel(L10n.tr("预览附件 \(attachment.name)"))
             if imageTile { Text(attachment.name).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle) }
             if let onRemove {
-                Button("移除") { onRemove(attachment) }.font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(.secondary)
-                    .accessibilityLabel("移除附件 \(attachment.name)")
+                Button(L10n.tr("移除")) { onRemove(attachment) }.font(.system(size: 11)).buttonStyle(.plain).foregroundStyle(.secondary)
+                    .accessibilityLabel(L10n.tr("移除附件 \(attachment.name)"))
             }
             if let error { Text(error).font(.system(size: 10)).foregroundStyle(.red).lineLimit(3) }
         }
-        .contextMenu { Button("另存为…", action: save) }
+        .contextMenu { Button(L10n.tr("另存为…"), action: save) }
         .quickLookPreview($previewURL)
         .task(id: attachment.sha256) {
             guard imageTile, let client = model.client else { return }
             do {
                 thumbnail = AttachmentThumbnail.make(try await client.attachmentData(attachment))
-                error = thumbnail == nil ? "无法生成缩略图，可预览或另存原文件" : nil
+                error = thumbnail == nil ? L10n.tr("无法生成缩略图，可预览或另存原文件") : nil
             }
-            catch { self.error = "图片未加载，点击重试" }
+            catch { self.error = L10n.tr("图片未加载，点击重试") }
         }
     }
 
     private func preview() {
-        guard let client = model.client else { error = "离线，暂时无法预览"; return }
+        guard let client = model.client else { error = L10n.tr("离线，暂时无法预览"); return }
         busy = true
         Task { @MainActor in
             defer { busy = false }

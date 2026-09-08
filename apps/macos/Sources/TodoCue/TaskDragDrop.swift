@@ -21,9 +21,9 @@ struct PendingTaskMove: Identifiable {
     let target: TaskDropTarget
 
     var message: String {
-        guard drag.group != target.group else { return "已调整执行顺序" }
-        if target.view == .all { return "已移至「\(target.group.isEmpty ? "未分组" : target.group)」" }
-        return "已改期至 \(TCDate.dateLabel(target.group))，截止与提醒保持原值"
+        guard drag.group != target.group else { return L10n.tr("已调整执行顺序") }
+        if target.view == .all { return L10n.tr("已移至「\(target.group.isEmpty ? L10n.tr("未分组") : target.group)」") }
+        return L10n.tr("已改期至 \(TCDate.dateLabel(target.group))，截止与提醒保持原值")
     }
 
     func payload(allowPastDeadline: Bool) -> TaskPayload {
@@ -52,8 +52,8 @@ struct TaskDragHandle: NSViewRepresentable {
         view.enabled = enabled
         view.model = model
         view.begin = begin
-        view.toolTip = enabled ? "拖动调整执行顺序；跨分组可修改项目或计划日期" : "当前无法拖动"
-        view.setAccessibilityLabel("拖动 \(task.title)")
+        view.toolTip = enabled ? L10n.tr("拖动调整执行顺序；跨分组可修改项目或计划日期") : L10n.tr("当前无法拖动")
+        view.setAccessibilityLabel(L10n.tr("拖动 \(task.title)"))
         view.needsDisplay = true
         view.window?.invalidateCursorRects(for: view)
     }
@@ -211,6 +211,7 @@ struct TaskDropRegion: NSViewRepresentable {
 }
 
 struct DraggableTaskRow: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let task: TodoTask
     let view: PanelTab
@@ -269,6 +270,7 @@ struct DraggableTaskRow: View {
 }
 
 struct DraggableSectionHeader: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let title: String
     let count: Int
@@ -284,12 +286,12 @@ struct DraggableSectionHeader: View {
                 SectionHeader(title: title, count: count, color: color)
                 if model.hasManualOrder(view: view, group: group) {
                     Menu {
-                        Button("恢复自动排序") { model.resetOrder(view: view, group: group) }
+                        Button(L10n.tr("恢复自动排序")) { model.resetOrder(view: view, group: group) }
                     } label: { Image(systemName: "arrow.up.arrow.down").font(.system(size: 10)) }
                     .menuStyle(.borderlessButton).fixedSize()
                     .disabled(!enabled || !model.canWrite || model.isMovingTask || model.draggedTask != nil)
-                    .help("手动排序 · 恢复自动排序")
-                    .accessibilityLabel("\(title)的排序选项")
+                    .help(L10n.tr("手动排序 · 恢复自动排序"))
+                    .accessibilityLabel(L10n.tr("\(title)的排序选项"))
                 }
             }
         }
@@ -302,6 +304,7 @@ struct DraggableSectionHeader: View {
 }
 
 struct TaskGroupEnd: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let view: PanelTab
     let group: String

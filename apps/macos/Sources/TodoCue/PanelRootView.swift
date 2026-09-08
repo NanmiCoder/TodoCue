@@ -3,6 +3,7 @@ import TodoCueKit
 
 /// The glass shell carries navigation; the reading and editing surfaces stay quiet.
 struct PanelRootView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
 
     var body: some View {
@@ -21,6 +22,7 @@ struct PanelRootView: View {
         .animation(Theme.reduceMotion ? nil : .easeOut(duration: 0.18), value: model.routes.count)
         .todoCueAccent()
         .cueScrollEdges()
+        .environment(\.locale, languagePreferences.language.locale)
     }
 
     @ViewBuilder private var content: some View {
@@ -34,6 +36,7 @@ struct PanelRootView: View {
 }
 
 struct HeaderView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
 
@@ -44,7 +47,7 @@ struct HeaderView: View {
                     Button { model.pop() } label: { Image(systemName: "chevron.left") }
                         .buttonStyle(QuietIconButtonStyle())
                         .keyboardShortcut("[", modifiers: .command)
-                        .accessibilityLabel("返回")
+                        .accessibilityLabel(L10n.tr("返回"))
                 } else {
                     CueMark().padding(.trailing, 5)
                 }
@@ -56,24 +59,24 @@ struct HeaderView: View {
                         .foregroundStyle(model.pinned ? accent : .secondary)
                 }
                 .buttonStyle(QuietIconButtonStyle())
-                .help(model.pinned ? "取消固定（允许 Esc 收起）" : "固定面板，防止 Esc 误收起")
-                .accessibilityLabel(model.pinned ? "取消固定面板" : "固定面板")
+                .help(model.pinned ? L10n.tr("取消固定（允许 Esc 收起）") : L10n.tr("固定面板，防止 Esc 误收起"))
+                .accessibilityLabel(model.pinned ? L10n.tr("取消固定面板") : L10n.tr("固定面板"))
                 Menu {
-                    Button("新建任务", action: model.newTask).disabled(!model.canWrite)
-                    Button("刷新") { Task { await model.refreshAll() } }
-                    Button("导出 JSON", action: model.exportJSON).disabled(model.client == nil)
+                    Button(L10n.tr("新建任务"), action: model.newTask).disabled(!model.canWrite)
+                    Button(L10n.tr("刷新")) { Task { await model.refreshAll() } }
+                    Button(L10n.tr("导出 JSON"), action: model.exportJSON).disabled(model.client == nil)
                     Divider()
-                    Button("设置…", action: model.showSettings)
-                    Button("退出 TodoCue") { NSApp.terminate(nil) }
+                    Button(L10n.tr("设置…"), action: model.showSettings)
+                    Button(L10n.tr("退出 TodoCue")) { NSApp.terminate(nil) }
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary).frame(width: 30, height: 30)
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30)
-                .accessibilityLabel("更多操作")
+                .accessibilityLabel(L10n.tr("更多操作"))
                 Button { model.onClosePanel?() } label: { Image(systemName: "xmark") }
                     .buttonStyle(QuietIconButtonStyle()).foregroundStyle(.secondary)
-                    .help("收起面板，任务与提醒继续运行").accessibilityLabel("收起面板")
+                    .help(L10n.tr("收起面板，任务与提醒继续运行")).accessibilityLabel(L10n.tr("收起面板"))
             }
             if !isDetail {
                 HStack(alignment: .center) {
@@ -101,46 +104,47 @@ struct HeaderView: View {
 
     private var title: String {
         switch model.routes.last {
-        case .detail: return "这件事"
-        case .form(let draft): return draft.isEditing ? "编辑任务" : "记下一件事"
-        case .settings: return "偏好设置"
+        case .detail: return L10n.tr("这件事")
+        case .form(let draft): return draft.isEditing ? L10n.tr("编辑任务") : L10n.tr("记下一件事")
+        case .settings: return L10n.tr("偏好设置")
         case nil:
-            switch model.tab { case .today: return "今天"; case .upcoming: return "接下来"; case .all: return "所有任务" }
+            switch model.tab { case .today: return L10n.tr("今天"); case .upcoming: return L10n.tr("接下来"); case .all: return L10n.tr("所有任务") }
         }
     }
     private var subtitle: String {
         switch model.tab {
         case .today: return model.todayDateLabel
-        case .upcoming: return "按计划日期排列"
-        case .all: return "\(model.allTasks.count) 件待办 · 按项目整理"
+        case .upcoming: return L10n.tr("按计划日期排列")
+        case .all: return L10n.tr("\(model.allTasks.count) 件待办 · 按项目整理")
         }
     }
 }
 
 struct OfflineBanner: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: model.connectionState == .connecting ? "arrow.triangle.2.circlepath" : "wifi.slash")
             VStack(alignment: .leading, spacing: 1) {
-                Text(model.isPreparingRuntime ? "正在准备 TodoCue…" : (model.connectionState == .noRuntime ? "无法连接 TodoCue 运行时" : model.connectionState.label))
+                Text(model.isPreparingRuntime ? L10n.tr("正在准备 TodoCue…") : (model.connectionState == .noRuntime ? L10n.tr("无法连接 TodoCue 运行时") : model.connectionState.label))
                     .font(.system(size: 12, weight: .medium))
                 if let error = model.runtimeSetupError {
                     Text(error).font(.system(size: 11)).foregroundStyle(.secondary)
                 } else if model.isPreparingRuntime {
-                    Text("首次启动会自动配置后台服务，原有任务会保留")
+                    Text(L10n.tr("首次启动会自动配置后台服务，原有任务会保留"))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 } else if model.connectionState == .noRuntime {
-                    Text("运行 todocue service start 后自动重连")
+                    Text(L10n.tr("运行 todocue service start 后自动重连"))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 } else if model.connectionState != .connecting {
-                    Text("显示上次数据，已暂停写入")
+                    Text(L10n.tr("显示上次数据，已暂停写入"))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Button("重试") { model.reconnect() }
+            Button(L10n.tr("重试")) { model.reconnect() }
                 .controlSize(.small)
                 .disabled(model.isPreparingRuntime)
         }
@@ -152,6 +156,7 @@ struct OfflineBanner: View {
 }
 
 struct ToastView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let toast: Toast
 
@@ -164,12 +169,12 @@ struct ToastView: View {
                 .lineLimit(2)
             Spacer(minLength: 0)
             if let id = toast.undoTaskId {
-                Button("撤销") { model.undoComplete(id) }
+                Button(L10n.tr("撤销")) { model.undoComplete(id) }
                     .controlSize(.small)
                     .keyboardShortcut("z", modifiers: .command)
             }
             if let token = toast.undoOrderToken, let revision = toast.undoOrderRevision {
-                Button("撤销") { model.undoOrder(token: token, revision: revision) }
+                Button(L10n.tr("撤销")) { model.undoOrder(token: token, revision: revision) }
                     .controlSize(.small)
                     .keyboardShortcut("z", modifiers: .command)
                     .disabled(!model.canWrite || model.isMovingTask)
@@ -178,7 +183,7 @@ struct ToastView: View {
                 Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("关闭提示")
+            .accessibilityLabel(L10n.tr("关闭提示"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

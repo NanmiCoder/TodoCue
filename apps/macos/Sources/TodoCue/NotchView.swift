@@ -45,6 +45,7 @@ final class NotchState: ObservableObject {
 /// Black shell merged with the notch. The card keeps a fixed width and its ideal height, so its
 /// measurement never depends on the window size that is derived from it.
 struct NotchRootView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
 
@@ -84,12 +85,13 @@ struct NotchRootView: View {
         .environment(\.accent, Theme.accent(.dark))
         .tint(Theme.accent(.dark))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("TodoCue 刘海快览")
+        .accessibilityLabel(L10n.tr("TodoCue 刘海快览"))
     }
 }
 
 /// Collapsed wings: the cue mark on the left, today's remaining count (or the offline mark) on the right.
 private struct NotchSummaryView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
 
@@ -112,12 +114,13 @@ private struct NotchSummaryView: View {
         .frame(height: state.notchHeight)
         .animation(Theme.interaction, value: model.remaining)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(model.connectionState.isOnline ? "今日剩余 \(model.remaining) 项，悬停或点击展开" : "TodoCue 离线")
+        .accessibilityLabel(model.connectionState.isOnline ? L10n.tr("今日剩余 \(model.remaining) 项，悬停或点击展开") : L10n.tr("TodoCue 离线"))
     }
 }
 
 /// The drop-down card: header, next step, today's rows, quick add.
 private struct NotchCardView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
 
@@ -132,9 +135,9 @@ private struct NotchCardView: View {
                 .opacity(model.toast == nil ? 1 : 0)
                 .accessibilityHidden(model.toast != nil)
             if model.connectionState == .noRuntime {
-                NotchNotice(icon: "bolt.slash", text: "未找到 TodoCue 运行时", action: "重试") { model.reconnect() }
+                NotchNotice(icon: "bolt.slash", text: L10n.tr("未找到 TodoCue 运行时"), action: L10n.tr("重试")) { model.reconnect() }
             } else if !model.connectionState.isOnline {
-                NotchNotice(icon: "wifi.slash", text: model.connectionState.label + "，显示上次数据", action: "重连") { model.reconnect() }
+                NotchNotice(icon: "wifi.slash", text: model.connectionState.label + L10n.tr("，显示上次数据"), action: L10n.tr("重连")) { model.reconnect() }
             }
             if let next = model.next?.next {
                 NotchNextCard(candidate: next, state: state)
@@ -151,14 +154,14 @@ private struct NotchCardView: View {
                     }
                     if selection.hidden > 0 {
                         Button { state.onOpenAll?() } label: {
-                            Text("还有 \(selection.hidden) 项，查看全部")
+                            Text(L10n.tr("还有 \(selection.hidden) 项，查看全部"))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.6))
                                 .padding(.horizontal, 8).padding(.vertical, 6)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("还有 \(selection.hidden) 项，打开面板查看全部")
+                        .accessibilityLabel(L10n.tr("还有 \(selection.hidden) 项，打开面板查看全部"))
                     }
                 }
             }
@@ -179,6 +182,7 @@ private struct NotchCardView: View {
 }
 
 private struct NotchHeader: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
     @Environment(\.accent) private var accent
@@ -187,7 +191,7 @@ private struct NotchHeader: View {
         HStack(spacing: 10) {
             CueMark()
             VStack(alignment: .leading, spacing: 1) {
-                Text("今天").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Text(L10n.tr("今天")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                 Text(model.todayDateLabel).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
             }
             Spacer(minLength: 8)
@@ -196,19 +200,20 @@ private struct NotchHeader: View {
                 .buttonStyle(QuietIconButtonStyle())
                 .foregroundStyle(.white.opacity(0.75))
                 .disabled(!model.canWrite)
-                .help("新建任务（在面板中填写详情）")
-                .accessibilityLabel("新建任务")
+                .help(L10n.tr("新建任务（在面板中填写详情）"))
+                .accessibilityLabel(L10n.tr("新建任务"))
             Button { state.onTogglePin?() } label: { Image(systemName: state.pinned ? "pin.fill" : "pin") }
                 .buttonStyle(QuietIconButtonStyle())
                 .foregroundStyle(state.pinned ? accent : .white.opacity(0.55))
-                .help(state.pinned ? "取消固定，移开鼠标即收起" : "固定快览，移开鼠标也保持展开")
-                .accessibilityLabel(state.pinned ? "取消固定快览" : "固定快览")
+                .help(state.pinned ? L10n.tr("取消固定，移开鼠标即收起") : L10n.tr("固定快览，移开鼠标也保持展开"))
+                .accessibilityLabel(state.pinned ? L10n.tr("取消固定快览") : L10n.tr("固定快览"))
         }
         .padding(.horizontal, 2)
     }
 }
 
 private struct NotchNotice: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let icon: String
     let text: String
     let action: String
@@ -228,6 +233,7 @@ private struct NotchNotice: View {
 }
 
 private struct NotchNextCard: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let candidate: NextCandidate
     @ObservedObject var state: NotchState
@@ -240,7 +246,7 @@ private struct NotchNextCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Circle().fill(accent).frame(width: 5, height: 5)
-                    Text("下一步").font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
+                    Text(L10n.tr("下一步")).font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
                     Spacer(minLength: 4)
                     Text(countdown?.text ?? candidate.group.label)
                         .font(.system(size: 11, weight: .medium)).monospacedDigit()
@@ -257,27 +263,27 @@ private struct NotchNextCard: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("打开 \(candidate.task.title)")
+                .accessibilityLabel(L10n.tr("打开 \(candidate.task.title)"))
                 TaskMetadataView(task: candidate.task, emphasized: true)
                 HStack(spacing: 8) {
-                    Button { model.complete(candidate.task) } label: { Label("完成", systemImage: "checkmark") }
+                    Button { model.complete(candidate.task) } label: { Label(L10n.tr("完成"), systemImage: "checkmark") }
                         .buttonStyle(CueButtonStyle(prominent: true))
                         .disabled(!model.canWrite || model.completingTaskIDs.contains(candidate.task.id))
-                        .accessibilityLabel("完成 \(candidate.task.title)")
-                    Button { model.snooze(candidate.task) } label: { Label("10 分钟后提醒", systemImage: "zzz") }
+                        .accessibilityLabel(L10n.tr("完成 \(candidate.task.title)"))
+                    Button { model.snooze(candidate.task) } label: { Label(L10n.tr("10 分钟后提醒"), systemImage: "zzz") }
                         .buttonStyle(CueButtonStyle())
                         .disabled(!model.canWrite)
-                        .accessibilityLabel("10 分钟后提醒 \(candidate.task.title)")
-                    Button { model.moveToTomorrow(candidate.task) } label: { Label("明天", systemImage: "arrow.turn.down.right") }
+                        .accessibilityLabel(L10n.tr("10 分钟后提醒 \(candidate.task.title)"))
+                    Button { model.moveToTomorrow(candidate.task) } label: { Label(L10n.tr("明天"), systemImage: "arrow.turn.down.right") }
                         .buttonStyle(CueButtonStyle())
                         .disabled(!model.canWrite)
-                        .accessibilityLabel("把 \(candidate.task.title) 改期到明天")
+                        .accessibilityLabel(L10n.tr("把 \(candidate.task.title) 改期到明天"))
                     Spacer()
                     Button { state.onOpenTask?(candidate.task.id) } label: {
                         Image(systemName: "chevron.right").foregroundStyle(accent)
                     }
                     .buttonStyle(QuietIconButtonStyle())
-                    .accessibilityLabel("查看下一步详情")
+                    .accessibilityLabel(L10n.tr("查看下一步详情"))
                 }
             }
             .padding(12)
@@ -292,6 +298,7 @@ private struct NotchNextCard: View {
 }
 
 private struct NotchSectionLabel: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let section: TodaySection
     let count: Int
 
@@ -309,6 +316,7 @@ private struct NotchSectionLabel: View {
 }
 
 private struct NotchTaskRow: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let item: TodayItem
     @ObservedObject var state: NotchState
@@ -332,19 +340,19 @@ private struct NotchTaskRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("打开 \(item.task.title)")
+            .accessibilityLabel(L10n.tr("打开 \(item.task.title)"))
             if item.task.priority == .high {
-                Image(systemName: "flag.fill").font(.system(size: 10)).foregroundStyle(.red).accessibilityLabel("高优先级")
+                Image(systemName: "flag.fill").font(.system(size: 10)).foregroundStyle(.red).accessibilityLabel(L10n.tr("高优先级"))
             }
             HStack(spacing: 0) {
                 Button { model.snooze(item.task) } label: { Image(systemName: "zzz") }
                     .buttonStyle(QuietIconButtonStyle())
-                    .help("10 分钟后提醒")
-                    .accessibilityLabel("10 分钟后提醒 \(item.task.title)")
+                    .help(L10n.tr("10 分钟后提醒"))
+                    .accessibilityLabel(L10n.tr("10 分钟后提醒 \(item.task.title)"))
                 Button { model.moveToTomorrow(item.task) } label: { Image(systemName: "arrow.turn.down.right") }
                     .buttonStyle(QuietIconButtonStyle())
-                    .help("改期到明天")
-                    .accessibilityLabel("把 \(item.task.title) 改期到明天")
+                    .help(L10n.tr("改期到明天"))
+                    .accessibilityLabel(L10n.tr("把 \(item.task.title) 改期到明天"))
             }
             .foregroundStyle(.white.opacity(0.7))
             .opacity(hovering ? 1 : 0)
@@ -359,6 +367,7 @@ private struct NotchTaskRow: View {
 }
 
 private struct NotchEmptyView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @ObservedObject var model: AppModel
     @Environment(\.accent) private var accent
 
@@ -372,9 +381,9 @@ private struct NotchEmptyView: View {
             }
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(cleared ? "今天已清空" : "今天还没有安排")
+                Text(cleared ? L10n.tr("今天已清空") : L10n.tr("今天还没有安排"))
                     .font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
-                Text(cleared ? "完成了 \(model.today.completed.count) 件事，留点时间给自己。" : "在下方记一件事，回车就加到今天。")
+                Text(cleared ? L10n.tr("完成了 \(model.today.completed.count) 件事，留点时间给自己。") : L10n.tr("在下方记一件事，回车就加到今天。"))
                     .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
             }
             Spacer()
@@ -386,6 +395,7 @@ private struct NotchEmptyView: View {
 
 /// Quick add straight from the notch; typing pins the card until Esc or a click outside.
 private struct NotchFooter: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
     @Environment(\.accent) private var accent
@@ -397,13 +407,13 @@ private struct NotchFooter: View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "plus").font(.system(size: 14, weight: .medium)).foregroundStyle(accent).accessibilityHidden(true)
-                TextField("添加到今天", text: $state.quickAddText,
-                          prompt: Text("添加到今天，回车创建").foregroundColor(.white.opacity(0.4)))
+                TextField(L10n.tr("添加到今天"), text: $state.quickAddText,
+                          prompt: Text(L10n.tr("添加到今天，回车创建")).foregroundColor(.white.opacity(0.4)))
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(.white)
                     .focused($focused)
                     .onSubmit(submit)
                     .disabled(!model.canWrite || model.isQuickAdding)
-                    .accessibilityLabel("快速添加到今天")
+                    .accessibilityLabel(L10n.tr("快速添加到今天"))
                 if model.isQuickAdding {
                     ProgressView().controlSize(.small)
                 } else if hasText {
@@ -412,16 +422,16 @@ private struct NotchFooter: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(!model.canWrite)
-                    .accessibilityLabel("添加到今天")
+                    .accessibilityLabel(L10n.tr("添加到今天"))
                 }
             }
             .padding(.horizontal, 12).frame(height: 36)
             .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(focused ? accent.opacity(0.6) : Color.white.opacity(0.10), lineWidth: focused ? 1 : 0.5))
-            Button { state.onOpenAll?() } label: { Label("查看全部", systemImage: "arrow.up.right") }
+            Button { state.onOpenAll?() } label: { Label(L10n.tr("查看全部"), systemImage: "arrow.up.right") }
                 .buttonStyle(CueButtonStyle())
-                .accessibilityLabel("查看全部今日任务")
+                .accessibilityLabel(L10n.tr("查看全部今日任务"))
         }
         .padding(.top, 4)
         .animation(Theme.interaction, value: focused)

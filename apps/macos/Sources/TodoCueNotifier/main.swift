@@ -69,8 +69,8 @@ func alertStyleString(_ s: UNAlertStyle) -> String {
 }
 
 func registerCategory(_ center: UNUserNotificationCenter) {
-    let complete = UNNotificationAction(identifier: actionComplete, title: "完成", options: [])
-    let snooze = UNNotificationAction(identifier: actionSnooze, title: "10 分钟后提醒", options: [])
+    let complete = UNNotificationAction(identifier: actionComplete, title: L10n.tr("完成"), options: [])
+    let snooze = UNNotificationAction(identifier: actionSnooze, title: L10n.tr("10 分钟后提醒"), options: [])
     let cat = UNNotificationCategory(identifier: categoryId, actions: [complete, snooze], intentIdentifiers: [], options: [])
     center.setNotificationCategories([cat])
 }

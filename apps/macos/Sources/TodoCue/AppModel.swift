@@ -13,10 +13,10 @@ enum ConnectionState: Equatable {
     var isOnline: Bool { self == .online }
     var label: String {
         switch self {
-        case .noRuntime: return "未找到运行时"
-        case .connecting: return "正在连接…"
-        case .online: return "已连接"
-        case .offline(let r): return "离线：\(r)"
+        case .noRuntime: return L10n.tr("未找到运行时")
+        case .connecting: return L10n.tr("正在连接…")
+        case .online: return L10n.tr("已连接")
+        case .offline(let r): return L10n.tr("离线：\(r)")
         }
     }
 }
@@ -25,7 +25,7 @@ enum PanelTab: String, CaseIterable, Identifiable {
     case today, upcoming, all
     var id: String { rawValue }
     var label: String {
-        switch self { case .today: return "今日"; case .upcoming: return "即将到来"; case .all: return "全部" }
+        switch self { case .today: return L10n.tr("今日"); case .upcoming: return L10n.tr("即将到来"); case .all: return L10n.tr("全部") }
     }
 }
 
@@ -101,11 +101,11 @@ final class AppModel: ObservableObject {
 
     var dragHint: String? {
         guard let drag = draggedTask else { return nil }
-        guard let target = dropTarget else { return "拖到任务之间调整顺序，Esc 取消" }
-        if drag.view == .today && drag.group != target.group { return "此分组由截止日期决定，请编辑日期" }
-        if drag.group == target.group { return "调整执行顺序 · Esc 取消" }
-        if drag.view == .all { return "移至「\(target.group.isEmpty ? "未分组" : target.group)」" }
-        return "改期至 \(TCDate.dateLabel(target.group))"
+        guard let target = dropTarget else { return L10n.tr("拖到任务之间调整顺序，Esc 取消") }
+        if drag.view == .today && drag.group != target.group { return L10n.tr("此分组由截止日期决定，请编辑日期") }
+        if drag.group == target.group { return L10n.tr("调整执行顺序 · Esc 取消") }
+        if drag.view == .all { return L10n.tr("移至「\(target.group.isEmpty ? L10n.tr("未分组") : target.group)」") }
+        return L10n.tr("改期至 \(TCDate.dateLabel(target.group))")
     }
 
     var canWrite: Bool { connectionState.isOnline && client != nil }
@@ -390,7 +390,7 @@ final class AppModel: ObservableObject {
                 restorePreview = true
             } catch {
                 restorePreview = true
-                notification = Toast(message: (error as? APIError)?.isVersionConflict == true ? "任务列表已在别处修改，请重新拖动" : "移动失败：\(error.localizedDescription)", isError: true)
+                notification = Toast(message: (error as? APIError)?.isVersionConflict == true ? L10n.tr("任务列表已在别处修改，请重新拖动") : L10n.tr("移动失败：\(error.localizedDescription)"), isError: true)
             }
             await finishOrderMutation(restorePreview: restorePreview)
             pendingMove = confirmation
@@ -436,8 +436,8 @@ final class AppModel: ObservableObject {
             do {
                 let result = try await client.resetOrder(view: view.rawValue, group: group, revision: revision)
                 ordering = result.ordering
-                showToast(Toast(message: "已恢复自动排序", undoOrderToken: result.undoToken, undoOrderRevision: result.ordering.revision))
-            } catch { showToast(Toast(message: "恢复排序失败：\(error.localizedDescription)", isError: true)) }
+                showToast(Toast(message: L10n.tr("已恢复自动排序"), undoOrderToken: result.undoToken, undoOrderRevision: result.ordering.revision))
+            } catch { showToast(Toast(message: L10n.tr("恢复排序失败：\(error.localizedDescription)"), isError: true)) }
             await finishOrderMutation()
         }
     }
@@ -450,8 +450,8 @@ final class AppModel: ObservableObject {
             do {
                 let result = try await client.undoOrder(token: token, revision: revision)
                 ordering = result.ordering
-                showToast(Toast(message: "已撤销移动或排序"))
-            } catch { showToast(Toast(message: "列表已改变或连接中断，撤销失败：\(error.localizedDescription)", isError: true)) }
+                showToast(Toast(message: L10n.tr("已撤销移动或排序")))
+            } catch { showToast(Toast(message: L10n.tr("列表已改变或连接中断，撤销失败：\(error.localizedDescription)"), isError: true)) }
             await finishOrderMutation()
         }
     }
@@ -468,7 +468,7 @@ final class AppModel: ObservableObject {
 
     private func handleLoadError(_ error: Error) {
         if let e = error as? APIError, case .http(let status, _, _) = e, status == 401 {
-            connectionState = .offline("令牌无效，等待运行时重启")
+            connectionState = .offline(L10n.tr("令牌无效，等待运行时重启"))
         } else if case APIError.transport(let m) = error {
             connectionState = .offline(m)
         } else {
@@ -480,7 +480,7 @@ final class AppModel: ObservableObject {
 
     private func perform(_ label: String, _ op: @escaping () async throws -> TodoTask?) async -> TodoTask? {
         guard canWrite else {
-            showToast(Toast(message: "离线状态下无法\(label)", isError: true)); return nil
+            showToast(Toast(message: L10n.tr("离线状态下无法\(label)"), isError: true)); return nil
         }
         do {
             let t = try await op()
@@ -489,9 +489,9 @@ final class AppModel: ObservableObject {
             return t
         } catch let e as APIError where e.isVersionConflict {
             await refreshLive()
-            showToast(Toast(message: "任务已在别处修改，已刷新", isError: true))
+            showToast(Toast(message: L10n.tr("任务已在别处修改，已刷新"), isError: true))
         } catch {
-            showToast(Toast(message: "\(label)失败：\(error.localizedDescription)", isError: true))
+            showToast(Toast(message: L10n.tr("\(label)失败：\(error.localizedDescription)"), isError: true))
         }
         return nil
     }
@@ -518,8 +518,8 @@ final class AppModel: ObservableObject {
         guard canWrite, completingTaskIDs.insert(task.id).inserted else { return }
         Task {
             defer { completingTaskIDs.remove(task.id) }
-            if let t = await perform("完成", { try await self.client!.complete(task.id, expectedVersion: task.version) }) {
-                showToast(Toast(message: "已完成「\(t.title)」", undoTaskId: t.id))
+            if let t = await perform(L10n.tr("完成"), { try await self.client!.complete(task.id, expectedVersion: task.version) }) {
+                showToast(Toast(message: L10n.tr("已完成「\(t.title)」"), undoTaskId: t.id))
             }
         }
     }
@@ -527,7 +527,7 @@ final class AppModel: ObservableObject {
     func actOnCue(_ cue: ReminderCue, snooze: Bool) async -> Bool {
         guard let client else { return false }
         let task = self.task(cue.task.id) ?? cue.task
-        return await perform(snooze ? "稍后提醒" : "完成", {
+        return await perform(snooze ? L10n.tr("稍后提醒") : L10n.tr("完成"), {
             if snooze { return try await client.snooze(task.id, expectedVersion: task.version) }
             return try await client.complete(task.id, expectedVersion: task.version)
         }) != nil
@@ -535,17 +535,17 @@ final class AppModel: ObservableObject {
 
     func undoComplete(_ id: String) {
         toast = nil
-        Task { _ = await perform("撤销", { try await self.client!.reopen(id) }) }
+        Task { _ = await perform(L10n.tr("撤销"), { try await self.client!.reopen(id) }) }
     }
 
-    func reopen(_ task: TodoTask) { Task { _ = await perform("重新打开", { try await self.client!.reopen(task.id, expectedVersion: task.version) }) } }
-    func cancel(_ task: TodoTask) { Task { _ = await perform("取消", { try await self.client!.cancel(task.id, expectedVersion: task.version) }) } }
-    func skip(_ task: TodoTask) { Task { _ = await perform("跳过", { try await self.client!.skip(task.id, expectedVersion: task.version) }) } }
+    func reopen(_ task: TodoTask) { Task { _ = await perform(L10n.tr("重新打开"), { try await self.client!.reopen(task.id, expectedVersion: task.version) }) } }
+    func cancel(_ task: TodoTask) { Task { _ = await perform(L10n.tr("取消"), { try await self.client!.cancel(task.id, expectedVersion: task.version) }) } }
+    func skip(_ task: TodoTask) { Task { _ = await perform(L10n.tr("跳过"), { try await self.client!.skip(task.id, expectedVersion: task.version) }) } }
 
     func snooze(_ task: TodoTask, minutes: Int = 10) {
         Task {
-            if await perform("稍后提醒", { try await self.client!.snooze(task.id, minutes: minutes, expectedVersion: task.version) }) != nil {
-                showToast(Toast(message: "将在 \(minutes) 分钟后提醒"))
+            if await perform(L10n.tr("稍后提醒"), { try await self.client!.snooze(task.id, minutes: minutes, expectedVersion: task.version) }) != nil {
+                showToast(Toast(message: L10n.tr("将在 \(minutes) 分钟后提醒")))
             }
         }
     }
@@ -553,8 +553,8 @@ final class AppModel: ObservableObject {
     func moveToTomorrow(_ task: TodoTask) {
         let p = TaskRescheduling.tomorrow(task)
         Task {
-            if await perform("改期", { try await self.client!.updateTask(task.id, p, expectedVersion: task.version) }) != nil {
-                showToast(Toast(message: "已改期到明天"))
+            if await perform(L10n.tr("改期"), { try await self.client!.updateTask(task.id, p, expectedVersion: task.version) }) != nil {
+                showToast(Toast(message: L10n.tr("已改期到明天")))
             }
         }
     }
@@ -565,10 +565,10 @@ final class AppModel: ObservableObject {
             do {
                 let r = try await client.stopSeries(id)
                 seriesById[id] = r.series
-                showToast(Toast(message: "已停止系列，取消了 \(r.cancelledTaskIds.count) 个未来实例"))
+                showToast(Toast(message: L10n.tr("已停止系列，取消了 \(r.cancelledTaskIds.count) 个未来实例")))
                 await refreshLive()
             } catch {
-                showToast(Toast(message: "停止系列失败：\(error.localizedDescription)", isError: true))
+                showToast(Toast(message: L10n.tr("停止系列失败：\(error.localizedDescription)"), isError: true))
             }
         }
     }
@@ -591,32 +591,32 @@ final class AppModel: ObservableObject {
         var p = TaskPayload()
         p.set("title", t)
         p.set("scheduledDate", TCDate.todayString())
-        guard await perform("添加", { try await self.client!.createTask(p).task }) != nil else { return false }
-        showToast(Toast(message: "已添加「\(t)」"))
+        guard await perform(L10n.tr("添加"), { try await self.client!.createTask(p).task }) != nil else { return false }
+        showToast(Toast(message: L10n.tr("已添加「\(t)」")))
         return true
     }
 
     /// Saves a form draft. Returns an error message to show inline, or nil on success.
     func save(_ draft: TaskDraft) async -> String? {
-        guard canWrite, let client else { return "离线状态下无法保存" }
+        guard canWrite, let client else { return L10n.tr("离线状态下无法保存") }
         if let err = draft.validate() { return err }
         do {
             if let id = draft.editingTaskId {
                 let t = try await client.updateTask(id, draft.updatePayload(), expectedVersion: draft.version)
                 merge(t)
-                showToast(Toast(message: "已保存"))
+                showToast(Toast(message: L10n.tr("已保存")))
             } else {
                 let env = try await client.createTask(draft.createPayload(), idempotencyKey: draft.saveIdempotencyKey)
                 merge(env.task)
                 if let s = env.series { seriesById[s.id] = s }
-                showToast(Toast(message: env.series == nil ? "已添加「\(env.task.title)」" : "已创建重复任务"))
+                showToast(Toast(message: env.series == nil ? L10n.tr("已添加「\(env.task.title)」") : L10n.tr("已创建重复任务")))
             }
             savedDraft = nil
             scheduleLiveRefresh()
             return nil
         } catch let e as APIError where e.isVersionConflict {
             await refreshLive()
-            return "任务已在别处修改，已刷新，请重新编辑"
+            return L10n.tr("任务已在别处修改，已刷新，请重新编辑")
         } catch {
             return error.localizedDescription
         }
@@ -632,15 +632,15 @@ final class AppModel: ObservableObject {
                 let url = dir.appendingPathComponent(name)
                 try data.write(to: url)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
-                showToast(Toast(message: "已导出到 \(name)"))
+                showToast(Toast(message: L10n.tr("已导出到 \(name)")))
             } catch {
-                showToast(Toast(message: "导出失败：\(error.localizedDescription)", isError: true))
+                showToast(Toast(message: L10n.tr("导出失败：\(error.localizedDescription)"), isError: true))
             }
         }
     }
 
     func requestNotificationAuthorization() async -> String {
-        guard let client else { return "未连接" }
+        guard let client else { return L10n.tr("未连接") }
         do {
             let a = try await client.requestNotificationAuthorization()
             await loadDoctor()
@@ -649,10 +649,10 @@ final class AppModel: ObservableObject {
     }
 
     func sendTestNotification() async -> String {
-        guard let client else { return "未连接" }
+        guard let client else { return L10n.tr("未连接") }
         do {
             let r = try await client.sendTestNotification()
-            return r.ok ? "已提交系统（\(r.channel ?? "?")）" : "发送失败"
+            return r.ok ? L10n.tr("已提交系统（\(r.channel ?? "?")）") : L10n.tr("发送失败")
         } catch { return error.localizedDescription }
     }
 

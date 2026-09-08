@@ -1,75 +1,102 @@
+**English** · [简体中文](README.zh-CN.md)
+
 <p align="center">
-  <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. 深绿色开口圆环与玻璃任务卡片组成的 3D 品牌插画。">
+  <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. A dark green open ring beside glass task cards.">
 </p>
 
 <p align="center">
-  <strong>把事情记在手边，把注意力留给当下。</strong><br>
-  一个原生 macOS 待办工具。你用浮动面板，Agent 用 Skills，操作同一份本地任务。
+  <strong>Turn your Agent conversations into things that get done.</strong><br>
+  Create and manage tasks and reminders with natural language, through Skills.<br>
+  TodoCue keeps them visible on your Mac and reminds you when it's time.
 </p>
 
 <p align="center">
-  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>下载 macOS 版</strong></a> ·
-  <a href="#安装-skills">安装 Skills</a> ·
-  <a href="release-notes/">版本说明</a> ·
+  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>Download for macOS</strong></a> ·
+  <a href="#install-the-skill">Install the Skill</a> ·
+  <a href="release-notes/">Release notes</a> ·
   <a href="LICENSE">MIT</a>
 </p>
 
-## 看清今天，只管下一步
+## Plan in the conversation. See it on your Mac.
 
-打开面板，先看到今天最该处理的一件事，再看其余安排。点开任务，备注、项目、预计耗时和截止时间都在同一处。
+While you code, discuss ideas, or work across projects with an Agent, little follow-ups come up: check a release tomorrow, send a draft, revisit a decision. Ask your Agent to save them in TodoCue and keep the conversation going. The tasks appear in the native macOS panel; set a reminder and TodoCue will notify you when it's time.
 
-<p align="center">
-  <img src="assets/readme/today-light.png" width="390" alt="浅色今日面板：下一步建议、已安排任务、今日完成进度与底部快速输入。">
-  <img src="assets/readme/task-detail-dark.png" width="390" alt="深色任务详情：完整备注、项目、耗时、计划与截止时间，以及完成和稍后提醒操作。">
-</p>
+**Your Agent is the main way to use TodoCue.** The same Skill lets Claude Code, Codex, Cursor, WorkBuddy, and other Agents that support Skills and local commands create, find, update, and complete tasks. Across projects and Agents, they work with the same task list on your Mac.
 
-**浅色的今天，深色的详情。** 上图均为真实 macOS App 截图，使用演示任务。窗口可在 300–600 点之间调整宽度并记住选择；菜单栏和刘海快览提供随手查看的入口。
-
-## 想到，就记下来
-
-在底部输入一句话，回车就加入今天。需要更完整的安排时，点「添加详情」继续填写项目、优先级、时间、提醒或重复规则，已经输入的内容会保留。
-
-<p align="center">
-  <img src="assets/readme/quick-add-light.png" width="390" alt="交互第一步：在今日面板底部输入新任务，可直接提交或添加详情。">
-  <img src="assets/readme/task-form-light.png" width="390" alt="交互第二步：同一条输入展开为任务表单，可补充备注、项目、预计耗时和时间安排。">
-</p>
-
-- **待在手边。** 原生 SwiftUI + AppKit 浮动面板，支持浅色与深色外观。macOS 26 使用 Liquid Glass，旧系统采用兼容材质。
-- **刘海就是入口。** 在有刘海的 MacBook 上，刘海两侧常显今日剩余数；鼠标停上去就展开今日任务：下一步、逾期与已安排各项，可直接完成、稍后提醒、改期到明天，或回车添加新任务。点一下刘海可固定并直接输入，Esc 收起。
-- **安排有后续。** 支持重复任务、提醒、稍后提醒，以及完成后的撤销。关闭面板后，后台服务继续负责提醒。
-- **数据属于你。** 任务保存在 `~/.todocue/todocue.sqlite`。覆盖、删除或重新安装 App 后，这个目录仍然保留。
-
-## 下载与安装
-
-当前版本 **[v0.1.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.1)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
-
-| 你的 Mac | 安装包 |
+| Say something like… | What happens |
 | --- | --- |
-| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.1/TodoCue-0.1.1-macOS-arm64.dmg) |
-| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.1/TodoCue-0.1.1-macOS-x64.dmg) |
+| “Use TodoCue to remind me tomorrow at 9 AM to check this project's release.” | A task is saved with a reminder at the specified time. |
+| “Add the three action items we just agreed on to TodoCue under Website redesign.” | Each action item becomes a task in that project. |
+| “What's left in TodoCue today?” | Your Agent checks today's tasks and the next suggestion. |
+| “Move the release check to 3 PM the day after tomorrow, and move its reminder too.” | Both the plan and reminder are updated. |
+| “Mark the release check in TodoCue as done.” | Your Agent finds the task and completes it. |
 
-打开 DMG → 将 **TodoCue.app 拖入 Applications** → 从应用程序中启动。
+Your Agent interprets the language. TodoCue stores the tasks and runs the reminders. You can also open the app to fill in a form or drag tasks into the order you want.
 
-App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无需另装运行时。需要提醒时，在设置中允许通知。更新时下载新 DMG 并替换 App；当前尚无 App 内自动更新。
+**Get started: [download and open the app](#download--install) → [install the Skill](#install-the-skill) → tell your Agent what needs doing.**
 
-[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.1/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
+## A clear view of today
 
-## 安装 Skills
+Tasks created by your Agent appear in the panel. Start with the next suggestion, then see the rest of today's plans. Open a task to see its notes, project, estimate, and deadline together.
 
-先安装并打开一次 TodoCue，再用 [Vercel Skills CLI](https://github.com/vercel-labs/skills) 安装到本机 Agent（需 Node.js / npx），按提示选择 Codex、Claude Code 等客户端：
+<p align="center">
+  <img src="assets/readme/en/today-light.png" width="390" alt="Light-mode Today panel with a next task, scheduled tasks, daily progress, and quick add.">
+  <img src="assets/readme/en/task-detail-dark.png" width="390" alt="Dark-mode task detail with notes, hiking photo attachments, schedule, and task actions.">
+</p>
+
+These are fresh English app screenshots at 2× resolution, captured with fictional tasks in a separate demo database. The hiking photos are generated demo attachments. **The app supports English and Simplified Chinese**—switch in Settings and your choice takes effect immediately. Resize the panel from 300 to 600 points; TodoCue remembers its width. The menu bar and notch quick look keep your tasks close by.
+
+## Prefer a form? It's still here.
+
+Away from an Agent conversation, type a task title at the bottom of the panel and press Return to add it to today. Choose **Add details** to fill in a project, priority, time, reminder, or repeat rule. Your existing text stays in place.
+
+<p align="center">
+  <img src="assets/readme/en/quick-add-light.png" width="390" alt="Quick add in the Today panel, with an option to add details.">
+  <img src="assets/readme/en/task-form-light.png" width="390" alt="Full task form with notes, project, priority, and estimate.">
+</p>
+
+- **Reorder as you go.** Drag a task and its neighbors move out of the way. Move between projects in All or dates in Upcoming; reorder within a group in Today. Undo a move or restore automatic sorting.
+- **Choose your language.** English and Simplified Chinese are available in Settings. The first launch follows your system language, with English as the fallback. Task content stays in its original language.
+- **Keep it close.** A native SwiftUI and AppKit floating panel with light and dark appearances. macOS 26 uses Liquid Glass; earlier systems use compatible materials.
+- **A glance at the notch.** On MacBooks with a notch, see the remaining count beside it. Hover to expand today's tasks, then complete, snooze, reschedule, or add a task. Click to pin and type; Esc collapses it.
+- **Reminders that follow through.** Repeat tasks, set reminders, snooze, and undo completion. Closing the panel leaves the background reminder service running.
+- **Your data stays yours.** Tasks live in `~/.todocue/todocue.sqlite`. Replacing, removing, or reinstalling the app keeps that directory intact.
+
+## Download & install
+
+Current version: **[v0.1.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.1.2)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
+
+| Your Mac | Installer |
+| --- | --- |
+| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.2/TodoCue-0.1.2-macOS-arm64.dmg) |
+| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.2/TodoCue-0.1.2-macOS-x64.dmg) |
+
+Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
+
+The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders. To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
+
+[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.2/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+
+## Install the Skill
+
+Install and open TodoCue once, then use the [Skills CLI](https://github.com/vercel-labs/skills) to install the Skill for your local Agent. This command requires Node.js / npx. Follow the prompts to select Claude Code, Codex, Cursor, or another supported client:
 
 ```bash
 npx skills add NanmiCoder/TodoCue --skill todocue -g
 ```
 
-安装后就可以说：「用 TodoCue 把整理本周进展放到今天，归到工作项目，预计 25 分钟。」Agent 通过 CLI 操作，结果同步显示在 App 中。
+For WorkBuddy or clients not listed by the installer, import the repository's [`skills/todocue`](skills/todocue) directory using the client's custom Skills setup. See [WorkBuddy's custom Skills guide](https://www.workbuddy.ai/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Create-Skills) and the [Skills CLI supported agents](https://github.com/vercel-labs/skills#supported-agents).
 
-MCP 为可选入口，可通过 `todocue mcp` 接入；自建集成见 [Local API 文档](docs/api.md)。
+Then ask: “Use TodoCue to add a task to summarize this week's progress, plan it for today, put it under Work, and estimate 25 minutes.” Keep using natural language to query, reschedule, set reminders, and complete tasks.
+
+The Agent must have access to the same Mac where TodoCue is installed and permission to run local commands. Loading the Skill in a remote or cloud-only environment does not give it access to this Mac's tasks. The app's quick-add field saves a task title; dates and reminders can be set in the form.
+
+MCP is an optional entry point via `todocue mcp`. For custom integrations, see the [Local API documentation](docs/api.md).
 
 <details>
-<summary><strong>从源码构建与参与开发</strong></summary>
+<summary><strong>Build from source & contribute</strong></summary>
 
-需要 macOS 14+、Node 24+、Xcode 26 / Swift 6 工具链。
+Requires macOS 14+, Node 24+, and an Xcode 26 / Swift 6 toolchain.
 
 ```bash
 npm ci
@@ -79,22 +106,22 @@ swift test --package-path apps/macos
 npm run macos:dmg
 ```
 
-DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的官方 Node，安装锁定的生产依赖，并检查内置 Node、SQLite 和 MCP 能否运行。
+The DMG is written to `apps/macos/build/`. Local packaging downloads and verifies a pinned official Node runtime, installs locked production dependencies, and checks that the bundled Node, SQLite, and MCP run correctly.
 
-| 路径 | 职责 |
+| Path | Responsibility |
 | --- | --- |
-| `apps/macos` | SwiftUI / AppKit 客户端与通知辅助程序 |
-| `packages/engine` | 任务规则、重复实例、提醒与 SQLite |
-| `packages/server` | Local API、认证与 SSE 实时同步 |
-| `packages/cli`、`packages/shared` | CLI / MCP 接口与共享契约 |
-| `skills/todocue` | 可分发的 Agent skill |
+| `apps/macos` | SwiftUI / AppKit client and notification helper |
+| `packages/engine` | Task rules, recurring occurrences, reminders, and SQLite |
+| `packages/server` | Local API, authentication, and SSE updates |
+| `packages/cli`, `packages/shared` | CLI / MCP interfaces and shared contracts |
+| `skills/todocue` | Distributable Agent Skill |
 
-开发时运行 `npm run dev:serve`；使用 `TODOCUE_HOME` 可隔离开发数据。GitHub Actions 在推送 `vX.Y.Z` 标签后构建双架构安装包，完成签名、公证后发布 Release。
+Use `npm run dev:serve` for development and `TODOCUE_HOME` to isolate development data. Pushing a `vX.Y.Z` tag triggers GitHub Actions to build, sign, notarize, and release both architectures.
 
-[发布指南](docs/github-release.md) · [实现与验收](docs/implementation-plan.md) · [提交 Issue](https://github.com/NanmiCoder/TodoCue/issues)
+[Release guide (中文)](docs/github-release.md) · [Implementation and QA (中文)](docs/implementation-plan.md) · [Open an issue](https://github.com/NanmiCoder/TodoCue/issues)
 
 </details>
 
-## 许可证
+## License
 
-[MIT](LICENSE) © 2026 NanmiCoder。欢迎使用、修改和贡献。
+[MIT](LICENSE) © 2026 NanmiCoder. Contributions welcome.

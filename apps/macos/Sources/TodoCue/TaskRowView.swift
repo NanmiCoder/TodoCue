@@ -3,6 +3,7 @@ import TodoCueKit
 
 /// Animated mint checkbox used in rows and cards.
 struct CheckButton: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @Environment(\.colorScheme) private var scheme
@@ -26,13 +27,14 @@ struct CheckButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!model.canWrite || model.completingTaskIDs.contains(task.id))
-        .accessibilityLabel(task.status == .done ? "重新打开 \(task.title)" : "完成 \(task.title)")
+        .accessibilityLabel(task.status == .done ? L10n.tr("重新打开 \(task.title)") : L10n.tr("完成 \(task.title)"))
     }
 
     private var isDone: Bool { task.status == .done || model.completingTaskIDs.contains(task.id) }
 }
 
 struct TaskRowView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     let task: TodoTask
@@ -60,7 +62,7 @@ struct TaskRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("打开任务 \(task.title)")
+            .accessibilityLabel(L10n.tr("打开任务 \(task.title)"))
         }
         .padding(.vertical, compact ? 4 : 7)
         .padding(.horizontal, 3)
@@ -74,6 +76,7 @@ struct TaskRowView: View {
 
 /// Lay out complete facts; a time or duration never breaks between its value and unit.
 struct TaskMetadataView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let task: TodoTask
     var showProject = true
     var emphasized = false
@@ -82,7 +85,7 @@ struct TaskMetadataView: View {
         FlowLayout(spacing: 8, rowSpacing: 3) {
             if task.priority == .high && !emphasized {
                 Image(systemName: "flag.fill").font(.system(size: 10)).foregroundStyle(task.priority.color)
-                    .accessibilityLabel("高优先级")
+                    .accessibilityLabel(L10n.tr("高优先级"))
             }
             ForEach(TaskMeta.items(for: task, includeProject: showProject)) { item in
                 Text(item.text)
@@ -92,10 +95,10 @@ struct TaskMetadataView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !task.attachments.isEmpty {
-                Label("\(task.attachments.count)", systemImage: "paperclip").accessibilityLabel("\(task.attachments.count) 个附件")
+                Label("\(task.attachments.count)", systemImage: "paperclip").accessibilityLabel(L10n.tr("\(task.attachments.count) 个附件"))
             }
-            if task.hasReminder { Image(systemName: "bell").accessibilityLabel("已设置提醒") }
-            if task.isSeriesInstance { Image(systemName: "repeat").accessibilityLabel("重复任务") }
+            if task.hasReminder { Image(systemName: "bell").accessibilityLabel(L10n.tr("已设置提醒")) }
+            if task.isSeriesInstance { Image(systemName: "repeat").accessibilityLabel(L10n.tr("重复任务")) }
         }
         .font(.system(size: 10)).foregroundStyle(.secondary)
         .accessibilityElement(children: .combine)
@@ -103,22 +106,23 @@ struct TaskMetadataView: View {
 }
 
 struct TaskContextMenu: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let task: TodoTask
 
     var body: some View {
         Group {
             if task.status == .todo {
-                Button("完成") { model.complete(task) }
-                Button("稍后提醒 10 分钟") { model.snooze(task) }
-                Button("改期到明天") { model.moveToTomorrow(task) }
-                Button("编辑…") { model.edit(task) }
+                Button(L10n.tr("完成")) { model.complete(task) }
+                Button(L10n.tr("稍后提醒 10 分钟")) { model.snooze(task) }
+                Button(L10n.tr("改期到明天")) { model.moveToTomorrow(task) }
+                Button(L10n.tr("编辑…")) { model.edit(task) }
                 Divider()
-                Button("取消", role: .destructive) { model.cancel(task) }
-                if task.isSeriesInstance { Button("跳过本次") { model.skip(task) } }
+                Button(L10n.tr("取消"), role: .destructive) { model.cancel(task) }
+                if task.isSeriesInstance { Button(L10n.tr("跳过本次")) { model.skip(task) } }
             } else {
-                Button("重新打开") { model.reopen(task) }
-                Button("编辑…") { model.edit(task) }
+                Button(L10n.tr("重新打开")) { model.reopen(task) }
+                Button(L10n.tr("编辑…")) { model.edit(task) }
             }
         }
         .disabled(!model.canWrite)

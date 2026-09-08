@@ -99,6 +99,7 @@ struct QuietIconButtonStyle: ButtonStyle {
     }
 
     private struct IconBody: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
         let configuration: ButtonStyle.Configuration
         @Environment(\.isEnabled) private var enabled
         @State private var hovering = false

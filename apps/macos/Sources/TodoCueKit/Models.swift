@@ -8,7 +8,7 @@ public enum Priority: String, Codable, CaseIterable, Sendable {
     }
 
     public var label: String {
-        switch self { case .none: return "无"; case .low: return "低"; case .medium: return "中"; case .high: return "高" }
+        switch self { case .none: return L10n.tr("无"); case .low: return L10n.tr("低"); case .medium: return L10n.tr("中"); case .high: return L10n.tr("高") }
     }
 }
 
@@ -126,10 +126,10 @@ public enum RecurrenceRule: Codable, Hashable, Sendable {
 
     public var label: String {
         switch self {
-        case .daily: return "每日"
+        case .daily: return L10n.tr("每日")
         case .weekly(let days):
-            let names = ["一", "二", "三", "四", "五", "六", "日"]
-            return "每周 " + days.sorted().compactMap { $0 >= 1 && $0 <= 7 ? names[$0 - 1] : nil }.joined(separator: "、")
+            let names = [L10n.tr("一"), L10n.tr("二"), L10n.tr("三"), L10n.tr("四"), L10n.tr("五"), L10n.tr("六"), L10n.tr("日")]
+            return L10n.tr("每周 ") + days.sorted().compactMap { $0 >= 1 && $0 <= 7 ? names[$0 - 1] : nil }.joined(separator: L10n.language == .chinese ? "、" : ", ")
         }
     }
 }
@@ -173,10 +173,10 @@ public enum TodayReason: String, Codable, Sendable {
 
     public var label: String {
         switch self {
-        case .overdue: return "逾期"
-        case .due_today: return "今日截止"
-        case .scheduled_today: return "今日计划"
-        case .carried_over: return "遗留"
+        case .overdue: return L10n.tr("逾期")
+        case .due_today: return L10n.tr("今日截止")
+        case .scheduled_today: return L10n.tr("今日计划")
+        case .carried_over: return L10n.tr("遗留")
         }
     }
 }
@@ -185,7 +185,7 @@ public enum TodaySection: String, Codable, Sendable {
     case overdue, must, scheduled
 
     public var label: String {
-        switch self { case .overdue: return "逾期"; case .must: return "必须完成"; case .scheduled: return "已安排" }
+        switch self { case .overdue: return L10n.tr("逾期"); case .must: return L10n.tr("必须完成"); case .scheduled: return L10n.tr("已安排") }
     }
 }
 
@@ -216,10 +216,10 @@ public enum NextGroup: String, Codable, Sendable {
 
     public var label: String {
         switch self {
-        case .overdue: return "逾期"
-        case .due_today: return "今日截止"
-        case .scheduled_reached: return "已到计划时间"
-        case .unscheduled: return "未安排"
+        case .overdue: return L10n.tr("逾期")
+        case .due_today: return L10n.tr("今日截止")
+        case .scheduled_reached: return L10n.tr("已到计划时间")
+        case .unscheduled: return L10n.tr("未安排")
         }
     }
 }
