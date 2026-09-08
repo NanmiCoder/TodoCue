@@ -14,7 +14,8 @@ struct ListRootView: View {
             VStack(spacing: 10) {
                 TabBarView().padding(.horizontal, 18)
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    // Preserve the native drag source while edge-scrolling past it.
+                    VStack(alignment: .leading, spacing: 10) {
                         if model.tab == .today, let next = model.next?.next { NextCard(candidate: next) }
                         switch model.tab {
                         case .today: TodayListView()
@@ -30,10 +31,26 @@ struct ListRootView: View {
                 }
                 .id(model.tab)
                 .scrollIndicators(.automatic)
+                .overlay(alignment: .bottom) {
+                    if model.isMovingTask {
+                        ProgressView("正在保存移动…").controlSize(.small).font(.system(size: 11))
+                            .padding(8).background(Theme.surface, in: RoundedRectangle(cornerRadius: 8)).padding(6)
+                    } else if let hint = model.dragHint {
+                        Text(hint).font(.system(size: 11)).padding(8)
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
+                            .padding(6).allowsHitTesting(false)
+                    }
+                }
                 .cueSurface(radius: 18)
                 .padding(.horizontal, horizontalInset)
                 QuickAddView().padding(.horizontal, horizontalInset)
             }
+        }
+        .alert("计划晚于截止时间", isPresented: Binding(get: { model.pendingMove != nil }, set: { if !$0 { model.pendingMove = nil } }), presenting: model.pendingMove) { move in
+            Button("保留截止日期并改期") { model.confirmMove(move) }.disabled(!model.canWrite || model.isMovingTask)
+            Button("取消", role: .cancel) { model.pendingMove = nil }
+        } message: { move in
+            Text("将「\(move.drag.task.title)」改期到 \(TCDate.dateLabel(move.target.group))，会晚于原截止时间。截止日期和提醒时间将保持原值。")
         }
     }
 }
@@ -179,7 +196,7 @@ struct TodayListView: View {
 
     private var sections: [(TodaySection, [TodayItem])] {
         [TodaySection.overdue, .must, .scheduled].compactMap { s in
-            let items = model.today.items.filter { $0.section == s && $0.task.status == .todo && $0.task.id != model.next?.next?.task.id }
+            let items = model.today.items.filter { $0.section == s && $0.task.status == .todo }
             return items.isEmpty ? nil : (s, items)
         }
     }
@@ -194,11 +211,14 @@ struct TodayListView: View {
         } else {
             ForEach(sections, id: \.0) { section, items in
                 VStack(spacing: 2) {
-                    SectionHeader(title: section.label, count: items.count, color: section == .overdue ? Theme.overdue : .secondary)
-                    ForEach(items) { item in
-                        TaskRowView(task: item.task, reasons: item.reasons)
+                    let group = "\(model.today.date):\(section.rawValue)"
+                    DraggableSectionHeader(title: section.label, count: items.count, view: .today, group: group, firstId: items.first?.task.id, color: section == .overdue ? Theme.overdue : .secondary)
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        DraggableTaskRow(task: item.task, view: .today, group: group, nextId: index + 1 < items.count ? items[index + 1].task.id : nil, reasons: item.reasons)
                     }
+                    TaskGroupEnd(view: .today, group: group)
                 }
+                .zIndex(model.dragPresentation?.source.group == "\(model.today.date):\(section.rawValue)" ? 1 : 0)
             }
         }
     }
@@ -218,9 +238,13 @@ struct UpcomingListView: View {
         } else {
             ForEach(groups, id: \.0) { date, tasks in
                 VStack(spacing: 2) {
-                    SectionHeader(title: TCDate.dateLabel(date), count: tasks.count)
-                    ForEach(tasks) { t in TaskRowView(task: t, reasons: []) }
+                    DraggableSectionHeader(title: TCDate.dateLabel(date), count: tasks.count, view: .upcoming, group: date, firstId: tasks.first?.id)
+                    ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                        DraggableTaskRow(task: task, view: .upcoming, group: date, nextId: index + 1 < tasks.count ? tasks[index + 1].id : nil)
+                    }
+                    TaskGroupEnd(view: .upcoming, group: date)
                 }
+                .zIndex(model.dragPresentation?.source.group == date ? 1 : 0)
             }
         }
     }
@@ -234,11 +258,11 @@ struct AllListView: View {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let tasks = model.allTasks.filter { term.isEmpty || [$0.title, $0.project ?? "", $0.notes ?? ""].contains { $0.localizedStandardContains(term) } }
         let dict = Dictionary(grouping: tasks) { $0.project ?? "" }
-        let keys = dict.keys.sorted { a, b in
+        let keys = Set(dict.keys).union(term.isEmpty && !tasks.isEmpty ? [""] : []).sorted { a, b in
             if a.isEmpty != b.isEmpty { return b.isEmpty } // named projects first
             return a < b
         }
-        return keys.map { ($0, dict[$0]!) }
+        return keys.map { ($0, dict[$0] ?? []) }
     }
 
     var body: some View {
@@ -251,14 +275,22 @@ struct AllListView: View {
             }
         }
         .font(.system(size: 12)).padding(10).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+        if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Text("清除搜索后可拖动调整顺序").font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 4)
+        }
         if groups.isEmpty {
             EmptyStateView(text: query.isEmpty ? "所有事情，都已妥当\n有新想法时，随时记下来。" : "没有找到相关任务\n试试其他关键词。", systemImage: query.isEmpty ? "tray" : "magnifyingglass", allowsAdd: query.isEmpty)
         } else {
             ForEach(groups, id: \.0) { project, tasks in
                 VStack(spacing: 2) {
-                    SectionHeader(title: project.isEmpty ? "未分组" : project, count: tasks.count)
-                    ForEach(tasks) { t in TaskRowView(task: t, reasons: [], showProject: false, compact: true) }
+                    let enabled = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    DraggableSectionHeader(title: project.isEmpty ? "未分组" : project, count: tasks.count, view: .all, group: project, firstId: tasks.first?.id, enabled: enabled)
+                    ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                        DraggableTaskRow(task: task, view: .all, group: project, nextId: index + 1 < tasks.count ? tasks[index + 1].id : nil, enabled: enabled, showProject: false, compact: true)
+                    }
+                    TaskGroupEnd(view: .all, group: project, enabled: enabled)
                 }
+                .zIndex(model.dragPresentation?.source.group == project ? 1 : 0)
             }
         }
     }

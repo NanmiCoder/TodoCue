@@ -39,6 +39,8 @@ struct Toast: Equatable {
     let id = UUID()
     var message: String
     var undoTaskId: String? = nil
+    var undoOrderToken: String? = nil
+    var undoOrderRevision: Int? = nil
     var isError = false
 }
 
@@ -58,6 +60,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var seriesById: [String: Series] = [:]
     @Published private(set) var remindersByTask: [String: Reminder] = [:]
     @Published private(set) var isLoading = false
+    @Published private(set) var ordering: APIClient.OrderingState = .empty
+    @Published var draggedTask: TaskDrag?
+    @Published var dropTarget: TaskDropTarget?
+    @Published private(set) var dragPresentation: TaskDragPresentation?
+    @Published var pendingMove: PendingTaskMove?
+    @Published private(set) var isMovingTask = false
     @Published var toast: Toast?
     @Published var tab: PanelTab = .today
     @Published var routes: [Route] = []
@@ -85,6 +93,20 @@ final class AppModel: ObservableObject {
     private var dirWatcher: DispatchSourceFileSystemObject?
     private var toastTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+
+    init(client: APIClient? = nil) {
+        self.client = client
+        if client != nil { connectionState = .online }
+    }
+
+    var dragHint: String? {
+        guard let drag = draggedTask else { return nil }
+        guard let target = dropTarget else { return "拖到任务之间调整顺序，Esc 取消" }
+        if drag.view == .today && drag.group != target.group { return "此分组由截止日期决定，请编辑日期" }
+        if drag.group == target.group { return "调整执行顺序 · Esc 取消" }
+        if drag.view == .all { return "移至「\(target.group.isEmpty ? "未分组" : target.group)」" }
+        return "改期至 \(TCDate.dateLabel(target.group))"
+    }
 
     var canWrite: Bool { connectionState.isOnline && client != nil }
     var remaining: Int { today.remaining }
@@ -177,6 +199,7 @@ final class AppModel: ObservableObject {
     }
 
     private func startSSE() {
+        ordering = .empty
         guard let client else { return }
         sse?.stop()
         sseTask?.cancel()
@@ -235,16 +258,11 @@ final class AppModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            async let ctx = client.context()
-            async let td = client.today()
-            async let nx = client.next()
-            async let all = client.tasks(status: [.todo])
-            async let up = client.tasks(status: [.todo], from: TCDate.tomorrowString(), includeUnscheduled: false)
+            async let board = client.board()
             async let ser = client.series()
             async let rem = client.reminders(status: [.pending, .submitted, .failed, .missed])
-            let (c, t, n, a, u, s, r) = try await (ctx, td, nx, all, up, ser, rem)
-            context = c
-            apply(today: t, next: n, all: a, upcoming: u)
+            let (snapshot, s, r) = try await (board, ser, rem)
+            apply(snapshot)
             seriesById = Dictionary(uniqueKeysWithValues: s.map { ($0.id, $0) })
             remindersByTask = Dictionary(r.map { ($0.taskId, $0) }, uniquingKeysWith: { a, b in a.updatedAt > b.updatedAt ? a : b })
             if !connectionState.isOnline { connectionState = .online }
@@ -256,26 +274,185 @@ final class AppModel: ObservableObject {
     func refreshLive() async {
         guard let client else { return }
         do {
-            async let td = client.today()
-            async let nx = client.next()
-            async let all = client.tasks(status: [.todo])
-            async let up = client.tasks(status: [.todo], from: TCDate.tomorrowString(), includeUnscheduled: false)
+            async let board = client.board()
             async let rem = client.reminders(status: [.pending, .submitted, .failed, .missed])
-            let (t, n, a, u, r) = try await (td, nx, all, up, rem)
-            apply(today: t, next: n, all: a, upcoming: u)
+            let (snapshot, r) = try await (board, rem)
+            apply(snapshot)
             remindersByTask = Dictionary(r.map { ($0.taskId, $0) }, uniquingKeysWith: { a, b in a.updatedAt > b.updatedAt ? a : b })
         } catch {
             handleLoadError(error)
         }
     }
 
-    private func apply(today t: TodayResult, next n: NextResult, all a: [TodoTask], upcoming u: [TodoTask]) {
-        let todayDate = t.date
+    private func apply(_ board: APIClient.Board) {
+        // Keep drop targets stationary while dragging and reject older in-flight responses.
+        guard draggedTask == nil, dragPresentation == nil, !isMovingTask, board.ordering.revision >= ordering.revision else { return }
         withAnimation(Theme.listChange) {
-            today = t
-            next = n
-            allTasks = a
-            upcoming = u.filter { ($0.planDate ?? "") > todayDate }
+            context = board.context
+            today = board.today
+            next = board.next
+            allTasks = board.all
+            upcoming = board.upcoming
+            ordering = board.ordering
+        }
+    }
+
+    func beginTaskDrag(_ task: TodoTask, view: PanelTab, group: String) -> Bool {
+        guard canWrite, !isMovingTask, dragPresentation == nil, pendingMove == nil, task.status == .todo,
+              !completingTaskIDs.contains(task.id) else { return false }
+        draggedTask = TaskDrag(task: task, view: view, group: group, revision: ordering.revision)
+        return true
+    }
+
+    func updateTaskDrag(at point: NSPoint, origin: NSPoint, in window: NSWindow) {
+        guard let drag = draggedTask else { return }
+        let source = TaskDragSlot(view: drag.view, group: drag.group, kind: .row, taskID: drag.task.id)
+        let frames = TaskDropRegion.RegionView.frames(in: window, view: drag.view)
+        guard let sourceFrame = frames.first(where: { $0.slot == source }) else { return }
+        let target = TaskDropRegion.RegionView.target(at: point, in: window, view: drag.view)
+        let grab = dragPresentation?.grabOffset ?? CGPoint(x: origin.x - sourceFrame.rect.minX, y: -origin.y - sourceFrame.rect.minY)
+        let translation = CGSize(width: point.x - grab.x - sourceFrame.rect.minX,
+                                 height: -point.y - grab.y - sourceFrame.rect.minY)
+        let presentation = TaskDragPresentation(id: dragPresentation?.id ?? UUID(), source: source, grabOffset: grab,
+                                               translation: translation,
+                                               projection: .evaluate(frames: frames, source: source, target: target))
+        if dropTarget != target { dropTarget = target }
+        if dragPresentation != presentation { dragPresentation = presentation }
+    }
+
+    func dragOffset(_ slot: TaskDragSlot) -> CGFloat { dragPresentation?.projection.offsets[slot] ?? 0 }
+
+    private func settleDrag(returning: Bool) {
+        guard var presentation = dragPresentation else { return }
+        presentation.phase = returning ? .returning : .landing
+        presentation.translation = returning ? .zero : presentation.projection.landingOffset
+        if returning { presentation.projection = TaskDragProjection() }
+        presentation.settleUntil = Date().addingTimeInterval(Theme.reduceMotion ? 0.01 : Theme.dragSettleDuration)
+        dragPresentation = presentation
+    }
+
+    private func waitForDragSettle() async {
+        if let deadline = dragPresentation?.settleUntil {
+            let remaining = max(0, deadline.timeIntervalSinceNow)
+            if remaining > 0 { try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+        }
+    }
+
+    func endTaskDrag() {
+        draggedTask = nil
+        dropTarget = nil
+        // The mouse-up cleanup must not clear the landing pose of a submitted move.
+        guard dragPresentation?.phase == .dragging else {
+            if dragPresentation == nil { scheduleLiveRefresh() }
+            return
+        }
+        settleDrag(returning: true)
+        let id = dragPresentation?.id
+        Task {
+            await waitForDragSettle()
+            guard dragPresentation?.id == id, dragPresentation?.phase == .returning else { return }
+            var transaction = Transaction(); transaction.disablesAnimations = true
+            withTransaction(transaction) { dragPresentation = nil }
+            scheduleLiveRefresh()
+        }
+    }
+
+    func dropTask(at target: TaskDropTarget) -> Bool {
+        guard let drag = draggedTask, canWrite, !isMovingTask,
+              target.view == drag.view, target.beforeId != drag.task.id else { return false }
+        guard drag.view != .today || target.group == drag.group else { return false }
+        let move = PendingTaskMove(drag: drag, target: target)
+        settleDrag(returning: false)
+        draggedTask = nil
+        dropTarget = nil
+        submitMove(move)
+        return true
+    }
+
+    func confirmMove(_ move: PendingTaskMove) {
+        pendingMove = nil
+        submitMove(move, allowPastDeadline: true)
+    }
+
+    private func submitMove(_ move: PendingTaskMove, allowPastDeadline: Bool = false) {
+        guard canWrite, !isMovingTask, let client else { return }
+        isMovingTask = true
+        Task {
+            var confirmation: PendingTaskMove?
+            var notification: Toast?
+            var restorePreview = false
+            do {
+                let result = try await client.moveTask(move.drag.task.id, payload: move.payload(allowPastDeadline: allowPastDeadline))
+                ordering = result.ordering
+                notification = Toast(message: move.message, undoOrderToken: result.undoToken, undoOrderRevision: result.ordering.revision)
+            } catch let error as APIError where error.code == "DEADLINE_CONFIRMATION_REQUIRED" {
+                confirmation = move
+                restorePreview = true
+            } catch {
+                restorePreview = true
+                notification = Toast(message: (error as? APIError)?.isVersionConflict == true ? "任务列表已在别处修改，请重新拖动" : "移动失败：\(error.localizedDescription)", isError: true)
+            }
+            await finishOrderMutation(restorePreview: restorePreview)
+            pendingMove = confirmation
+            if let notification { showToast(notification) }
+        }
+    }
+
+    private func finishOrderMutation(restorePreview: Bool = false) async {
+        if restorePreview { settleDrag(returning: true) }
+        // Do not allow a second drag with the new revision but old rows/versions.
+        // Publish the committed snapshot and unlock dragging in the same actor turn.
+        do {
+            guard let client else { isMovingTask = false; return }
+            let snapshot = try await client.board()
+            await waitForDragSettle()
+            isMovingTask = false
+            if dragPresentation != nil {
+                // Replace projected positions with committed positions in one frame.
+                var transaction = Transaction(); transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    dragPresentation = nil
+                    apply(snapshot)
+                }
+            } else { apply(snapshot) }
+        } catch {
+            settleDrag(returning: true)
+            await waitForDragSettle()
+            dragPresentation = nil
+            isMovingTask = false
+            handleLoadError(error)
+        }
+    }
+
+    func hasManualOrder(view: PanelTab, group: String) -> Bool {
+        ordering.groups.contains { $0.view == view.rawValue && $0.group == group }
+    }
+
+    func resetOrder(view: PanelTab, group: String) {
+        guard canWrite, !isMovingTask, draggedTask == nil, dragPresentation == nil, let client else { return }
+        let revision = ordering.revision
+        isMovingTask = true
+        Task {
+            do {
+                let result = try await client.resetOrder(view: view.rawValue, group: group, revision: revision)
+                ordering = result.ordering
+                showToast(Toast(message: "已恢复自动排序", undoOrderToken: result.undoToken, undoOrderRevision: result.ordering.revision))
+            } catch { showToast(Toast(message: "恢复排序失败：\(error.localizedDescription)", isError: true)) }
+            await finishOrderMutation()
+        }
+    }
+
+    func undoOrder(token: String, revision: Int) {
+        guard canWrite, !isMovingTask, let client else { return }
+        toast = nil
+        isMovingTask = true
+        Task {
+            do {
+                let result = try await client.undoOrder(token: token, revision: revision)
+                ordering = result.ordering
+                showToast(Toast(message: "已撤销移动或排序"))
+            } catch { showToast(Toast(message: "列表已改变或连接中断，撤销失败：\(error.localizedDescription)", isError: true)) }
+            await finishOrderMutation()
         }
     }
 
@@ -485,7 +662,7 @@ final class AppModel: ObservableObject {
         toast = t
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: t.undoTaskId == nil ? 5_000_000_000 : 10_000_000_000)
+            try? await Task.sleep(nanoseconds: (t.undoTaskId == nil && t.undoOrderToken == nil) ? 5_000_000_000 : 10_000_000_000)
             guard !Task.isCancelled else { return }
             if self?.toast?.id == t.id { self?.toast = nil }
         }
@@ -549,6 +726,8 @@ final class AppModel: ObservableObject {
 
     /// Esc: close top layer first; close the panel only from the root (unless pinned).
     func handleEscape() {
+        if draggedTask != nil { endTaskDrag(); return }
+        if pendingMove != nil { pendingMove = nil; return }
         if !routes.isEmpty {
             pop()
         } else if !pinned {

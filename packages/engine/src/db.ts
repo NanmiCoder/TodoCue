@@ -116,6 +116,30 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    name: "list_ordering",
+    up(db) {
+      db.exec(`
+        CREATE TABLE list_ordering (
+          singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+          revision INTEGER NOT NULL DEFAULT 0,
+          groups TEXT NOT NULL DEFAULT '[]',
+          undo TEXT
+        );
+        INSERT INTO list_ordering(singleton) VALUES (1);
+        CREATE TRIGGER ordering_task_insert AFTER INSERT ON tasks BEGIN
+          UPDATE list_ordering SET revision = revision + 1, undo = NULL;
+        END;
+        CREATE TRIGGER ordering_task_update AFTER UPDATE ON tasks BEGIN
+          UPDATE list_ordering SET revision = revision + 1, undo = NULL;
+        END;
+        CREATE TRIGGER ordering_task_delete AFTER DELETE ON tasks BEGIN
+          UPDATE list_ordering SET revision = revision + 1, undo = NULL;
+        END;
+      `);
+    },
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = migrations[migrations.length - 1]!.version;

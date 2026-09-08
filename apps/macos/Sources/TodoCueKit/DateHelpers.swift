@@ -47,6 +47,15 @@ public enum TCDate {
 
     public static func parseLocalDate(_ s: String) -> Date? { dateOnly.date(from: s) }
 
+    public static func dateString(_ date: Date, timezone: String) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: timezone) ?? .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
     public static func todayString() -> String { localDateString(Date()) }
 
     public static func tomorrowString() -> String {

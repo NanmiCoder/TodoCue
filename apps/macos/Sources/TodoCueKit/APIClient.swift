@@ -100,6 +100,39 @@ public struct APIClient: Sendable {
     public struct TestNotificationEnvelope: Codable, Sendable { public var ok: Bool; public var channel: String? }
     public struct HealthEnvelope: Codable, Sendable { public var ok: Bool; public var runtimeVersion: String; public var pid: Int }
 
+    public struct OrderedGroup: Codable, Sendable {
+        public var view: String
+        public var group: String
+        public var taskIds: [String]
+    }
+    public struct OrderingState: Codable, Sendable {
+        public var revision: Int
+        public var groups: [OrderedGroup]
+        public static let empty = OrderingState(revision: 0, groups: [])
+    }
+    public struct Board: Decodable, Sendable {
+        public var context: ContextInfo
+        public var today: TodayResult
+        public var next: NextResult
+        public var all: [TodoTask]
+        public var upcoming: [TodoTask]
+        public var ordering: OrderingState
+    }
+    public struct OrderResult: Decodable, Sendable {
+        public var ordering: OrderingState
+        public var undoToken: String?
+    }
+    public func board() async throws -> Board { try await send("GET", "/v1/board") }
+    public func moveTask(_ id: String, payload: TaskPayload) async throws -> OrderResult {
+        try await send("POST", "/v1/tasks/\(id)/move", json: payload.fields, idempotencyKey: UUID().uuidString)
+    }
+    public func resetOrder(view: String, group: String, revision: Int) async throws -> OrderResult {
+        try await send("POST", "/v1/ordering/reset", json: ["view": JSONValue.string(view), "group": .string(group), "expectedRevision": .int(revision)], idempotencyKey: UUID().uuidString)
+    }
+    public func undoOrder(token: String, revision: Int) async throws -> OrderResult {
+        try await send("POST", "/v1/ordering/undo", json: ["token": JSONValue.string(token), "expectedRevision": .int(revision)], idempotencyKey: UUID().uuidString)
+    }
+
     public func health() async throws -> HealthEnvelope { try await send("GET", "/v1/health") }
     public func context() async throws -> ContextInfo { try await send("GET", "/v1/context") }
     public func today() async throws -> TodayResult { try await send("GET", "/v1/today") }

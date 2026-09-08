@@ -1,0 +1,36 @@
+import { afterEach, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { FakeClock, MemoryNotifier } from "@todocue/engine";
+import { startRuntime, type RunningRuntime } from "../src/runtime.js";
+import { silentLogger } from "../src/logger.js";
+
+let rt: RunningRuntime | undefined;
+let home: string | undefined;
+afterEach(async () => { await rt?.stop(); if (home) fs.rmSync(home, { recursive: true, force: true }); });
+it("serves a consistent board and authenticated, versioned, idempotent move/reset/undo actions", async () => {
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "todocue-order-api-"));
+  rt = await startRuntime({ home, memory: true, clock: new FakeClock("2026-09-07T01:00:00Z"), notifier: new MemoryNotifier(), logger: silentLogger });
+  const a = rt.engine.createTask({ title: "first", project: "A" }).task;
+  const b = rt.engine.createTask({ title: "second", project: "B" }).task;
+  const headers = { authorization: `Bearer ${rt.token}`, "content-type": "application/json" };
+  const getBoard = async () => (await rt!.app.inject({ method: "GET", url: "/v1/board", headers })).json();
+  const board = await getBoard();
+  const payload = { view: "all", sourceGroup: "B", targetGroup: "A", beforeId: a.id, expectedRevision: board.ordering.revision, expectedVersion: b.version };
+  const url = `/v1/tasks/${b.id}/move`;
+  expect((await rt.app.inject({ method: "POST", url, payload })).statusCode).toBe(401);
+  const response = await rt.app.inject({ method: "POST", url, headers: { ...headers, "idempotency-key": "move-once" }, payload });
+  expect(response.statusCode).toBe(200);
+  const result = response.json();
+  const replay = await rt.app.inject({ method: "POST", url, headers: { ...headers, "idempotency-key": "move-once" }, payload });
+  expect(replay.json()).toEqual(result);
+  expect((await getBoard()).all.map((t: { id: string }) => t.id)).toEqual([b.id, a.id]);
+  expect((await rt.app.inject({ method: "POST", url, headers, payload })).statusCode).toBe(409);
+  const undo = await rt.app.inject({ method: "POST", url: "/v1/ordering/undo", headers, payload: { token: result.undoToken, expectedRevision: result.ordering.revision } });
+  expect(undo.statusCode).toBe(200);
+  expect(rt.engine.getTask(b.id).project).toBe("B");
+  const reset = await rt.app.inject({ method: "POST", url: "/v1/ordering/reset", headers, payload: { view: "all", group: "A", expectedRevision: undo.json().ordering.revision } });
+  expect(reset.statusCode).toBe(200);
+  expect((await rt.app.inject({ method: "POST", url, headers, payload: { ...payload, surprise: true } })).statusCode).toBe(400);
+});

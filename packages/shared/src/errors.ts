@@ -3,6 +3,7 @@
  * Every error that leaves the runtime is one of these.
  */
 export const ErrorCodes = {
+  DEADLINE_CONFIRMATION_REQUIRED: "DEADLINE_CONFIRMATION_REQUIRED",
   VALIDATION_ERROR: "VALIDATION_ERROR",
   NOT_FOUND: "NOT_FOUND",
   VERSION_CONFLICT: "VERSION_CONFLICT",
@@ -16,6 +17,7 @@ export const ErrorCodes = {
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 export const errorHttpStatus: Record<ErrorCode, number> = {
+  DEADLINE_CONFIRMATION_REQUIRED: 409,
   VALIDATION_ERROR: 400,
   NOT_FOUND: 404,
   VERSION_CONFLICT: 409,
