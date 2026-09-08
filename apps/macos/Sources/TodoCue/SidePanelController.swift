@@ -22,12 +22,12 @@ final class SidePanelController: NSObject, NSWindowDelegate {
     init(model: AppModel, defaults: UserDefaults = .standard) {
         self.model = model
         self.defaults = defaults
-        window = SidePanelWindow(contentRect: NSRect(x: 0, y: 0, width: Prefs.panelWidth(in: defaults), height: Theme.panelHeight),
+        window = SidePanelWindow(contentRect: NSRect(x: 0, y: 0, width: Prefs.panelWidth(in: defaults), height: Prefs.panelHeight(in: defaults)),
                                  styleMask: [.borderless, .resizable, .fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
         window.delegate = self
-        window.minSize = NSSize(width: Theme.panelMinWidth, height: Theme.panelHeight)
-        window.maxSize = NSSize(width: Theme.panelMaxWidth, height: Theme.panelHeight)
+        window.minSize = NSSize(width: Theme.panelMinWidth, height: Theme.panelMinHeight)
+        window.maxSize = NSSize(width: Theme.panelMaxWidth, height: Theme.panelMaxHeight)
         window.isFloatingPanel = true
         window.becomesKeyOnlyIfNeeded = true
         window.hidesOnDeactivate = false
@@ -54,6 +54,9 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         background.resizeHandle.onResize = { [weak self] width, finished in
             self?.resize(to: width, persist: finished)
         }
+        background.verticalResizeHandle.onResize = { [weak self] height, finished in
+            self?.resizeHeight(to: height, persist: finished)
+        }
         window.contentView = background
 
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -73,7 +76,7 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         let vf = screen.visibleFrame
         let m = Theme.panelMargin
         let w = PanelGeometry.width(Prefs.panelWidth(in: defaults), available: vf.width - 2 * m)
-        let h = min(Theme.panelHeight, vf.height - 2 * m)
+        let h = PanelGeometry.height(Prefs.panelHeight(in: defaults), available: vf.height - 2 * m)
         let x = vf.maxX - m - w
         let y = vf.maxY - m - h
         return NSRect(x: x, y: y, width: w, height: h)
@@ -86,8 +89,16 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         if persist { Prefs.savePanelWidth(resized.width, in: defaults) }
     }
 
+    func resizeHeight(to height: CGFloat, persist: Bool = true) {
+        let screen = window.screen ?? targetScreen()
+        let resized = PanelGeometry.resizedVertically(window.frame, to: height, in: screen.visibleFrame)
+        window.setFrame(resized, display: true)
+        if persist { Prefs.savePanelHeight(resized.height, in: defaults) }
+    }
+
     func windowDidEndLiveResize(_ notification: Notification) {
         Prefs.savePanelWidth(window.frame.width, in: defaults)
+        Prefs.savePanelHeight(window.frame.height, in: defaults)
         repositionIfVisible()
     }
 
@@ -115,9 +126,8 @@ final class SidePanelController: NSObject, NSWindowDelegate {
 
     private func updateSizeLimits(on screen: NSScreen) {
         let available = screen.visibleFrame.insetBy(dx: Theme.panelMargin, dy: Theme.panelMargin)
-        let height = min(Theme.panelHeight, available.height)
-        window.minSize = NSSize(width: min(Theme.panelMinWidth, available.width), height: height)
-        window.maxSize = NSSize(width: min(Theme.panelMaxWidth, available.width), height: height)
+        window.minSize = NSSize(width: min(Theme.panelMinWidth, available.width), height: min(Theme.panelMinHeight, available.height))
+        window.maxSize = NSSize(width: min(Theme.panelMaxWidth, available.width), height: min(Theme.panelMaxHeight, available.height))
     }
 
     func show(focusInput: Bool = false) {
@@ -188,6 +198,7 @@ final class SidePanelController: NSObject, NSWindowDelegate {
 /// One native glass plane for the floating utility. Content uses quiet, readable fills.
 final class PanelBackgroundView: NSView {
     let resizeHandle = PanelResizeHandle()
+    let verticalResizeHandle = PanelResizeHandle(vertical: true)
     private let foreground = NSView()
     private var fallbackEffect: NSVisualEffectView?
     private var accessibilityObserver: NSObjectProtocol?
@@ -233,6 +244,7 @@ final class PanelBackgroundView: NSView {
         hosting.layer?.masksToBounds = true
         foreground.addSubview(hosting)
         foreground.addSubview(resizeHandle)
+        foreground.addSubview(verticalResizeHandle)
         updateMaterial()
         accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
@@ -243,6 +255,7 @@ final class PanelBackgroundView: NSView {
 
     override func layout() {
         super.layout()
+        verticalResizeHandle.frame = NSRect(x: Theme.panelCorner, y: 0, width: max(0, bounds.width - 2 * Theme.panelCorner), height: 10)
         resizeHandle.frame = NSRect(x: 0, y: Theme.panelCorner, width: 10, height: max(0, bounds.height - 2 * Theme.panelCorner))
     }
 

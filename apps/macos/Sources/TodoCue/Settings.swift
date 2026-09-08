@@ -13,6 +13,15 @@ enum Prefs {
         defaults.set(Double(PanelGeometry.width(width)), forKey: panelWidthKey)
     }
 
+    static func panelHeight(in defaults: UserDefaults = .standard) -> CGFloat {
+        let saved = defaults.object(forKey: "panelHeight") as? Double
+        return PanelGeometry.height(saved.map { CGFloat($0) } ?? Theme.panelHeight)
+    }
+
+    static func savePanelHeight(_ height: CGFloat, in defaults: UserDefaults = .standard) {
+        defaults.set(Double(PanelGeometry.height(height)), forKey: "panelHeight")
+    }
+
     static let notchEnabled = "notchEnabled"
     static let notchDisableInFullscreen = "notchDisableInFullscreen"
     static let notchSummary = "notchShowsSummary"

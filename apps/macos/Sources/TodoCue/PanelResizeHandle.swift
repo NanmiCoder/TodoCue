@@ -1,28 +1,33 @@
 import AppKit
 
-/// A generous left-edge hit target without taking keyboard focus from a draft.
+/// A generous edge hit target without taking keyboard focus from a draft.
 final class PanelResizeHandle: NSView {
     var onResize: ((CGFloat, Bool) -> Void)?
-    private var dragStartX: CGFloat?
-    private var startWidth: CGFloat = 0
+    private let vertical: Bool
+    private var defaultSize: CGFloat { vertical ? Theme.panelHeight : Theme.panelWidth }
+    private var currentSize: CGFloat { (vertical ? window?.frame.height : window?.frame.width) ?? defaultSize }
+    private var dragStartCoordinate: CGFloat?
+    private var startSize: CGFloat = 0
     private var hovered = false
 
-    init() {
+    init(vertical: Bool = false) {
+        self.vertical = vertical
         super.init(frame: .zero)
-        toolTip = "拖动调整面板宽度，双击恢复默认宽度"
+        let dimension = vertical ? "高度" : "宽度"
+        toolTip = "拖动调整面板\(dimension)，双击恢复默认\(dimension)"
         setAccessibilityElement(true)
         setAccessibilityRole(.slider)
-        setAccessibilityLabel("面板宽度")
-        setAccessibilityHelp("拖动左边缘调整宽度，双击恢复默认宽度。")
-        setAccessibilityMinValue(Theme.panelMinWidth)
-        setAccessibilityMaxValue(Theme.panelMaxWidth)
+        setAccessibilityLabel("面板\(dimension)")
+        setAccessibilityHelp(toolTip)
+        setAccessibilityMinValue(vertical ? Theme.panelMinHeight : Theme.panelMinWidth)
+        setAccessibilityMaxValue(vertical ? Theme.panelMaxHeight : Theme.panelMaxWidth)
     }
 
     required init?(coder: NSCoder) { nil }
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .resizeLeftRight) }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: vertical ? .resizeUpDown : .resizeLeftRight) }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -34,35 +39,40 @@ final class PanelResizeHandle: NSView {
     override func mouseExited(with event: NSEvent) { hovered = false; needsDisplay = true }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.secondaryLabelColor.withAlphaComponent(hovered || dragStartX != nil ? 0.65 : 0.24).setFill()
-        NSBezierPath(roundedRect: NSRect(x: 3, y: bounds.midY - 22, width: 3, height: 44), xRadius: 1.5, yRadius: 1.5).fill()
+        NSColor.secondaryLabelColor.withAlphaComponent(hovered || dragStartCoordinate != nil ? 0.65 : 0.24).setFill()
+        let grip = vertical
+            ? NSRect(x: bounds.midX - 22, y: 3, width: 44, height: 3)
+            : NSRect(x: 3, y: bounds.midY - 22, width: 3, height: 44)
+        NSBezierPath(roundedRect: grip, xRadius: 1.5, yRadius: 1.5).fill()
     }
 
     override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 { onResize?(Theme.panelWidth, true); return }
+        if event.clickCount == 2 { onResize?(defaultSize, true); return }
         guard let window else { return }
-        dragStartX = window.convertPoint(toScreen: event.locationInWindow).x
-        startWidth = window.frame.width
+        let point = window.convertPoint(toScreen: event.locationInWindow)
+        dragStartCoordinate = vertical ? point.y : point.x
+        startSize = currentSize
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let window, let dragStartX else { return }
-        let x = window.convertPoint(toScreen: event.locationInWindow).x
-        onResize?(startWidth + dragStartX - x, false)
+        guard let window, let dragStartCoordinate else { return }
+        let point = window.convertPoint(toScreen: event.locationInWindow)
+        let x = vertical ? point.y : point.x
+        onResize?(startSize + dragStartCoordinate - x, false)
     }
 
     override func mouseUp(with event: NSEvent) {
-        guard dragStartX != nil else { return }
-        dragStartX = nil
-        if let window { onResize?(window.frame.width, true) }
+        guard dragStartCoordinate != nil else { return }
+        dragStartCoordinate = nil
+        if window != nil { onResize?(currentSize, true) }
         needsDisplay = true
     }
 
-    override func accessibilityValue() -> Any? { window?.frame.width ?? Theme.panelWidth }
+    override func accessibilityValue() -> Any? { currentSize }
     override func setAccessibilityValue(_ value: Any?) {
         if let number = value as? NSNumber { onResize?(CGFloat(number.doubleValue), true) }
     }
-    override func accessibilityPerformIncrement() -> Bool { onResize?((window?.frame.width ?? Theme.panelWidth) + 20, true); return true }
-    override func accessibilityPerformDecrement() -> Bool { onResize?((window?.frame.width ?? Theme.panelWidth) - 20, true); return true }
+    override func accessibilityPerformIncrement() -> Bool { onResize?((currentSize) + 20, true); return true }
+    override func accessibilityPerformDecrement() -> Bool { onResize?((currentSize) - 20, true); return true }
 }

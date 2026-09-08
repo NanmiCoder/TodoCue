@@ -42,6 +42,88 @@ final class PanelSizingTests: XCTestCase {
         XCTAssertEqual(widths, [340])
     }
 
+    @MainActor func testVerticalGripResetAndAccessibility() async {
+        let handle = PanelResizeHandle(vertical: true)
+        var heights: [CGFloat] = []
+        handle.onResize = { height, finished in
+            XCTAssertTrue(finished)
+            heights.append(height)
+        }
+        let event = NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+                                      timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 2, pressure: 1)!
+        handle.mouseDown(with: event)
+        handle.mouseUp(with: event)
+        XCTAssertEqual(heights, [Theme.panelHeight])
+        handle.setAccessibilityValue(NSNumber(value: 900))
+        XCTAssertEqual(heights.last, 900)
+    }
+
+    @MainActor func testBottomDragUsesScreenCoordinatesAcrossWindowMovement() async {
+        _ = NSApplication.shared
+        let window = SidePanelWindow(contentRect: CGRect(x: 100, y: 300, width: 340, height: 680),
+                                     styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let handle = PanelResizeHandle(vertical: true)
+        window.contentView!.addSubview(handle)
+        var finishedHeight: CGFloat?
+        handle.onResize = { height, finished in
+            let frame = window.frame
+            window.setFrame(CGRect(x: frame.minX, y: frame.maxY - height, width: frame.width, height: height), display: false)
+            if finished { finishedHeight = height }
+        }
+        func event(_ type: NSEvent.EventType, screenY: CGFloat) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: window.convertPoint(fromScreen: CGPoint(x: 200, y: screenY)),
+                               modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                               context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        }
+        handle.mouseDown(with: event(.leftMouseDown, screenY: 305))
+        handle.mouseDragged(with: event(.leftMouseDragged, screenY: 205))
+        XCTAssertEqual(window.frame.height, 780)
+        handle.mouseDragged(with: event(.leftMouseDragged, screenY: 155))
+        XCTAssertEqual(window.frame.height, 830)
+        XCTAssertEqual(window.frame.maxY, 980)
+        handle.mouseUp(with: event(.leftMouseUp, screenY: 155))
+        XCTAssertEqual(finishedHeight, 830)
+    }
+
+    func testBottomGripKeepsTopAndWidthAndStopsAtScreenMargin() {
+        let screen = CGRect(x: -100, y: -100, width: 1200, height: 1200)
+        let original = CGRect(x: 200, y: 300, width: 520, height: 680)
+        let taller = PanelGeometry.resizedVertically(original, to: 950, in: screen)
+        XCTAssertEqual(taller.height, 950)
+        XCTAssertEqual(taller.maxY, original.maxY)
+        XCTAssertEqual(taller.minX, original.minX)
+        XCTAssertEqual(taller.width, original.width)
+        let capped = PanelGeometry.resizedVertically(original, to: 2000, in: screen)
+        XCTAssertEqual(capped.minY, screen.minY + Theme.panelMargin)
+        XCTAssertEqual(capped.maxY, original.maxY)
+        XCTAssertEqual(PanelGeometry.resizedVertically(original, to: 100, in: screen).height, Theme.panelMinHeight)
+        XCTAssertEqual(PanelGeometry.height(.nan), Theme.panelHeight)
+        XCTAssertEqual(PanelGeometry.height(.infinity), Theme.panelHeight)
+        XCTAssertEqual(PanelGeometry.height(900, available: 300), 300)
+    }
+
+    @MainActor func testHeightPreferenceSurvivesRecreationAndTemporaryFitting() async {
+        _ = NSApplication.shared
+        let name = "TodoCue.PanelHeightTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertEqual(Prefs.panelHeight(in: defaults), Theme.panelHeight)
+        Prefs.savePanelHeight(950, in: defaults)
+        let controller = SidePanelController(model: AppModel(), defaults: defaults)
+        XCTAssertEqual(controller.window.frame.height, 950)
+        let smallScreen = CGRect(x: 0, y: 0, width: 800, height: 600)
+        let fitted = PanelGeometry.fitted(controller.window.frame, in: smallScreen)
+        controller.window.setFrame(fitted, display: false)
+        XCTAssertEqual(controller.window.frame.height, 576)
+        XCTAssertEqual(Prefs.panelHeight(in: defaults), 950)
+        let recreated = SidePanelController(model: AppModel(), defaults: defaults)
+        XCTAssertEqual(recreated.window.frame.height, 950)
+        recreated.window.setFrame(CGRect(x: 0, y: 0, width: 340, height: 800), display: false)
+        recreated.windowDidEndLiveResize(Notification(name: NSWindow.didEndLiveResizeNotification))
+        XCTAssertEqual(Prefs.panelHeight(in: defaults), 800)
+    }
+
     func testWidthLimitsAndInvalidPreferences() {
         XCTAssertEqual(PanelGeometry.width(120), 300)
         XCTAssertEqual(PanelGeometry.width(780), 600)

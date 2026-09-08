@@ -6,6 +6,8 @@ enum Theme {
     static let panelWidth: CGFloat = 340
     static let panelMinWidth: CGFloat = 300
     static let panelMaxWidth: CGFloat = 600
+    static let panelMinHeight: CGFloat = 360
+    static let panelMaxHeight: CGFloat = 10_000
     static var panelHeight: CGFloat {
         #if DEBUG
         if let raw = ProcessInfo.processInfo.environment["TODOCUE_PREVIEW_HEIGHT"], let value = Double(raw) {
