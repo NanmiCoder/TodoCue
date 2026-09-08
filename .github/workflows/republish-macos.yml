@@ -1,0 +1,60 @@
+name: Republish verified macOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful Release macOS workflow run to publish
+        required: true
+      tag:
+        description: Existing release tag pointing to the build commit
+        required: true
+        default: v0.1.2
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: republish-macos
+  cancel-in-progress: false
+
+jobs:
+  republish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ inputs.run_id }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Verify source workflow and release tag
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh api "repos/$GH_REPO/actions/runs/$RUN_ID" > run.json
+          jq -e '.conclusion == "success" and .path == ".github/workflows/release-macos.yml"' run.json
+          sha="$(jq -r .head_sha run.json)"
+          tag_sha="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)"
+          test "$sha" = "$tag_sha"
+          gh release view "$TAG"
+          gh api "repos/$GH_REPO/contents/release-notes/$TAG.md?ref=$sha" --jq .content | base64 --decode > notes.md
+      - name: Download and verify both installers
+        run: |
+          set -euo pipefail
+          gh run download "$RUN_ID" --pattern 'macos-release-*' --dir artifacts
+          mkdir release-assets
+          version="${TAG#v}"
+          for arch in arm64 x64; do
+            file="TodoCue-$version-macOS-$arch.dmg"
+            (cd "artifacts/macos-release-$arch" && sha256sum --check "$file.sha256")
+            cp "artifacts/macos-release-$arch/$file" release-assets/
+          done
+          (cd release-assets && sha256sum *.dmg > SHA256SUMS)
+      - name: Replace explicitly requested release assets
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" release-assets/* --clobber
+          gh release edit "$TAG" --notes-file notes.md --title "TodoCue $TAG" --latest
