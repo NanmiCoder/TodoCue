@@ -15,17 +15,37 @@ struct CalendarView: View {
         GeometryReader { geometry in
             // Match the list's gutter ramp: 12pt at 300pt, 16pt at 340pt and above.
             let inset = min(16, 12 + max(0, geometry.size.width - Theme.panelMinWidth) * 0.1)
+            // The quick-add row is pinned under the calendar, so it is not the grid's to spend.
+            let available = geometry.size.height - CalendarLayout.quickAdd
             VStack(spacing: 0) {
-                CalendarNavigator(available: geometry.size.height)
+                CalendarNavigator(available: available)
                     .frame(height: CalendarLayout.navigator)
                     .padding(.horizontal, inset)
                 switch model.calendarSpan {
-                case .month: monthBody(available: geometry.size.height, inset: inset)
+                case .month: monthBody(available: available, inset: inset)
                 case .week: weekBody(inset: inset)
+                }
+                QuickAddView(date: model.calendarSelected).padding(.horizontal, inset)
+            }
+            .overlay(alignment: .bottom) {
+                if let hint = model.dragHint, model.draggedTask?.surface == .calendar {
+                    Text(hint).font(.system(size: 11)).padding(8)
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.bottom, CalendarLayout.quickAdd + 6)
+                        .allowsHitTesting(false)
                 }
             }
         }
         .animation(Theme.interaction, value: model.calendarSpan)
+        .alert(L10n.tr("计划晚于截止时间"), isPresented: Binding(get: { model.pendingReschedule != nil },
+                                                    set: { if !$0 { model.pendingReschedule = nil } }),
+               presenting: model.pendingReschedule) { pending in
+            Button(L10n.tr("保留截止日期并改期")) { model.reschedule(pending.task, to: pending.date, confirmedPastDeadline: true) }
+                .disabled(!model.canWrite || model.isMovingTask)
+            Button(L10n.tr("取消"), role: .cancel) { model.pendingReschedule = nil }
+        } message: { pending in
+            Text(L10n.tr("将「\(pending.task.title)」改期到 \(TCDate.dateLabel(pending.date))，会晚于原截止时间。截止日期和提醒时间将保持原值。"))
+        }
     }
 
     @ViewBuilder private func monthBody(available: CGFloat, inset: CGFloat) -> some View {
@@ -57,22 +77,19 @@ struct CalendarView: View {
             .cueSurface(radius: 18)
             .padding(.horizontal, inset)
             .padding(.top, 8)
-            .padding(.bottom, 12)
         }
     }
 
     @ViewBuilder private func weekBody(inset: CGFloat) -> some View {
         let days = CalendarRange.days(span: .week, anchor: model.calendarAnchor,
                                       firstWeekday: model.calendarFirstWeekday)
-        let empty = days.allSatisfy { model.calendarBucket($0).isEmpty }
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if empty {
-                    EmptyStateView(text: L10n.tr("这一周没有安排"), systemImage: "calendar")
-                } else {
-                    ForEach(days, id: \.self) { day in
-                        DayAgendaList(date: day, hidesWhenEmpty: true)
-                    }
+                // All seven days, always: a week planner that hides its empty days is the one you
+                // cannot drag onto, and those are exactly the days with room.
+                ForEach(days, id: \.self) { day in
+                    DayAgendaList(date: day, isWeekBlock: true)
+                        .onTapGesture { model.setCalendar(selected: day) }
                 }
             }
             .padding(10)
@@ -83,7 +100,6 @@ struct CalendarView: View {
         .scrollIndicators(.automatic)
         .cueSurface(radius: 18)
         .padding(.horizontal, inset)
-        .padding(.bottom, 12)
     }
 }
 
@@ -278,6 +294,7 @@ private struct CalendarDayCell: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .background(CalendarDropTarget(date: date, cornerRadius: 8))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

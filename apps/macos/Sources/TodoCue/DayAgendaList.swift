@@ -9,8 +9,9 @@ struct DayAgendaList: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     let date: String
-    /// Week blocks hide themselves when there is nothing to say; the month agenda shows a placeholder.
-    var hidesWhenEmpty = false
+    /// A week block always shows its heading, so every day of the week stays a visible drop target;
+    /// the month agenda instead explains an empty day, because it owns the whole pane.
+    var isWeekBlock = false
     /// nil until the reader decides: on a past day the completed work is the whole day, so it opens.
     @State private var completedExpanded: Bool?
 
@@ -20,26 +21,30 @@ struct DayAgendaList: View {
     }
 
     var body: some View {
-        if bucket.isEmpty && hidesWhenEmpty {
-            EmptyView()
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                DayAgendaHeader(date: date, bucket: bucket)
-                if bucket.isEmpty {
+        VStack(alignment: .leading, spacing: 4) {
+            DayAgendaHeader(date: date, bucket: bucket)
+            Group {
+                if bucket.isEmpty && !isWeekBlock {
                     // Not `EmptyStateView`: its concentric rings are ~180pt tall and this pane can
                     // be as short as 120pt, so the placeholder would have to be scrolled.
                     Text(model.calendarHistoryUnavailable ? L10n.tr("离线，只显示待办") : L10n.tr("这一天没有安排"))
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4).padding(.vertical, 10)
-                } else {
-                    ForEach(bucket.planned) { task in TaskRowView(task: task, compact: true) }
+                } else if !bucket.isEmpty {
+                    ForEach(Array(bucket.planned.enumerated()), id: \.element.id) { index, task in
+                        DraggableTaskRow(task: task, surface: .calendar, group: date,
+                                         nextId: index + 1 < bucket.planned.count ? bucket.planned[index + 1].id : nil,
+                                         compact: true, reorderable: false)
+                    }
                     if !bucket.deadlines.isEmpty {
                         // Red only when something here is actually late; a deadline that is merely
                         // approaching should not read as an alarm.
                         SectionHeader(title: L10n.tr("截止"), count: bucket.deadlines.count,
                                       color: bucket.deadlines.contains(where: \.isOverdue) ? Theme.overdue : .secondary)
-                        // These are planned on another day; their metadata line carries that date.
+                        // Planned on another day — their metadata line carries that date, and
+                        // dragging one here would only move the plan, not the deadline, so they
+                        // stay put rather than pretending this is where they live.
                         ForEach(bucket.deadlines) { task in TaskRowView(task: task, compact: true) }
                     }
                     if !bucket.ghosts.isEmpty {
@@ -54,6 +59,40 @@ struct DayAgendaList: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        // The whole block is a landing place, so an empty day still accepts a drag.
+        .background(CalendarDropTarget(date: date))
+    }
+}
+
+/// Marks a region of the calendar as a day a dragged task can be dropped onto, and shows where
+/// the drop would land.
+struct CalendarDropTarget: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.accent) private var accent
+    let date: String
+    var cornerRadius: CGFloat = 10
+
+    private var dragging: Bool { model.draggedTask?.surface == .calendar }
+    private var isTarget: Bool {
+        dragging && model.dropTarget?.group == date && model.draggedTask?.group != date
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(accent.opacity(isTarget ? 0.10 : 0))
+            .overlay {
+                if isTarget {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(accent.opacity(0.55), lineWidth: 1.5)
+                }
+            }
+            .animation(Theme.interaction, value: isTarget)
+            .allowsHitTesting(false)
+            // Only while a drag is in flight: a month grid would otherwise keep 42 AppKit views
+            // alive for nothing, and they cannot be drawn by an offscreen renderer.
+            .background { if dragging { TaskDropRegion(surface: .calendar, group: date, beforeId: nil) } }
     }
 }
 
@@ -70,7 +109,9 @@ private struct DayAgendaHeader: View {
                 .foregroundStyle(date == TCDate.todayString() ? accent : Color.primary)
             Spacer(minLength: 4)
             if bucket.openCount > 0 {
-                Text(L10n.tr("\(bucket.openCount) 件")).font(.system(size: 11)).monospacedDigit()
+                // A bare number, like `SectionHeader` and the completed disclosure: the catalog has
+                // no plural rules, so any "{0} tasks" phrasing reads as "1 tasks".
+                Text("\(bucket.openCount)").font(.system(size: 11)).monospacedDigit()
                     .foregroundStyle(.secondary)
             }
         }

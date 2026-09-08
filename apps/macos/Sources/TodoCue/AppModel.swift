@@ -40,6 +40,7 @@ struct Toast: Equatable {
     let id = UUID()
     var message: String
     var undoTaskId: String? = nil
+    var undoReschedule: UndoReschedule? = nil
     var undoOrderToken: String? = nil
     var undoOrderRevision: Int? = nil
     var isError = false
@@ -66,6 +67,8 @@ final class AppModel: ObservableObject {
     @Published var dropTarget: TaskDropTarget?
     @Published private(set) var dragPresentation: TaskDragPresentation?
     @Published var pendingMove: PendingTaskMove?
+    /// A calendar drop whose new plan date lands after the task's own deadline.
+    @Published var pendingReschedule: PendingReschedule?
     @Published private(set) var isMovingTask = false
     @Published var toast: Toast?
     @Published var tab: PanelTab = .today
@@ -116,10 +119,16 @@ final class AppModel: ObservableObject {
 
     var dragHint: String? {
         guard let drag = draggedTask else { return nil }
+        if drag.surface == .calendar {
+            guard let target = dropTarget, target.group != drag.group else {
+                return L10n.tr("拖到某一天即可改期，Esc 取消")
+            }
+            return L10n.tr("改期至 \(TCDate.dateLabel(target.group))")
+        }
         guard let target = dropTarget else { return L10n.tr("拖到任务之间调整顺序，Esc 取消") }
-        if drag.view == .today && drag.group != target.group { return L10n.tr("此分组由截止日期决定，请编辑日期") }
+        if drag.surface == .list(.today) && drag.group != target.group { return L10n.tr("此分组由截止日期决定，请编辑日期") }
         if drag.group == target.group { return L10n.tr("调整执行顺序 · Esc 取消") }
-        if drag.view == .all { return L10n.tr("移至「\(target.group.isEmpty ? L10n.tr("未分组") : target.group)」") }
+        if drag.surface == .list(.all) { return L10n.tr("移至「\(target.group.isEmpty ? L10n.tr("未分组") : target.group)」") }
         return L10n.tr("改期至 \(TCDate.dateLabel(target.group))")
     }
 
@@ -327,19 +336,19 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func beginTaskDrag(_ task: TodoTask, view: PanelTab, group: String) -> Bool {
+    func beginTaskDrag(_ task: TodoTask, surface: DragSurface, group: String) -> Bool {
         guard canWrite, !isMovingTask, dragPresentation == nil, pendingMove == nil, task.status == .todo,
               !completingTaskIDs.contains(task.id) else { return false }
-        draggedTask = TaskDrag(task: task, view: view, group: group, revision: ordering.revision)
+        draggedTask = TaskDrag(task: task, surface: surface, group: group, revision: ordering.revision)
         return true
     }
 
     func updateTaskDrag(at point: NSPoint, origin: NSPoint, in window: NSWindow) {
         guard let drag = draggedTask else { return }
-        let source = TaskDragSlot(view: drag.view, group: drag.group, kind: .row, taskID: drag.task.id)
-        let frames = TaskDropRegion.RegionView.frames(in: window, view: drag.view)
+        let source = TaskDragSlot(surface: drag.surface, group: drag.group, kind: .row, taskID: drag.task.id)
+        let frames = TaskDropRegion.RegionView.frames(in: window, surface: drag.surface)
         guard let sourceFrame = frames.first(where: { $0.slot == source }) else { return }
-        let target = TaskDropRegion.RegionView.target(at: point, in: window, view: drag.view)
+        let target = TaskDropRegion.RegionView.target(at: point, in: window, surface: drag.surface)
         let grab = dragPresentation?.grabOffset ?? CGPoint(x: origin.x - sourceFrame.rect.minX, y: -origin.y - sourceFrame.rect.minY)
         let translation = CGSize(width: point.x - grab.x - sourceFrame.rect.minX,
                                  height: -point.y - grab.y - sourceFrame.rect.minY)
@@ -389,14 +398,65 @@ final class AppModel: ObservableObject {
 
     func dropTask(at target: TaskDropTarget) -> Bool {
         guard let drag = draggedTask, canWrite, !isMovingTask,
-              target.view == drag.view, target.beforeId != drag.task.id else { return false }
-        guard drag.view != .today || target.group == drag.group else { return false }
+              target.surface == drag.surface, target.beforeId != drag.task.id else { return false }
+        // The calendar drags to change a date. It cannot go through `moveTask`: that path rejects a
+        // source whose plan date is not after today, and refuses any target on or before today —
+        // so "drag the overdue one onto today" would fail. It patches the plan date instead.
+        if drag.surface == .calendar {
+            guard target.group != drag.group else { return false }
+            settleDrag(returning: false)
+            draggedTask = nil
+            dropTarget = nil
+            reschedule(drag.task, to: target.group)
+            return true
+        }
+        guard drag.surface != .list(.today) || target.group == drag.group else { return false }
         let move = PendingTaskMove(drag: drag, target: target)
         settleDrag(returning: false)
         draggedTask = nil
         dropTarget = nil
         submitMove(move)
         return true
+    }
+
+    /// Patch the plan date, keeping the time of day, the deadline and the reminder.
+    func reschedule(_ task: TodoTask, to date: String, confirmedPastDeadline: Bool = false) {
+        guard canWrite, !isMovingTask, let client else { return }
+        if !confirmedPastDeadline, TaskRescheduling.landsAfterDeadline(task, on: date) {
+            pendingReschedule = PendingReschedule(task: task, date: date)
+            return
+        }
+        pendingReschedule = nil
+        let undo = UndoReschedule(task: task)
+        isMovingTask = true
+        Task {
+            defer { isMovingTask = false }
+            do {
+                let updated = try await client.updateTask(task.id, TaskRescheduling.plan(task, on: date),
+                                                          expectedVersion: task.version)
+                merge(updated)
+                toast = Toast(message: L10n.tr("已改期至 \(TCDate.dateLabel(date))，截止与提醒保持原值"),
+                              undoReschedule: undo)
+            } catch {
+                settleDrag(returning: true)
+                toast = Toast(message: (error as? APIError)?.isVersionConflict == true
+                              ? L10n.tr("任务已在别处修改，请刷新后重试")
+                              : L10n.tr("改期失败：\(error.localizedDescription)"), isError: true)
+            }
+            await refreshLive()
+        }
+    }
+
+    func undoReschedule(_ undo: UndoReschedule) {
+        guard canWrite, let client else { return }
+        toast = nil
+        Task {
+            guard let current = try? await client.task(undo.taskId).task,
+                  let restored = try? await client.updateTask(undo.taskId, undo.payload, expectedVersion: current.version)
+            else { toast = Toast(message: L10n.tr("撤销失败，任务可能已在别处修改"), isError: true); return }
+            merge(restored)
+            await refreshLive()
+        }
     }
 
     func confirmMove(_ move: PendingTaskMove) {
@@ -605,23 +665,25 @@ final class AppModel: ObservableObject {
     }
 
     /// Quick add from the panel field.
-    func quickAdd() {
+    func quickAdd(on date: String? = nil) {
         let original = quickAddText
         Task {
-            if await quickAdd(title: original), quickAddText == original { quickAddText = "" }
+            if await quickAdd(title: original, on: date), quickAddText == original { quickAddText = "" }
         }
     }
 
-    /// Creates a task with only a title, planned for today. Returns true when it was saved.
+    /// Creates a task with only a title, planned for `date` (today when omitted).
+    /// Returns true when it was saved.
     @discardableResult
-    func quickAdd(title: String) async -> Bool {
+    func quickAdd(title: String, on date: String? = nil) async -> Bool {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canWrite, !isQuickAdding, !t.isEmpty else { return false }
         isQuickAdding = true
         defer { isQuickAdding = false }
+        let day = date ?? TCDate.todayString()
         var p = TaskPayload()
         p.set("title", t)
-        p.set("scheduledDate", TCDate.todayString())
+        p.set("scheduledDate", day)
         guard await perform(L10n.tr("添加"), { try await self.client!.createTask(p).task }) != nil else { return false }
         showToast(Toast(message: L10n.tr("已添加「\(t)」")))
         return true

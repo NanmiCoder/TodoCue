@@ -147,6 +147,42 @@ final class CalendarNavigationTests: XCTestCase {
         XCTAssertEqual(model.calendarSelected, "2026-09-15")
     }
 
+    @MainActor func testCalendarAndListDragSurfacesStayDistinct() {
+        let model = AppModel()
+        let task = TodoTask(id: "t1", title: "写周报", scheduledDate: "2026-09-09",
+                            timezone: "Asia/Shanghai", createdAt: "2026-09-01T00:00:00Z",
+                            updatedAt: "2026-09-01T00:00:00Z")
+        model.showCalendar()
+        // Offline models cannot begin a drag, so assert the surfaces themselves stay distinct:
+        // a `PanelTab` value is what goes on the wire as MoveTaskInput.view, and the calendar
+        // has no such value.
+        XCTAssertNil(DragSurface.calendar.tab)
+        XCTAssertEqual(DragSurface.list(.upcoming).tab, .upcoming)
+        XCTAssertNotEqual(DragSurface.calendar, .list(.upcoming))
+        XCTAssertFalse(model.dropTask(at: TaskDropTarget(surface: .calendar, group: "2026-09-10", beforeId: nil)))
+        _ = task
+    }
+
+    @MainActor func testDroppingOnTheSameDayIsANoOp() {
+        let model = AppModel()
+        model.showCalendar()
+        // No drag in flight and no client: the guard must refuse rather than submit anything.
+        XCTAssertFalse(model.dropTask(at: TaskDropTarget(surface: .calendar, group: "2026-09-10", beforeId: nil)))
+        XCTAssertNil(model.pendingReschedule)
+        XCTAssertNil(model.toast)
+    }
+
+    @MainActor func testQuickAddTargetsTheSelectedDayRatherThanToday() async {
+        let model = AppModel()
+        model.showCalendar()
+        model.setCalendar(anchor: "2027-03-01", selected: "2027-03-04")
+        // Offline, so the create is refused — the point is that the calendar hands the selected
+        // day to quick add instead of silently filing everything under today.
+        let saved = await model.quickAdd(title: "写季度报告", on: model.calendarSelected)
+        XCTAssertFalse(saved)
+        XCTAssertEqual(model.calendarSelected, "2027-03-04")
+    }
+
     @MainActor func testUnknownDaysReturnAnEmptyBucketRatherThanTrapping() {
         let model = AppModel()
         model.showCalendar()

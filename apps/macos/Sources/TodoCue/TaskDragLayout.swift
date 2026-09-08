@@ -4,7 +4,7 @@ import Foundation
 /// Visual transforms never change these hit-test rectangles.
 struct TaskDragSlot: Hashable {
     enum Kind: Hashable { case row, header, end }
-    let view: PanelTab
+    let surface: DragSurface
     let group: String
     let kind: Kind
     var taskID: String? = nil
@@ -21,9 +21,10 @@ struct TaskDragProjection: Equatable {
     var landingOffset: CGSize = .zero
 
     static func evaluate(frames: [TaskDragFrame], source: TaskDragSlot, target: TaskDropTarget?) -> Self {
-        let ordered = frames.filter { $0.slot.view == source.view }.sorted { $0.rect.minY < $1.rect.minY }
+        let ordered = frames.filter { $0.slot.surface == source.surface }.sorted { $0.rect.minY < $1.rect.minY }
         guard let from = ordered.firstIndex(where: { $0.slot == source }), let target,
-              target.view == source.view, source.view != .today || target.group == source.group,
+              target.surface == source.surface,
+              source.surface != .list(.today) || target.group == source.group,
               let to = ordered.firstIndex(where: {
                   $0.slot.group == target.group && (target.beforeId == nil
                       ? $0.slot.kind == .end : $0.slot.kind == .row && $0.slot.taskID == target.beforeId)

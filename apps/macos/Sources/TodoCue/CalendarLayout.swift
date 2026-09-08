@@ -9,6 +9,8 @@ import Foundation
 enum CalendarLayout {
     static let navigator: CGFloat = 38
     static let weekdayHeader: CGFloat = 18
+    /// The quick-add row pinned under the calendar, matching the one under the task lists.
+    static let quickAdd: CGFloat = 57
     /// Roughly three task rows — below this the agenda stops being worth showing.
     static let agendaMin: CGFloat = 120
     /// What a cell actually draws: a 20pt number (the selected day's filled circle) + 2 + a 6pt

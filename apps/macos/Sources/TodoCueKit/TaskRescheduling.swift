@@ -35,4 +35,30 @@ public enum TaskRescheduling {
         }
         return payload
     }
+
+    /// Move a task's plan onto `date`, keeping its time of day. The deadline and the reminder are
+    /// left alone — this is the calendar's drag semantics, matching the list's cross-date drag
+    /// ("已改期至 X，截止与提醒保持原值") and the runtime's own `moveTask`.
+    public static func plan(_ task: TodoTask, on date: String, calendar: Calendar = .current) -> TaskPayload {
+        var payload = TaskPayload()
+        if let at = task.scheduledAt, let instant = TCDate.parse(at), let day = TCDate.parseLocalDate(date) {
+            let time = calendar.dateComponents([.hour, .minute, .second], from: instant)
+            let moved = calendar.date(bySettingHour: time.hour ?? 9, minute: time.minute ?? 0,
+                                      second: time.second ?? 0, of: day) ?? day
+            payload.set("scheduledAt", TCDate.iso(moved))
+            payload.set("scheduledDate", nil as String?)
+        } else {
+            payload.set("scheduledDate", date)
+            payload.set("scheduledAt", nil as String?)
+        }
+        return payload
+    }
+
+    /// Whether planning `task` on `date` would put the work after its own deadline — the same
+    /// condition the runtime raises `DEADLINE_CONFIRMATION_REQUIRED` for.
+    public static func landsAfterDeadline(_ task: TodoTask, on date: String) -> Bool {
+        guard let due = task.dueDate ?? task.dueAt.flatMap({ TCDate.parse($0) }).map({ TCDate.dateString($0, timezone: task.timezone) })
+        else { return false }
+        return date > due
+    }
 }

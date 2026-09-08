@@ -196,7 +196,7 @@ struct TodayListView: View {
                     let group = "\(model.today.date):\(section.rawValue)"
                     DraggableSectionHeader(title: section.label, count: items.count, view: .today, group: group, firstId: items.first?.task.id, color: section == .overdue ? Theme.overdue : .secondary)
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        DraggableTaskRow(task: item.task, view: .today, group: group, nextId: index + 1 < items.count ? items[index + 1].task.id : nil, reasons: item.reasons)
+                        DraggableTaskRow(task: item.task, surface: .list(.today), group: group, nextId: index + 1 < items.count ? items[index + 1].task.id : nil, reasons: item.reasons)
                     }
                     TaskGroupEnd(view: .today, group: group)
                 }
@@ -223,7 +223,7 @@ struct UpcomingListView: View {
                 VStack(spacing: 2) {
                     DraggableSectionHeader(title: TCDate.dateLabel(date), count: tasks.count, view: .upcoming, group: date, firstId: tasks.first?.id)
                     ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
-                        DraggableTaskRow(task: task, view: .upcoming, group: date, nextId: index + 1 < tasks.count ? tasks[index + 1].id : nil)
+                        DraggableTaskRow(task: task, surface: .list(.upcoming), group: date, nextId: index + 1 < tasks.count ? tasks[index + 1].id : nil)
                     }
                     TaskGroupEnd(view: .upcoming, group: date)
                 }
@@ -270,7 +270,7 @@ struct AllListView: View {
                     let enabled = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     DraggableSectionHeader(title: project.isEmpty ? L10n.tr("未分组") : project, count: tasks.count, view: .all, group: project, firstId: tasks.first?.id, enabled: enabled)
                     ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
-                        DraggableTaskRow(task: task, view: .all, group: project, nextId: index + 1 < tasks.count ? tasks[index + 1].id : nil, enabled: enabled, showProject: false, compact: true)
+                        DraggableTaskRow(task: task, surface: .list(.all), group: project, nextId: index + 1 < tasks.count ? tasks[index + 1].id : nil, enabled: enabled, showProject: false, compact: true)
                     }
                     TaskGroupEnd(view: .all, group: project, enabled: enabled)
                 }
@@ -284,24 +284,29 @@ struct QuickAddView: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
+    /// nil adds to today; the calendar passes the day the reader is looking at.
+    var date: String? = nil
     @FocusState private var focused: Bool
     private var hasText: Bool { !model.quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var isToday: Bool { date == nil || date == TCDate.todayString() }
+    private var prompt: String { isToday ? L10n.tr("添加到今天…") : L10n.tr("添加到 \(TCDate.dateLabel(date!))…") }
+    private var dayLabel: String { isToday ? L10n.tr("今天") : TCDate.dateLabel(date!) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "plus").font(.system(size: 16, weight: .light)).foregroundStyle(accent)
                     .frame(width: 24).accessibilityHidden(true)
-                TextField(L10n.tr("添加到今天…"), text: $model.quickAddText,
-                          prompt: Text(L10n.tr("添加到今天…")).foregroundColor(.secondary))
+                TextField(prompt, text: $model.quickAddText,
+                          prompt: Text(prompt).foregroundColor(.secondary))
                     .textFieldStyle(.plain).font(.system(size: 13))
-                    .focused($focused).onSubmit { model.quickAdd() }
+                    .focused($focused).onSubmit { model.quickAdd(on: date) }
                     .disabled(!model.canWrite || model.isQuickAdding)
-                    .accessibilityLabel(L10n.tr("快速添加到今天"))
+                    .accessibilityLabel(prompt)
                 if model.isQuickAdding { ProgressView().controlSize(.small) }
                 else if hasText {
-                    Button { model.quickAdd() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 23)).foregroundStyle(accent) }
-                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("添加到今天")).help(L10n.tr("添加到今天（回车）"))
+                    Button { model.quickAdd(on: date) } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 23)).foregroundStyle(accent) }
+                        .buttonStyle(.plain).accessibilityLabel(prompt).help(L10n.tr("回车添加"))
                         .disabled(!model.canWrite)
                 } else {
                     Button(action: expand) { Image(systemName: "square.and.pencil") }
@@ -313,7 +318,7 @@ struct QuickAddView: View {
             }
             if focused || hasText {
                 HStack {
-                    Label(L10n.tr("今天"), systemImage: "calendar").foregroundStyle(.secondary)
+                    Label(dayLabel, systemImage: "calendar").foregroundStyle(.secondary)
                     Spacer()
                     Button(L10n.tr("添加详情"), action: expand).buttonStyle(.plain).foregroundStyle(accent)
                         .disabled(!model.canWrite || model.isQuickAdding)
@@ -348,6 +353,7 @@ struct QuickAddView: View {
         if hasText {
             draft.title = model.quickAddText
             draft.scheduledMode = .date
+            if let date, let parsed = TCDate.parseLocalDate(date) { draft.scheduledDate = parsed }
             model.quickAddText = ""
         }
         model.presentForm(draft)

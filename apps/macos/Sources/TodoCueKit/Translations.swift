@@ -369,7 +369,6 @@ extension L10n {
         "这一周没有安排": "Nothing planned for this week",
         "离线，只显示待办": "Offline — showing open tasks only",
         "待生成": "Not created yet",
-        "{0} 件": "{0} tasks",
         "收起已完成": "Collapse completed",
         "展开已完成": "Expand completed",
         "{0}，没有安排": "{0}, nothing planned",
@@ -379,5 +378,13 @@ extension L10n {
         "{0}，已完成 {1} 件": "{0}, {1} completed",
         "{0}，{1} 件待生成": "{0}, {1} repeating, not created yet",
         "{0}，重复任务，运行时尚未生成": "{0}, repeating task, not created yet",
+        // Calendar drag and quick add
+        "拖到某一天即可改期，Esc 取消": "Drop on a day to reschedule · Esc cancels",
+        "改期失败：{0}": "Could not reschedule: {0}",
+        "任务已在别处修改，请刷新后重试": "This task changed elsewhere — refresh and try again",
+        "撤销失败，任务可能已在别处修改": "Could not undo; the task may have changed elsewhere",
+        "添加到 {0}…": "Add to {0}…",
+        "回车添加": "Press Return to add",
+        "拖动 {0} 改期": "Drag {0} to reschedule",
     ]
 }
