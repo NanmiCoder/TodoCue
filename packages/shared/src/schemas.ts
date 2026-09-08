@@ -239,8 +239,32 @@ export const CreateSeriesInput = z
   .strict();
 export type CreateSeriesInput = z.infer<typeof CreateSeriesInput>;
 
+export const ListView = z.enum(["all", "today", "upcoming"]);
+export type ListView = z.infer<typeof ListView>;
+export const OrderedGroup = z.object({ view: ListView, group: z.string(), taskIds: z.array(z.string()) });
+export type OrderedGroup = z.infer<typeof OrderedGroup>;
+export const OrderingState = z.object({ revision: z.number().int(), groups: z.array(OrderedGroup) });
+export type OrderingState = z.infer<typeof OrderingState>;
+export const MoveTaskInput = z.object({
+  view: ListView,
+  sourceGroup: z.string().max(200),
+  targetGroup: z.string().max(200),
+  beforeId: z.string().nullable(),
+  expectedVersion: z.number().int(),
+  expectedRevision: z.number().int(),
+  allowPastDeadline: z.boolean().optional(),
+}).strict();
+export type MoveTaskInput = z.infer<typeof MoveTaskInput>;
+export const ResetOrderInput = z.object({
+  view: ListView, group: z.string().max(200), expectedRevision: z.number().int(),
+}).strict();
+export type ResetOrderInput = z.infer<typeof ResetOrderInput>;
+export const UndoOrderInput = z.object({ token: z.string(), expectedRevision: z.number().int() }).strict();
+export type UndoOrderInput = z.infer<typeof UndoOrderInput>;
+
 export const ListTasksQuery = z
   .object({
+    view: ListView.optional(),
     status: z.union([TaskStatus, z.array(TaskStatus)]).optional(),
     project: z.string().optional(),
     seriesId: z.string().optional(),
@@ -398,6 +422,7 @@ export const ExportBundle = z.object({
   series: z.array(Series),
   reminders: z.array(Reminder),
   attachments: z.array(Attachment.extend({ dataBase64: z.string() })).default([]),
+  ordering: OrderingState.optional(),
 });
 export type ExportBundle = z.infer<typeof ExportBundle>;
 

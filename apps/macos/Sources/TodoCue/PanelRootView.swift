@@ -168,6 +168,12 @@ struct ToastView: View {
                     .controlSize(.small)
                     .keyboardShortcut("z", modifiers: .command)
             }
+            if let token = toast.undoOrderToken, let revision = toast.undoOrderRevision {
+                Button("撤销") { model.undoOrder(token: token, revision: revision) }
+                    .controlSize(.small)
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!model.canWrite || model.isMovingTask)
+            }
             Button { model.toast = nil } label: {
                 Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
             }

@@ -1,4 +1,11 @@
+import { randomUUID } from "node:crypto";
 import {
+  MoveTaskInput,
+  ResetOrderInput,
+  UndoOrderInput,
+  type ListView,
+  type OrderedGroup,
+  type OrderingState,
   CreateSeriesInput,
   CreateTaskInput,
   ListRemindersQuery,
@@ -36,6 +43,7 @@ import {
   type TaskRow,
 } from "./rows.js";
 import {
+  assertDate,
   addDays,
   assertTimezone,
   compareDates,
@@ -532,20 +540,151 @@ export class TaskEngine {
     const now = this.now();
     const today = localDateOf(now, this.timezone);
     tasks.sort((a, b) => this.compareTasks(a, b, now, today));
+    tasks = this.orderTasks(tasks, q.view ?? "all");
     if (q.limit) tasks = tasks.slice(0, q.limit);
     return tasks;
   }
 
-  /** Earliest local date the task "belongs" to (plan or due). */
+  /** Plan takes precedence; a deadline is a fallback, not a second plan. */
   private planDate(t: Task): string | null {
-    const dates: string[] = [];
-    if (t.scheduledDate) dates.push(t.scheduledDate);
-    if (t.scheduledAt) dates.push(localDateOf(t.scheduledAt, t.timezone));
-    if (t.dueDate) dates.push(t.dueDate);
-    if (t.dueAt) dates.push(localDateOf(t.dueAt, t.timezone));
-    if (dates.length === 0) return null;
-    dates.sort();
-    return dates[0]!;
+    return t.scheduledDate ?? (t.scheduledAt ? localDateOf(t.scheduledAt, t.timezone) : null)
+      ?? t.dueDate ?? (t.dueAt ? localDateOf(t.dueAt, t.timezone) : null);
+  }
+
+  ordering(): OrderingState {
+    const row = this.db.prepare("SELECT revision, groups FROM list_ordering WHERE singleton = 1").get() as { revision: number; groups: string };
+    return { revision: row.revision, groups: JSON.parse(row.groups) as OrderedGroup[] };
+  }
+
+  private listGroup(t: Task, view: ListView): string | null {
+    if (view === "all") return t.project ?? "";
+    if (view === "upcoming") {
+      const date = this.planDate(t);
+      return date && date > this.today() ? date : null;
+    }
+    const now = this.nowIso(), today = this.today();
+    const section = this.isOverdue(t, now, today) ? "overdue" : this.isDueToday(t, today) ? "must"
+      : (t.scheduledDate ?? (t.scheduledAt ? localDateOf(t.scheduledAt, t.timezone) : "9999")) <= today ? "scheduled" : null;
+    return section ? `${today}:${section}` : null;
+  }
+
+  private orderTasks(tasks: Task[], view: ListView): Task[] {
+    const groups = this.ordering().groups;
+    // Sort each partition independently; mixing group-specific ranks in a global
+    // comparator would be non-transitive when tasks from several projects interleave.
+    const partitions = new Map<string | null, Task[]>();
+    for (const task of tasks) {
+      if (task.status !== "todo") continue;
+      const key = this.listGroup(task, view);
+      const items = partitions.get(key) ?? [];
+      items.push(task); partitions.set(key, items);
+    }
+    for (const [key, items] of partitions) {
+      const saved = groups.find(g => g.view === view && g.group === key);
+      if (!saved) continue;
+      const ranks = new Map(saved.taskIds.map((id, i) => [id, i]));
+      items.sort((a, b) => (ranks.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+    }
+    const offsets = new Map<string | null, number>();
+    return tasks.map(task => {
+      if (task.status !== "todo") return task;
+      const key = this.listGroup(task, view), offset = offsets.get(key) ?? 0;
+      offsets.set(key, offset + 1);
+      return partitions.get(key)![offset]!;
+    });
+  }
+
+  /** One consistent snapshot for the native client, including the mutation revision. */
+  board() {
+    this.ensureSeriesInstances();
+    return this.tx(() => ({
+      context: this.context(), today: this.todayView(), next: this.nextView(),
+      all: this.listTasks({ view: "all" }),
+      upcoming: this.listTasks({ view: "upcoming", from: addDays(this.today(), 1), includeUnscheduled: false }),
+      ordering: this.ordering(),
+    }));
+  }
+
+  private checkOrderingRevision(expected: number): OrderingState {
+    const state = this.ordering();
+    if (state.revision !== expected) throw TodoCueError.conflict("list ordering", expected, state.revision);
+    return state;
+  }
+
+  private saveOrdering(groups: OrderedGroup[], before: OrderingState, task?: Task) {
+    const token = randomUUID();
+    // Keep a single persistent undo receipt. Any later task write invalidates it
+    // via the database triggers, so undo never overwrites concurrent edits.
+    const undo = { token, groups: before.groups, task: task ? {
+      id: task.id, project: task.project, scheduledDate: task.scheduledDate, scheduledAt: task.scheduledAt,
+    } : null };
+    this.db.prepare("UPDATE list_ordering SET groups = ?, revision = revision + 1, undo = ? WHERE singleton = 1")
+      .run(JSON.stringify(groups), JSON.stringify(undo));
+    this.queueEvent({ type: "task.updated", id: task?.id ?? null });
+    return { ordering: this.ordering(), undoToken: token };
+  }
+
+  moveTask(id: string, raw: MoveTaskInput) {
+    const input = MoveTaskInput.parse(raw);
+    this.ensureSeriesInstances();
+    return this.tx(() => {
+      const before = this.checkOrderingRevision(input.expectedRevision);
+      const task = this.requireTask(id);
+      this.checkVersion(task, input.expectedVersion);
+      if (task.status !== "todo") throw TodoCueError.invalidState("只能移动未完成任务");
+      if (this.listGroup(task, input.view) !== input.sourceGroup) throw TodoCueError.invalidState("任务分组已改变，请刷新后重试");
+      if (input.beforeId === id) throw TodoCueError.validation("不能将任务插入自身之前");
+      const crossGroup = input.sourceGroup !== input.targetGroup;
+      let moved = task;
+      if (crossGroup) {
+        if (input.view === "today") throw TodoCueError.validation("此分组由截止日期决定，请编辑日期");
+        if (input.view === "all") {
+          if (input.targetGroup.length > 100 || input.targetGroup.trim() !== input.targetGroup) throw TodoCueError.validation("无效的项目名称");
+          moved = this.updateTask(id, { project: input.targetGroup || null, expectedVersion: task.version });
+        } else {
+          const date = assertDate(input.targetGroup, "targetGroup");
+          if (date <= this.today()) throw TodoCueError.validation("即将到来的目标日期必须晚于今天");
+          const scheduledAt = task.scheduledAt ? parseInstant(`${date}T${formatLocal(task.scheduledAt, task.timezone, "HH:mm:ss.SSS")}`, task.timezone) : null;
+          const dueDate = task.dueDate ?? (task.dueAt ? localDateOf(task.dueAt, task.timezone) : null);
+          const pastDeadline = dueDate && (date > dueDate || (scheduledAt && task.dueAt && scheduledAt > task.dueAt));
+          if (pastDeadline && !input.allowPastDeadline) throw new TodoCueError("DEADLINE_CONFIRMATION_REQUIRED", "计划晚于截止时间，请确认保留截止日期并改期");
+          moved = this.updateTask(id, { scheduledAt, scheduledDate: scheduledAt ? null : date, expectedVersion: task.version });
+        }
+      }
+      const target = this.listTasks({ view: input.view }).filter(t => t.id !== id && this.listGroup(t, input.view) === input.targetGroup);
+      const index = input.beforeId === null ? target.length : target.findIndex(t => t.id === input.beforeId);
+      if (index < 0) throw TodoCueError.invalidState("目标任务已移动或完成，请刷新后重试");
+      target.splice(index, 0, moved);
+      const groups = before.groups.map(g => g.view === input.view ? { ...g, taskIds: g.taskIds.filter(t => t !== id) } : g)
+        .filter(g => !(g.view === input.view && g.group === input.targetGroup));
+      groups.push({ view: input.view, group: input.targetGroup, taskIds: target.map(t => t.id) });
+      return { task: moved, ...this.saveOrdering(groups, before, crossGroup ? task : undefined) };
+    });
+  }
+
+  resetOrder(raw: ResetOrderInput) {
+    const input = ResetOrderInput.parse(raw);
+    return this.tx(() => {
+      const before = this.checkOrderingRevision(input.expectedRevision);
+      return this.saveOrdering(before.groups.filter(g => g.view !== input.view || g.group !== input.group), before);
+    });
+  }
+
+  undoOrder(raw: UndoOrderInput) {
+    const input = UndoOrderInput.parse(raw);
+    return this.tx(() => {
+      this.checkOrderingRevision(input.expectedRevision);
+      const row = this.db.prepare("SELECT undo FROM list_ordering WHERE singleton = 1").get() as { undo: string | null };
+      const undo = row.undo ? JSON.parse(row.undo) as { token: string; groups: OrderedGroup[]; task: { id: string; project: string | null; scheduledDate: string | null; scheduledAt: string | null } | null } : null;
+      if (!undo || undo.token !== input.token) throw TodoCueError.invalidState("任务列表已改变，无法撤销这次移动");
+      if (undo.task) {
+        const { id, ...patch } = undo.task;
+        this.updateTask(id, patch);
+      }
+      this.db.prepare("UPDATE list_ordering SET groups = ?, revision = revision + 1, undo = NULL WHERE singleton = 1").run(JSON.stringify(undo.groups));
+      this.queueEvent({ type: "task.updated", id: undo.task?.id ?? null });
+      return { ordering: this.ordering() };
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -648,6 +787,9 @@ export class TaskEngine {
     }
     const sectionRank = { overdue: 0, must: 1, scheduled: 2 } as const;
     items.sort((a, b) => sectionRank[a.section] - sectionRank[b.section] || this.compareTasks(a.task, b.task, now, today));
+    const ordered = this.orderTasks(items.map(i => i.task), "today");
+    const positions = new Map(ordered.map((t, i) => [t.id, i]));
+    items.sort((a, b) => positions.get(a.task.id)! - positions.get(b.task.id)!);
     const completedRows = this.db
       .prepare("SELECT * FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL ORDER BY completed_at DESC")
       .all() as TaskRow[];
@@ -667,6 +809,9 @@ export class TaskEngine {
       candidates.push({ task: t, group, reason: this.describeReason(t, group, today) });
     }
     candidates.sort((a, b) => this.compareTasks(a.task, b.task, now, today));
+    const todayIds = this.todayView().items.map(i => i.task.id);
+    const positions = new Map(todayIds.map((id, i) => [id, i]));
+    candidates.sort((a, b) => (positions.get(a.task.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.task.id) ?? Number.MAX_SAFE_INTEGER));
     return { now: nowIso, timezone: this.timezone, next: candidates[0] ?? null, candidates };
   }
 
@@ -1042,7 +1187,7 @@ export class TaskEngine {
     const tasks = (this.db.prepare("SELECT * FROM tasks ORDER BY created_at").all() as TaskRow[]).map(this.hydrateTask);
     const series = (this.db.prepare("SELECT * FROM series ORDER BY created_at").all() as SeriesRow[]).map(seriesFromRow);
     const reminders = (this.db.prepare("SELECT * FROM reminders ORDER BY created_at").all() as ReminderRow[]).map(reminderFromRow);
-    return { format: "todocue-export", version: 1, exportedAt: this.nowIso(), timezone: this.timezone, tasks, series, reminders, attachments: this.attachments.export() };
+    return { format: "todocue-export", version: 1, exportedAt: this.nowIso(), timezone: this.timezone, tasks, series, reminders, ordering: this.ordering(), attachments: this.attachments.export() };
   }
 
   projects(): string[] {

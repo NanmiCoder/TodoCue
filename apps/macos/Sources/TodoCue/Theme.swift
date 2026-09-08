@@ -57,6 +57,14 @@ enum Theme {
     static var collapse: Animation {
         reduceMotion ? .easeInOut(duration: 0.15) : .easeOut(duration: 0.18)
     }
+    static let dragSettleDuration: TimeInterval = 0.22
+    static var dragShift: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .timingCurve(0.25, 0.1, 0.25, 1, duration: 0.20)
+    }
+    static var dragSettle: Animation {
+        reduceMotion ? .linear(duration: 0.01) : .timingCurve(0.2, 0.8, 0.2, 1, duration: dragSettleDuration)
+    }
+
     static var listChange: Animation {
         reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.9)
     }

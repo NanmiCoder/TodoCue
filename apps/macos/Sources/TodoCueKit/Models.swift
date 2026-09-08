@@ -84,9 +84,9 @@ public struct TodoTask: Codable, Identifiable, Hashable, Sendable {
     /// The local date this task is planned or due on (scheduled first, then due).
     public var planDate: String? {
         if let d = scheduledDate { return d }
-        if let at = scheduledAt, let date = TCDate.parse(at) { return TCDate.localDateString(date) }
+        if let at = scheduledAt, let date = TCDate.parse(at) { return TCDate.dateString(date, timezone: timezone) }
         if let d = dueDate { return d }
-        if let at = dueAt, let date = TCDate.parse(at) { return TCDate.localDateString(date) }
+        if let at = dueAt, let date = TCDate.parse(at) { return TCDate.dateString(date, timezone: timezone) }
         return nil
     }
 

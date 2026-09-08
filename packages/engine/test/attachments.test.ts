@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, type RuntimeEvent } from "@todocue/shared";
-import { migrations, openDatabase } from "../src/db.js";
+import { CURRENT_SCHEMA_VERSION, migrations, openDatabase } from "../src/db.js";
 import { TaskEngine } from "../src/engine.js";
 import { makeEngine } from "./helpers.js";
 
@@ -110,7 +110,7 @@ describe("attachment transactions and persistence", () => {
     old.exec("INSERT INTO tasks(id,title,timezone,created_at,updated_at) VALUES('old-task','keep me','Asia/Shanghai','2026-01-01','2026-01-01')");
     old.close();
     const opened = openDatabase({ path: database });
-    expect(opened.schemaVersion).toBe(2);
+    expect(opened.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(fs.existsSync(opened.backupPath!)).toBe(true);
     const backup = new Database(opened.backupPath!, { readonly: true });
     expect(backup.prepare("SELECT title FROM tasks").get()).toEqual({ title: "keep me" }); backup.close();

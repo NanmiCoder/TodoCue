@@ -5,6 +5,9 @@ import {
   API_PREFIX,
   ATTACHMENT_BODY_LIMIT,
   AddAttachmentsInput,
+  MoveTaskInput,
+  ResetOrderInput,
+  UndoOrderInput,
   CreateSeriesInput,
   CreateTaskInput,
   ErrorCodes,
@@ -178,6 +181,10 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     reply.code(201);
     return { task: res.task, series: res.series };
   });
+  app.get(`${API_PREFIX}/board`, async () => engine.board());
+  app.post(`${API_PREFIX}/tasks/:id/move`, async req => engine.moveTask(idOf(req), parse(MoveTaskInput, req.body)));
+  app.post(`${API_PREFIX}/ordering/reset`, async req => engine.resetOrder(parse(ResetOrderInput, req.body)));
+  app.post(`${API_PREFIX}/ordering/undo`, async req => engine.undoOrder(parse(UndoOrderInput, req.body)));
   app.get(`${API_PREFIX}/tasks/:id`, async (req) => engine.getTaskDetail(idOf(req)));
   app.patch(`${API_PREFIX}/tasks/:id`, { bodyLimit: ATTACHMENT_BODY_LIMIT }, async (req) => ({ task: engine.updateTask(idOf(req), parse(UpdateTaskInput, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/complete`, async (req) => ({ task: engine.completeTask(idOf(req), parse(VersionedAction, req.body)) }));
