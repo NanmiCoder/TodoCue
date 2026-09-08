@@ -60,34 +60,10 @@ struct ListRootView: View {
 private struct TabBarView: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
-    @Environment(\.accent) private var accent
-    @Namespace private var selection
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(PanelTab.allCases) { tab in
-                Button { withAnimation(Theme.interaction) { model.tab = tab } } label: {
-                    Text(tab.label).font(.system(size: 12, weight: model.tab == tab ? .semibold : .medium))
-                        .frame(maxWidth: .infinity).frame(height: 32)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(model.tab == tab ? Color.primary : .secondary)
-                .background {
-                    if model.tab == tab {
-                        Capsule().fill(Theme.surface)
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
-                            .shadow(color: .black.opacity(0.055), radius: 3, y: 1)
-                            .matchedGeometryEffect(id: "selected-tab", in: selection)
-                    }
-                }
-                .accessibilityLabel(tab.label)
-                .accessibilityAddTraits(model.tab == tab ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(Color.primary.opacity(0.045), in: Capsule())
-        .accessibilityElement(children: .contain).accessibilityLabel(L10n.tr("任务视图切换"))
+        SegmentedCapsule(items: PanelTab.allCases, selected: model.tab, title: \.label,
+                         select: { model.tab = $0 }, label: L10n.tr("任务视图切换"))
     }
 }
 

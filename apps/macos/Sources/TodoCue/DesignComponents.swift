@@ -75,6 +75,62 @@ struct CueButtonStyle: ButtonStyle {
     }
 }
 
+/// The panel's segmented control: a capsule track with a selection that slides between segments.
+/// Shared by the task views and the calendar spans so the two cannot drift apart.
+struct SegmentedCapsule<Item: Identifiable & Equatable>: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
+    private let items: [Item]
+    private let selected: Item
+    private let title: (Item) -> String
+    private let select: (Item) -> Void
+    /// Segments divide the width equally when true, and hug their labels when false.
+    private let fills: Bool
+    private let height: CGFloat
+    private let fontSize: CGFloat
+    private let trackPadding: CGFloat
+    private let label: String
+    @Namespace private var slider
+
+    init(items: [Item], selected: Item, title: @escaping (Item) -> String, select: @escaping (Item) -> Void,
+         fills: Bool = true, height: CGFloat = 32, fontSize: CGFloat = 12, trackPadding: CGFloat = 3,
+         label: String) {
+        self.items = items; self.selected = selected; self.title = title; self.select = select
+        self.fills = fills; self.height = height; self.fontSize = fontSize
+        self.trackPadding = trackPadding; self.label = label
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(items) { item in
+                let isSelected = item == selected
+                Button { withAnimation(Theme.interaction) { select(item) } } label: {
+                    Text(title(item))
+                        .font(.system(size: fontSize, weight: isSelected ? .semibold : .medium))
+                        .frame(maxWidth: fills ? .infinity : nil)
+                        .padding(.horizontal, fills ? 0 : 8)
+                        .frame(height: height)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(isSelected ? Color.primary : .secondary)
+                .background {
+                    if isSelected {
+                        Capsule().fill(Theme.surface)
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
+                            .shadow(color: .black.opacity(0.055), radius: 3, y: 1)
+                            .matchedGeometryEffect(id: "selected-segment", in: slider)
+                    }
+                }
+                .accessibilityLabel(title(item))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(trackPadding)
+        .background(Color.primary.opacity(0.045), in: Capsule())
+        .accessibilityElement(children: .contain).accessibilityLabel(label)
+    }
+}
+
 struct SurfaceModifier: ViewModifier {
     var radius: CGFloat
     func body(content: Content) -> some View {

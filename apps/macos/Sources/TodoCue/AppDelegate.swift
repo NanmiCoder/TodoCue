@@ -97,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.model.handleEscape()
                 return nil
             }
+            if flags == [.command, .shift], event.charactersIgnoringModifiers?.lowercased() == "k" {
+                self.model.showCalendar()
+                return nil
+            }
             guard flags == .command, let ch = event.charactersIgnoringModifiers?.lowercased() else { return event }
             switch ch {
             case "n": self.model.newTask(); return nil
