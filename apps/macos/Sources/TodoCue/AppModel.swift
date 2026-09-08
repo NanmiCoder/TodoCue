@@ -404,14 +404,20 @@ final class AppModel: ObservableObject {
         // so "drag the overdue one onto today" would fail. It patches the plan date instead.
         if drag.surface == .calendar {
             guard target.group != drag.group else { return false }
-            settleDrag(returning: false)
+            // Deliberately no `settleDrag(returning: false)`. That parks the presentation in
+            // `.landing`, and only `finishOrderMutation` — which is the ordering path, not this one
+            // — ever clears it; `endTaskDrag` skips anything that is not `.dragging`. A leaked
+            // presentation permanently blocks `apply(_:)` and `beginTaskDrag`, so one calendar drag
+            // would freeze every snapshot and every drag in the app. `TaskDragHandle.finish()`
+            // always calls `endTaskDrag()` right after this, which settles and clears properly;
+            // the optimistic `merge` in `reschedule` is what moves the row to its new day.
             draggedTask = nil
             dropTarget = nil
             reschedule(drag.task, to: target.group)
             return true
         }
         guard drag.surface != .list(.today) || target.group == drag.group else { return false }
-        let move = PendingTaskMove(drag: drag, target: target)
+        guard let move = PendingTaskMove(drag: drag, target: target) else { return false }
         settleDrag(returning: false)
         draggedTask = nil
         dropTarget = nil
@@ -427,34 +433,41 @@ final class AppModel: ObservableObject {
             return
         }
         pendingReschedule = nil
-        let undo = UndoReschedule(task: task)
         isMovingTask = true
         Task {
-            defer { isMovingTask = false }
             do {
                 let updated = try await client.updateTask(task.id, TaskRescheduling.plan(task, on: date),
                                                           expectedVersion: task.version)
                 merge(updated)
-                toast = Toast(message: L10n.tr("已改期至 \(TCDate.dateLabel(date))，截止与提醒保持原值"),
-                              undoReschedule: undo)
+                // Undo targets the version this write produced, so a later edit from the CLI, an
+                // agent or another window makes the undo conflict instead of silently reverting it.
+                showToast(Toast(message: L10n.tr("已改期至 \(TCDate.dateLabel(date))，截止与提醒保持原值"),
+                                undoReschedule: UndoReschedule(task: task, expectedVersion: updated.version)))
             } catch {
-                settleDrag(returning: true)
-                toast = Toast(message: (error as? APIError)?.isVersionConflict == true
-                              ? L10n.tr("任务已在别处修改，请刷新后重试")
-                              : L10n.tr("改期失败：\(error.localizedDescription)"), isError: true)
+                showToast(Toast(message: (error as? APIError)?.isVersionConflict == true
+                                ? L10n.tr("任务已在别处修改，请刷新后重试")
+                                : L10n.tr("改期失败：\(error.localizedDescription)"), isError: true))
             }
+            // `apply` refuses a snapshot while a mutation is in flight, so clear the flag first;
+            // a `defer` here would run after the await and make the reconcile a no-op.
+            isMovingTask = false
             await refreshLive()
         }
     }
 
     func undoReschedule(_ undo: UndoReschedule) {
-        guard canWrite, let client else { return }
+        guard canWrite, !isMovingTask, let client else { return }
         toast = nil
+        isMovingTask = true
         Task {
-            guard let current = try? await client.task(undo.taskId).task,
-                  let restored = try? await client.updateTask(undo.taskId, undo.payload, expectedVersion: current.version)
-            else { toast = Toast(message: L10n.tr("撤销失败，任务可能已在别处修改"), isError: true); return }
-            merge(restored)
+            do {
+                let restored = try await client.updateTask(undo.taskId, undo.payload,
+                                                           expectedVersion: undo.expectedVersion)
+                merge(restored)
+            } catch {
+                showToast(Toast(message: L10n.tr("撤销失败，任务可能已在别处修改"), isError: true))
+            }
+            isMovingTask = false
             await refreshLive()
         }
     }
@@ -755,7 +768,8 @@ final class AppModel: ObservableObject {
         toast = t
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: (t.undoTaskId == nil && t.undoOrderToken == nil) ? 5_000_000_000 : 10_000_000_000)
+            let hasUndo = t.undoTaskId != nil || t.undoOrderToken != nil || t.undoReschedule != nil
+            try? await Task.sleep(nanoseconds: hasUndo ? 10_000_000_000 : 5_000_000_000)
             guard !Task.isCancelled else { return }
             if self?.toast?.id == t.id { self?.toast = nil }
         }

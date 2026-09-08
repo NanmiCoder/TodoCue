@@ -2,9 +2,8 @@ import SwiftUI
 import TodoCueKit
 
 /// One day's work, shared by the month view's agenda pane and by each block of the week view.
-/// Rows are plain `TaskRowView`s: reordering has no meaning inside a date, and `DraggableTaskRow`
-/// would register frames into the Upcoming drag graph, whose region table is keyed only by window
-/// and `PanelTab`.
+/// Rows are draggable but not droppable: a drag here changes which day a task is planned for, and
+/// the only landing places are days, so ordering within a day is not a thing you can express.
 struct DayAgendaList: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel

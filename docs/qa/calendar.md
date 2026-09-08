@@ -12,7 +12,7 @@
 ## 自动门禁
 
 - `npm run check`：TypeScript 构建、单元测试、发布脚本测试、CLI/MCP 冒烟、版本一致性——通过。
-- `swift test --package-path apps/macos`：140 项，其中 2 项 opt-in 截图测试跳过，其余全部通过。
+- `swift test --package-path apps/macos`：148 项，其中 2 项 opt-in 截图测试跳过，其余全部通过。
 - `git diff --check` 通过。
 
 ## 渲染证据
@@ -81,6 +81,29 @@
 - 底部常驻 quick-add，绑定当前选中日（「添加到 9月11日…」），「添加详情」升级到表单时日期已预填。
   代价：日历页固定少 57pt，因此 360pt 最矮面板下六周月份连强制展开都放不下（`canExpand` 会拒绝而不是裁剪）。
 - 英文计数改回裸数字：本地化目录没有复数规则，`"{0} tasks"` 在 1 的时候会读成 "1 tasks"。
+
+### 第三轮对抗性审查修掉的问题
+
+拖拽这一版又过了一轮独立审查，抓到 11 条，其中一条是能把 App 用废的：
+
+| 严重度 | 问题 | 处理 |
+|---|---|---|
+| 严重 | 日历落点调用了 `settleDrag(returning: false)`，把 `dragPresentation` 停在 `.landing`，而只有排序路径的 `finishOrderMutation` 会清它、`endTaskDrag` 又只处理 `.dragging`。**一次成功的拖拽之后，`apply(_:)` 会丢弃之后所有快照、`beginTaskDrag` 拒绝任何拖拽**，直到重启 | 日历分支不再自己 settle，交回 `endTaskDrag` 的既有清理路径；补 `CalendarDragTests`——真窗口、真 region、真跑一遍生命周期，并验证过它在 bug 复现时确实失败 |
+| 高 | `defer { isMovingTask = false }` 在 `await refreshLive()` **之后**才执行，而 `apply` 会因为 `isMovingTask` 为真而拒绝快照 —— 那次对账根本没发生 | 显式在 await 前清标志 |
+| 高 | `landsAfterDeadline` 只实现了引擎条件的前半段，漏掉「同一天但时刻晚于 `dueAt`」，确认框会被跳过 | 补齐第二个析取项 |
+| 高 | `TaskRescheduling.plan` 用 `Calendar.current` 做时刻运算，而 `planDate`（决定任务画在哪个格子）按任务自己的时区解析。跨时区任务拖一下会**落到错误的那一天** | 改用任务自身时区；补跨时区测试 |
+| 中 | 改期 toast 直接赋值而非走 `showToast`，永不自动消失，永久占掉日程区高度 | 走 `showToast`，并把 `undoReschedule` 计入 10 秒撤销窗口 |
+| 中 | 撤销无条件覆盖：取当前版本再写回拖拽时的快照，中间别人的修改会被静默还原 | 撤销针对本次写入产生的版本，冲突则报错 |
+| 中 | 拖拽投影对日历仍然生效，悬停时会把**无关日期**的任务整行上下推 | `evaluate` 对 `.calendar` 直接返回空投影 |
+| 中低 | `DayAgendaList` 的类型注释还写着「用纯 TaskRowView，因为 DraggableTaskRow 会污染 Upcoming 拖拽图」—— 正是本次证伪并推翻的说法 | 重写 |
+| 中低 | 日历行的握把提示仍是列表的「拖动调整执行顺序」，而它压根不能重排；新加的「拖动 {0} 改期」词条无人调用 | 按 surface 分别给提示与无障碍标签 |
+| 中低 | 空周现在只剩 7 个光秃秃的标题行，没有任何说明 | 恢复一行说明 |
+| 低 | `PendingTaskMove.payload` 改成 `drag.surface.tab?.rawValue`，非法 surface 会发出 `view: null` —— 抽 `DragSurface` 的初衷正是让它不可表达 | 改成可失败构造器，持有 `PanelTab`；补测试 |
+| 低 | 快速添加的无障碍标签变成了带省略号的 placeholder；铅笔按钮在输入框为空时忽略选中日 | 各自修正 |
+| 低 | 聚焦后 quick-add 会长高约 24pt，强制展开到极限时会把它挤出面板 | `canExpand` 预留该高度，补属性测试 |
+
+审查同时确认：`DragSurface` 重构对列表拖拽逐条等价、`plan` 写出的 payload 与引擎一致、
+拖放区域按需挂载的时序安全（60Hz 的 `scrollTimer` 每帧重算目标）、高度阶梯算术无误。
 
 ## 已知边界
 

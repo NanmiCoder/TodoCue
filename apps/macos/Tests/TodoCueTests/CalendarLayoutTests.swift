@@ -68,6 +68,18 @@ final class CalendarLayoutTests: XCTestCase {
         XCTAssertEqual(forcedShut.rows, 1)
     }
 
+    /// Forcing a grid open must never leave so little room that focusing the quick-add row
+    /// pushes it off the bottom of the panel.
+    func testAnExpandedGridAlwaysLeavesRoomForAFocusedQuickAdd() {
+        for available in stride(from: CGFloat(150), through: 1200, by: 5) {
+            for rows in 1...6 where CalendarLayout.canExpand(available: available, weekRows: rows) {
+                let m = CalendarLayout.metrics(available: available, weekRows: rows, forceExpanded: true)
+                XCTAssertGreaterThanOrEqual(m.agendaHeight, CalendarLayout.quickAddFocused,
+                                            "available=\(available) rows=\(rows)")
+            }
+        }
+    }
+
     func testTheLadderAlwaysPartitionsTheAvailableHeightWithoutNegativeSpace() {
         for available in stride(from: CGFloat(150), through: 900, by: 10) {
             for rows in 4...6 {

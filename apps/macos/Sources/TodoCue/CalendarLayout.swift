@@ -11,6 +11,9 @@ enum CalendarLayout {
     static let weekdayHeader: CGFloat = 18
     /// The quick-add row pinned under the calendar, matching the one under the task lists.
     static let quickAdd: CGFloat = 57
+    /// It grows by a hint row once focused. The agenda absorbs that — unless the agenda is already
+    /// at zero, which is exactly what forcing a grid open can produce, so expansion reserves it.
+    static let quickAddFocused: CGFloat = 24
     /// Roughly three task rows — below this the agenda stops being worth showing.
     static let agendaMin: CGFloat = 120
     /// What a cell actually draws: a 20pt number (the selected day's filled circle) + 2 + a 6pt
@@ -50,8 +53,9 @@ enum CalendarLayout {
                        rows: shown, collapsed: collapsed)
     }
 
-    /// Whether the user can meaningfully expand a collapsed grid at this height.
+    /// Whether the user can meaningfully expand a collapsed grid at this height — leaving room for
+    /// the quick-add row to grow when focused, so an expanded grid can never push it off the panel.
     static func canExpand(available: CGFloat, weekRows: Int) -> Bool {
-        available - navigator - weekdayHeader >= minCell * CGFloat(max(1, weekRows))
+        available - navigator - weekdayHeader - quickAddFocused >= minCell * CGFloat(max(1, weekRows))
     }
 }

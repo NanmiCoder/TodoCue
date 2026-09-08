@@ -87,6 +87,11 @@ struct CalendarView: View {
             VStack(alignment: .leading, spacing: 12) {
                 // All seven days, always: a week planner that hides its empty days is the one you
                 // cannot drag onto, and those are exactly the days with room.
+                if days.allSatisfy({ model.calendarBucket($0).isEmpty }) {
+                    Text(L10n.tr("这一周没有安排"))
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                        .padding(.horizontal, 4).padding(.bottom, 2)
+                }
                 ForEach(days, id: \.self) { day in
                     DayAgendaList(date: day, isWeekBlock: true)
                         .onTapGesture { model.setCalendar(selected: day) }

@@ -21,6 +21,10 @@ struct TaskDragProjection: Equatable {
     var landingOffset: CGSize = .zero
 
     static func evaluate(frames: [TaskDragFrame], source: TaskDragSlot, target: TaskDropTarget?) -> Self {
+        // Reorder choreography is meaningless on the calendar: a day block's rect encloses the very
+        // rows it would be sorted against, so this would shove unrelated days' tasks a row up or
+        // down while the pointer merely hovers. The calendar's feedback is the target day's ring.
+        guard source.surface != .calendar else { return Self() }
         let ordered = frames.filter { $0.slot.surface == source.surface }.sorted { $0.rect.minY < $1.rect.minY }
         guard let from = ordered.firstIndex(where: { $0.slot == source }), let target,
               target.surface == source.surface,

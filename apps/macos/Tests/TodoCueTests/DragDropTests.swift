@@ -41,8 +41,9 @@ final class DragDropTests: XCTestCase {
     }
 
     func testMovePayloadContainsSnapshotAndOnlyExplicitlyConfirmsDeadline() throws {
-        let move = PendingTaskMove(drag: TaskDrag(task: task(), surface: .list(.upcoming), group: "2026-09-09", revision: 42),
-                                   target: TaskDropTarget(surface: .list(.upcoming), group: "2026-09-10", beforeId: nil))
+        let move = try XCTUnwrap(PendingTaskMove(
+            drag: TaskDrag(task: task(), surface: .list(.upcoming), group: "2026-09-09", revision: 42),
+            target: TaskDropTarget(surface: .list(.upcoming), group: "2026-09-10", beforeId: nil)))
         let data = try JSONEncoder().encode(move.payload(allowPastDeadline: false).fields)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["expectedRevision"] as? Int, 42)
@@ -123,5 +124,13 @@ final class DragDropTests: XCTestCase {
         XCTAssertEqual(t.planDate, "2026-09-09")
         t.scheduledAt = nil
         XCTAssertEqual(t.planDate, "2026-09-08")
+    }
+
+    /// `DragSurface` exists so an ordering move cannot be built for a surface the server has no
+    /// name for; the failable init is what keeps that unrepresentable rather than sending null.
+    func testAnOrderingMoveCannotBeBuiltFromACalendarDrag() {
+        XCTAssertNil(PendingTaskMove(
+            drag: TaskDrag(task: task(), surface: .calendar, group: "2026-09-09", revision: 42),
+            target: TaskDropTarget(surface: .calendar, group: "2026-09-10", beforeId: nil)))
     }
 }

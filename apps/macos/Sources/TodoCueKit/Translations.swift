@@ -194,9 +194,6 @@ extension L10n {
         "没有找到相关任务\n试试其他关键词。": "No matching tasks\nTry another keyword.",
         "未分组": "No project",
         "添加到今天…": "Add to today…",
-        "快速添加到今天": "Quick add to today",
-        "添加到今天": "Add to today",
-        "添加到今天（回车）": "Add to today (Return)",
         "展开完整表单": "Open full form",
         "继续草稿": "Continue draft",
         "展开完整表单（⌘N）": "Open full form (⌘N)",
@@ -386,5 +383,10 @@ extension L10n {
         "添加到 {0}…": "Add to {0}…",
         "回车添加": "Press Return to add",
         "拖动 {0} 改期": "Drag {0} to reschedule",
+        "拖到另一天即可改期": "Drag to another day to reschedule",
+        "快速添加到 {0}": "Quick add to {0}",
+        "添加到 {0}": "Add to {0}",
+        "快速添加到今天": "Quick add to today",
+        "添加到今天": "Add to today",
     ]
 }

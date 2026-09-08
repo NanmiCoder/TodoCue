@@ -41,11 +41,15 @@ struct UndoReschedule: Equatable {
     let taskId: String
     let scheduledDate: String?
     let scheduledAt: String?
+    /// The version the reschedule produced. Undoing against it means a later edit from anywhere
+    /// else conflicts rather than being silently reverted.
+    let expectedVersion: Int
 
-    init(task: TodoTask) {
+    init(task: TodoTask, expectedVersion: Int) {
         taskId = task.id
         scheduledDate = task.scheduledDate
         scheduledAt = task.scheduledAt
+        self.expectedVersion = expectedVersion
     }
 
     /// `set` writes an explicit null for nil, which is what clears the other half of the pair.
@@ -61,6 +65,16 @@ struct PendingTaskMove: Identifiable {
     let id = UUID()
     let drag: TaskDrag
     let target: TaskDropTarget
+    /// The wire `ListView`. Held explicitly so an ordering move cannot be built from a surface
+    /// that has no server-side name — the point of `DragSurface` was to keep that unrepresentable.
+    let view: PanelTab
+
+    init?(drag: TaskDrag, target: TaskDropTarget) {
+        guard let tab = drag.surface.tab else { return nil }
+        self.drag = drag
+        self.target = target
+        self.view = tab
+    }
 
     var message: String {
         guard drag.group != target.group else { return L10n.tr("已调整执行顺序") }
@@ -70,7 +84,7 @@ struct PendingTaskMove: Identifiable {
 
     func payload(allowPastDeadline: Bool) -> TaskPayload {
         var p = TaskPayload()
-        p.set("view", drag.surface.tab?.rawValue)
+        p.set("view", view.rawValue)
         p.set("sourceGroup", drag.group)
         p.set("targetGroup", target.group)
         p.set("beforeId", target.beforeId)
@@ -88,14 +102,18 @@ struct TaskDragHandle: NSViewRepresentable {
     let enabled: Bool
     let model: AppModel
     let begin: () -> Bool
+    /// Calendar rows can only be moved to another day; list rows can also be reordered.
+    var reschedulesOnly = false
 
     func makeNSView(context: Context) -> HandleView { HandleView() }
     func updateNSView(_ view: HandleView, context: Context) {
         view.enabled = enabled
         view.model = model
         view.begin = begin
-        view.toolTip = enabled ? L10n.tr("拖动调整执行顺序；跨分组可修改项目或计划日期") : L10n.tr("当前无法拖动")
-        view.setAccessibilityLabel(L10n.tr("拖动 \(task.title)"))
+        view.toolTip = enabled
+            ? (reschedulesOnly ? L10n.tr("拖到另一天即可改期") : L10n.tr("拖动调整执行顺序；跨分组可修改项目或计划日期"))
+            : L10n.tr("当前无法拖动")
+        view.setAccessibilityLabel(reschedulesOnly ? L10n.tr("拖动 \(task.title) 改期") : L10n.tr("拖动 \(task.title)"))
         view.needsDisplay = true
         view.window?.invalidateCursorRects(for: view)
     }
@@ -280,7 +298,8 @@ struct DraggableTaskRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             TaskDragHandle(task: task, enabled: canDrag, model: model,
-                           begin: { model.beginTaskDrag(task, surface: surface, group: group) })
+                           begin: { model.beginTaskDrag(task, surface: surface, group: group) },
+                           reschedulesOnly: !reorderable)
                 .frame(width: 16, height: 30).padding(.top, compact ? 4 : 7)
                 .opacity(canDrag ? 0.65 : 0.2)
             TaskRowView(task: task, reasons: reasons, showProject: showProject, compact: compact)

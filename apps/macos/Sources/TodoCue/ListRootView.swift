@@ -302,11 +302,11 @@ struct QuickAddView: View {
                     .textFieldStyle(.plain).font(.system(size: 13))
                     .focused($focused).onSubmit { model.quickAdd(on: date) }
                     .disabled(!model.canWrite || model.isQuickAdding)
-                    .accessibilityLabel(prompt)
+                    .accessibilityLabel(L10n.tr("快速添加到 \(dayLabel)"))
                 if model.isQuickAdding { ProgressView().controlSize(.small) }
                 else if hasText {
                     Button { model.quickAdd(on: date) } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 23)).foregroundStyle(accent) }
-                        .buttonStyle(.plain).accessibilityLabel(prompt).help(L10n.tr("回车添加"))
+                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("添加到 \(dayLabel)")).help(L10n.tr("回车添加"))
                         .disabled(!model.canWrite)
                 } else {
                     Button(action: expand) { Image(systemName: "square.and.pencil") }
@@ -350,10 +350,15 @@ struct QuickAddView: View {
 
     private func expand() {
         var draft = model.savedDraft ?? TaskDraft()
+        // The day comes from the surface, not from whether anything was typed: opening the form
+        // from a row labelled "Add to Sep 20" must not quietly default to today.
+        if let date, let parsed = TCDate.parseLocalDate(date) {
+            draft.scheduledMode = .date
+            draft.scheduledDate = parsed
+        }
         if hasText {
             draft.title = model.quickAddText
             draft.scheduledMode = .date
-            if let date, let parsed = TCDate.parseLocalDate(date) { draft.scheduledDate = parsed }
             model.quickAddText = ""
         }
         model.presentForm(draft)
