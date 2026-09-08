@@ -78,23 +78,23 @@ enum NotchLayout {
         if minutes < 1 {
             span = ""
         } else if minutes < 60 {
-            span = "\(minutes) 分钟"
+            span = L10n.tr("\(minutes) 分钟")
         } else if minutes < 24 * 60 {
             let h = minutes / 60, m = minutes % 60
-            span = m == 0 ? "\(h) 小时" : "\(h) 小时 \(m) 分"
+            span = m == 0 ? L10n.tr("\(h) 小时") : L10n.tr("\(h) 小时 \(m) 分")
         } else {
-            span = "\(minutes / (24 * 60)) 天"
+            span = L10n.tr("\(minutes / (24 * 60)) 天")
         }
         let text: String
         switch (isDeadline, late, span.isEmpty) {
-        case (false, false, true): text = "就是现在"
-        case (false, false, false): text = "还有 " + span
-        case (false, true, true): text = "刚到时间"
-        case (false, true, false): text = "已过 " + span
-        case (true, false, true): text = "马上截止"
-        case (true, false, false): text = "距截止 " + span
-        case (true, true, true): text = "刚刚截止"
-        case (true, true, false): text = "已逾期 " + span
+        case (false, false, true): text = L10n.tr("就是现在")
+        case (false, false, false): text = L10n.tr("还有 ") + span
+        case (false, true, true): text = L10n.tr("刚到时间")
+        case (false, true, false): text = L10n.tr("已过 ") + span
+        case (true, false, true): text = L10n.tr("马上截止")
+        case (true, false, false): text = L10n.tr("距截止 ") + span
+        case (true, true, true): text = L10n.tr("刚刚截止")
+        case (true, true, false): text = L10n.tr("已逾期 ") + span
         }
         return Countdown(text: text, late: late)
     }

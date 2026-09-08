@@ -66,12 +66,12 @@ final class DecodingTests: XCTestCase {
         """
         let s = try JSONDecoder().decode(Series.self, from: Data(daily.utf8))
         XCTAssertEqual(s.rule, .daily)
-        XCTAssertEqual(s.rule.label, "每日")
+        XCTAssertEqual(s.rule.label, L10n.tr("每日"))
 
         let weekly = daily.replacingOccurrences(of: "{ \"kind\": \"daily\" }", with: "{ \"kind\": \"weekly\", \"weekdays\": [1,3,5] }")
         let w = try JSONDecoder().decode(Series.self, from: Data(weekly.utf8))
         XCTAssertEqual(w.rule, .weekly(weekdays: [1, 3, 5]))
-        XCTAssertEqual(w.rule.label, "每周 一、三、五")
+        XCTAssertEqual(w.rule.label, L10n.language == .chinese ? "每周 一、三、五" : "Every week: Mon, Wed, Fri")
 
         // round trip
         let data = try JSONEncoder().encode(w.rule)

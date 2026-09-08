@@ -2,6 +2,7 @@ import SwiftUI
 import TodoCueKit
 
 struct TaskFormView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @State var draft: TaskDraft
     @State private var error: String?
@@ -21,17 +22,17 @@ struct TaskFormView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("要做什么").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                            TextField("给任务起个名字", text: $draft.title, axis: .vertical)
+                            Text(L10n.tr("要做什么")).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                            TextField(L10n.tr("给任务起个名字"), text: $draft.title, axis: .vertical)
                                 .lineLimit(2...4)
                                 .font(.system(size: 20, weight: .medium)).tracking(-0.35)
                                 .focused($titleFocused)
-                                .accessibilityLabel("标题")
+                                .accessibilityLabel(L10n.tr("标题"))
                             Divider().opacity(0.5)
-                            TextField("添加备注、链接或想法（可选）", text: $draft.notes, axis: .vertical)
+                            TextField(L10n.tr("添加备注、链接或想法（可选）"), text: $draft.notes, axis: .vertical)
                                 .lineLimit(2...5)
                                 .font(.system(size: 13))
-                                .accessibilityLabel("备注")
+                                .accessibilityLabel(L10n.tr("备注"))
                         }
                         .textFieldStyle(.plain)
                         .padding(16)
@@ -39,31 +40,31 @@ struct TaskFormView: View {
 
                         AttachmentEditorView(draft: $draft, loading: $importingAttachments)
 
-                        EditorSection(title: "任务属性", icon: "slider.horizontal.3") {
-                            EditorFieldRow(title: "项目", icon: "folder") {
+                        EditorSection(title: L10n.tr("任务属性"), icon: "slider.horizontal.3") {
+                            EditorFieldRow(title: L10n.tr("项目"), icon: "folder") {
                                 HStack(spacing: 6) {
-                                    TextField("未分组", text: $draft.project)
-                                        .textFieldStyle(.roundedBorder).accessibilityLabel("项目")
+                                    TextField(L10n.tr("未分组"), text: $draft.project)
+                                        .textFieldStyle(.roundedBorder).accessibilityLabel(L10n.tr("项目"))
                                     if !model.projects.isEmpty {
                                         Menu {
                                             ForEach(model.projects, id: \.self) { project in Button(project) { draft.project = project } }
                                         } label: { Image(systemName: "chevron.down") }
                                         .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 18)
-                                        .accessibilityLabel("选择已有项目")
+                                        .accessibilityLabel(L10n.tr("选择已有项目"))
                                     }
                                 }
                             }
-                            EditorFieldRow(title: "优先级", icon: "flag") {
-                                Picker("优先级", selection: $draft.priority) {
+                            EditorFieldRow(title: L10n.tr("优先级"), icon: "flag") {
+                                Picker(L10n.tr("优先级"), selection: $draft.priority) {
                                     ForEach(Priority.allCases, id: \.self) { Text($0.label).tag($0) }
                                 }.labelsHidden().frame(width: 82, alignment: .leading)
                             }
-                            EditorFieldRow(title: "预计", icon: "timer") {
+                            EditorFieldRow(title: L10n.tr("预计"), icon: "timer") {
                                 HStack(spacing: 6) {
                                     TextField("—", text: $draft.estimate)
                                         .textFieldStyle(.roundedBorder).frame(width: 48)
-                                        .accessibilityLabel("预计耗时分钟")
-                                    Text("分钟").foregroundStyle(.secondary)
+                                        .accessibilityLabel(L10n.tr("预计耗时分钟"))
+                                    Text(L10n.tr("分钟")).foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -76,23 +77,23 @@ struct TaskFormView: View {
                         })) {
                             VStack(alignment: .leading, spacing: 14) {
                                 if draft.repeatKind == .none {
-                                    DateModeField(title: "计划", mode: $draft.scheduledMode, date: $draft.scheduledDate)
-                                    DateModeField(title: "截止", mode: $draft.dueMode, date: $draft.dueDate)
+                                    DateModeField(title: L10n.tr("计划"), mode: $draft.scheduledMode, date: $draft.scheduledDate)
+                                    DateModeField(title: L10n.tr("截止"), mode: $draft.dueMode, date: $draft.dueDate)
                                     VStack(alignment: .leading, spacing: 9) {
-                                        Toggle("提醒", isOn: $draft.reminderOn).toggleStyle(.switch).controlSize(.mini)
+                                        Toggle(L10n.tr("提醒"), isOn: $draft.reminderOn).toggleStyle(.switch).controlSize(.mini)
                                         if draft.reminderOn {
-                                            CompactDateField(title: "提醒", date: $draft.reminderDate, includesTime: true)
+                                            CompactDateField(title: L10n.tr("提醒"), date: $draft.reminderDate, includesTime: true)
                                         }
                                     }
                                 }
                                 if !draft.isEditing { repeatSection }
                                 else if draft.isSeriesInstance {
-                                    Label("重复任务 · 修改只影响本次", systemImage: "repeat")
+                                    Label(L10n.tr("重复任务 · 修改只影响本次"), systemImage: "repeat")
                                         .font(.system(size: 12)).foregroundStyle(.secondary)
                                 }
                             }.padding(.top, 14)
                         } label: {
-                            Label("时间与重复", systemImage: "calendar")
+                            Label(L10n.tr("时间与重复"), systemImage: "calendar")
                                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
                         }
                         .padding(16).cueSurface().id("task-schedule")
@@ -110,15 +111,15 @@ struct TaskFormView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {
-                    Text(model.canWrite ? "返回会保留草稿" : "离线，草稿已保留")
+                    Text(model.canWrite ? L10n.tr("返回会保留草稿") : L10n.tr("离线，草稿已保留"))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                     Spacer(minLength: 8)
                     if saving { ProgressView().controlSize(.small) }
-                    Button(draft.isEditing ? "保存更改" : "添加任务", action: save)
+                    Button(draft.isEditing ? L10n.tr("保存更改") : L10n.tr("添加任务"), action: save)
                         .buttonStyle(CueButtonStyle(prominent: true))
                         .keyboardShortcut(.return, modifiers: .command)
                         .disabled(saving || importingAttachments || !model.canWrite)
-                        .help("⌘Return 保存")
+                        .help(L10n.tr("⌘Return 保存"))
                 }
             }
             .padding(.horizontal, 16)
@@ -139,41 +140,41 @@ struct TaskFormView: View {
     private var repeatSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("重复")
+                Text(L10n.tr("重复"))
                 Spacer()
-                Picker("重复", selection: $draft.repeatKind) {
+                Picker(L10n.tr("重复"), selection: $draft.repeatKind) {
                     ForEach(RepeatKind.allCases) { Text($0.label).tag($0) }
                 }.labelsHidden().frame(width: 136)
             }
             if draft.repeatKind == .weekly {
                 HStack(spacing: 4) {
                     ForEach(1...7, id: \.self) { day in
-                        let names = ["一", "二", "三", "四", "五", "六", "日"]
+                        let names = [L10n.tr("一"), L10n.tr("二"), L10n.tr("三"), L10n.tr("四"), L10n.tr("五"), L10n.tr("六"), L10n.tr("日")]
                         Toggle(names[day - 1], isOn: Binding(
                             get: { draft.weekdays.contains(day) },
                             set: { on in if on { draft.weekdays.insert(day) } else { draft.weekdays.remove(day) } }
                         ))
                         .toggleStyle(.button).controlSize(.small)
                         .frame(maxWidth: .infinity)
-                        .accessibilityLabel("周\(names[day - 1])")
+                        .accessibilityLabel(L10n.tr("周\(names[day - 1])"))
                     }
                 }
             }
             if draft.repeatKind != .none {
-                CompactDateField(title: "开始", date: $draft.repeatStart)
+                CompactDateField(title: L10n.tr("开始"), date: $draft.repeatStart)
                 HStack {
-                    Toggle("固定时间", isOn: $draft.repeatTimeOn).toggleStyle(.switch).controlSize(.mini)
+                    Toggle(L10n.tr("固定时间"), isOn: $draft.repeatTimeOn).toggleStyle(.switch).controlSize(.mini)
                     if draft.repeatTimeOn {
-                        DatePicker("时间", selection: $draft.repeatTime, displayedComponents: .hourAndMinute).labelsHidden()
+                        DatePicker(L10n.tr("时间"), selection: $draft.repeatTime, displayedComponents: .hourAndMinute).labelsHidden()
                     }
                 }
                 HStack {
-                    Toggle("每次提醒", isOn: $draft.repeatReminderOn).toggleStyle(.switch).controlSize(.mini)
+                    Toggle(L10n.tr("每次提醒"), isOn: $draft.repeatReminderOn).toggleStyle(.switch).controlSize(.mini)
                     if draft.repeatReminderOn {
-                        DatePicker("提醒", selection: $draft.repeatReminderTime, displayedComponents: .hourAndMinute).labelsHidden()
+                        DatePicker(L10n.tr("提醒"), selection: $draft.repeatReminderTime, displayedComponents: .hourAndMinute).labelsHidden()
                     }
                 }
-                Text("按所选日期自动重复，每次可单独编辑或跳过。")
+                Text(L10n.tr("按所选日期自动重复，每次可单独编辑或跳过。"))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
@@ -197,6 +198,7 @@ struct TaskFormView: View {
 }
 
 struct DateModeField: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let title: String
     @Binding var mode: DateMode
     @Binding var date: Date
@@ -219,6 +221,7 @@ struct DateModeField: View {
 
 /// Native text/time entry plus a calendar that remains inside the panel's interaction scope.
 struct CompactDateField: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let title: String
     @Binding var date: Date
     var includesTime = false
@@ -229,13 +232,13 @@ struct CompactDateField: View {
             HStack(spacing: 8) {
                 DatePicker(title, selection: $date, displayedComponents: .date)
                     .labelsHidden().datePickerStyle(.compact).fixedSize()
-                    .accessibilityLabel(title + "日期")
+                    .accessibilityLabel(L10n.tr("\(title)日期"))
                 calendarButton
             }
             if includesTime {
-                DatePicker(title + "时间", selection: $date, displayedComponents: .hourAndMinute)
+                DatePicker(L10n.tr("\(title)时间"), selection: $date, displayedComponents: .hourAndMinute)
                     .labelsHidden().datePickerStyle(.compact).fixedSize()
-                    .accessibilityLabel(title + "时间")
+                    .accessibilityLabel(L10n.tr("\(title)时间"))
             }
         }
     }
@@ -243,17 +246,17 @@ struct CompactDateField: View {
     private var calendarButton: some View {
         Button { calendarOpen.toggle() } label: { Image(systemName: "calendar") }
                 .buttonStyle(QuietIconButtonStyle())
-                .accessibilityLabel("选择" + title + "日期")
+                .accessibilityLabel(L10n.tr("选择\(title)日期"))
                 .popover(isPresented: $calendarOpen, arrowEdge: .trailing) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("选择" + title + "日期").font(.system(size: 13, weight: .semibold))
+                        Text(L10n.tr("选择\(title)日期")).font(.system(size: 13, weight: .semibold))
                         DatePicker(title, selection: $date, displayedComponents: .date)
                             .datePickerStyle(.graphical).labelsHidden()
                         HStack {
-                            Button("今天") { setDay(Date()) }
-                            Button("明天") { setDay(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()) }
+                            Button(L10n.tr("今天")) { setDay(Date()) }
+                            Button(L10n.tr("明天")) { setDay(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()) }
                             Spacer()
-                            Button("完成") { calendarOpen = false }.buttonStyle(.borderedProminent)
+                            Button(L10n.tr("完成")) { calendarOpen = false }.buttonStyle(.borderedProminent)
                         }
                         .controlSize(.small)
                     }

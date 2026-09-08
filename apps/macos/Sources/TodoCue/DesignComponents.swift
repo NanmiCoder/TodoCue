@@ -1,7 +1,9 @@
+import TodoCueKit
 import SwiftUI
 
 /// The open ring is a cue: one small next step, with room left for the day.
 struct CueMark: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @Environment(\.accent) private var accent
     var body: some View {
         ZStack {
@@ -15,6 +17,7 @@ struct CueMark: View {
 }
 
 struct DayProgressView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let completed: Int
     let remaining: Int
     @Environment(\.accent) private var accent
@@ -33,13 +36,13 @@ struct DayProgressView: View {
                 }
             }
             .frame(width: 22, height: 22)
-            Text(remaining > 0 ? "还剩 \(remaining) 件" : (completed > 0 ? "已清空" : "暂无待办"))
+            Text(remaining > 0 ? L10n.tr("还剩 \(remaining) 件") : (completed > 0 ? L10n.tr("已清空") : L10n.tr("暂无待办")))
                 .font(.system(size: 12, weight: .medium)).monospacedDigit()
                 .foregroundStyle(.secondary).contentTransition(.numericText())
         }
         .animation(Theme.interaction, value: progress)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("今日已完成 \(completed) 项，还剩 \(remaining) 项")
+        .accessibilityLabel(L10n.tr("今日已完成 \(completed) 项，还剩 \(remaining) 项"))
     }
 }
 
@@ -49,6 +52,7 @@ struct CueButtonStyle: ButtonStyle {
         ButtonBody(configuration: configuration, prominent: prominent)
     }
     private struct ButtonBody: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
         let configuration: Configuration
         let prominent: Bool
         @Environment(\.accent) private var accent
@@ -90,6 +94,7 @@ extension View {
 }
 
 struct EditorSection<Content: View>: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let title: String
     let icon: String
     let content: Content
@@ -113,6 +118,7 @@ struct EditorSection<Content: View>: View {
 
 /// A stable label/value axis, including while an active field is resized.
 struct EditorFieldRow<Content: View>: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let title: String
     let icon: String
     @ViewBuilder let content: Content

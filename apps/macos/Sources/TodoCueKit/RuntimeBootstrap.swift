@@ -34,7 +34,7 @@ public enum RuntimeBootstrap {
                 let error = json?["error"] as? [String: Any]
                 let message = error?["message"] as? String ?? String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
                 throw NSError(domain: "TodoCue.Runtime", code: Int(process.terminationStatus),
-                              userInfo: [NSLocalizedDescriptionKey: message?.isEmpty == false ? message! : "后台服务启动失败，请重新打开 TodoCue。"])
+                              userInfo: [NSLocalizedDescriptionKey: message?.isEmpty == false ? message! : L10n.tr("后台服务启动失败，请重新打开 TodoCue。")])
             }
         }.value
     }

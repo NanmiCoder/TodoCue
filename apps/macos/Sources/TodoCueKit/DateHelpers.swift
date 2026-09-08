@@ -62,37 +62,31 @@ public enum TCDate {
         localDateString(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
     }
 
-    private static let timeFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "zh_CN"); f.dateFormat = "HH:mm"; return f
-    }()
-    private static let dayFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "zh_CN"); f.dateFormat = "M月d日"; return f
-    }()
-    private static let dayWeekFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "zh_CN"); f.dateFormat = "M月d日 EEE"; return f
-    }()
-    private static let dayTimeFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "zh_CN"); f.dateFormat = "M月d日 HH:mm"; return f
-    }()
+    private static func display(_ date: Date, template: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = L10n.language.locale
+        formatter.setLocalizedDateFormatFromTemplate(template)
+        return formatter.string(from: date)
+    }
 
-    public static func time(_ d: Date) -> String { timeFmt.string(from: d) }
-    public static func day(_ d: Date) -> String { dayFmt.string(from: d) }
-    public static func dayWithWeekday(_ d: Date) -> String { dayWeekFmt.string(from: d) }
+    public static func time(_ d: Date) -> String { display(d, template: "HHmm") }
+    public static func day(_ d: Date) -> String { display(d, template: "MMMd") }
+    public static func dayWithWeekday(_ d: Date) -> String { display(d, template: "MMM d EEE") }
 
     /// Human label for an instant: today → "HH:mm", otherwise "M月d日 HH:mm".
     public static func instantLabel(_ iso: String) -> String {
         guard let d = parse(iso) else { return iso }
         if Calendar.current.isDateInToday(d) { return time(d) }
-        if Calendar.current.isDateInTomorrow(d) { return "明天 " + time(d) }
-        return dayTimeFmt.string(from: d)
+        if Calendar.current.isDateInTomorrow(d) { return L10n.tr("明天 ") + time(d) }
+        return display(d, template: "MMMd HHmm")
     }
 
     /// Human label for a local date string.
     public static func dateLabel(_ s: String) -> String {
         guard let d = parseLocalDate(s) else { return s }
-        if Calendar.current.isDateInToday(d) { return "今天" }
-        if Calendar.current.isDateInTomorrow(d) { return "明天" }
-        if Calendar.current.isDateInYesterday(d) { return "昨天" }
+        if Calendar.current.isDateInToday(d) { return L10n.tr("今天") }
+        if Calendar.current.isDateInTomorrow(d) { return L10n.tr("明天") }
+        if Calendar.current.isDateInYesterday(d) { return L10n.tr("昨天") }
         return dayWithWeekday(d)
     }
 

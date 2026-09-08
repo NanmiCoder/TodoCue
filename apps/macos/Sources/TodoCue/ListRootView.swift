@@ -3,6 +3,7 @@ import TodoCueKit
 
 /// Next card + tabs + lists + quick add + completed today.
 struct ListRootView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @State private var completedExpanded = false
 
@@ -33,7 +34,7 @@ struct ListRootView: View {
                 .scrollIndicators(.automatic)
                 .overlay(alignment: .bottom) {
                     if model.isMovingTask {
-                        ProgressView("正在保存移动…").controlSize(.small).font(.system(size: 11))
+                        ProgressView(L10n.tr("正在保存移动…")).controlSize(.small).font(.system(size: 11))
                             .padding(8).background(Theme.surface, in: RoundedRectangle(cornerRadius: 8)).padding(6)
                     } else if let hint = model.dragHint {
                         Text(hint).font(.system(size: 11)).padding(8)
@@ -46,17 +47,18 @@ struct ListRootView: View {
                 QuickAddView().padding(.horizontal, horizontalInset)
             }
         }
-        .alert("计划晚于截止时间", isPresented: Binding(get: { model.pendingMove != nil }, set: { if !$0 { model.pendingMove = nil } }), presenting: model.pendingMove) { move in
-            Button("保留截止日期并改期") { model.confirmMove(move) }.disabled(!model.canWrite || model.isMovingTask)
-            Button("取消", role: .cancel) { model.pendingMove = nil }
+        .alert(L10n.tr("计划晚于截止时间"), isPresented: Binding(get: { model.pendingMove != nil }, set: { if !$0 { model.pendingMove = nil } }), presenting: model.pendingMove) { move in
+            Button(L10n.tr("保留截止日期并改期")) { model.confirmMove(move) }.disabled(!model.canWrite || model.isMovingTask)
+            Button(L10n.tr("取消"), role: .cancel) { model.pendingMove = nil }
         } message: { move in
-            Text("将「\(move.drag.task.title)」改期到 \(TCDate.dateLabel(move.target.group))，会晚于原截止时间。截止日期和提醒时间将保持原值。")
+            Text(L10n.tr("将「\(move.drag.task.title)」改期到 \(TCDate.dateLabel(move.target.group))，会晚于原截止时间。截止日期和提醒时间将保持原值。"))
         }
     }
 }
 
 /// A single navigation lens with a sliding selection; content never changes the hit targets.
 private struct TabBarView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @Namespace private var selection
@@ -85,11 +87,12 @@ private struct TabBarView: View {
         }
         .padding(3)
         .background(Color.primary.opacity(0.045), in: Capsule())
-        .accessibilityElement(children: .contain).accessibilityLabel("任务视图切换")
+        .accessibilityElement(children: .contain).accessibilityLabel(L10n.tr("任务视图切换"))
     }
 }
 
 struct NextCard: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     let candidate: NextCandidate
@@ -99,7 +102,7 @@ struct NextCard: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 6) {
                 Circle().fill(accent).frame(width: 5, height: 5)
-                Text("下一步").font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
+                Text(L10n.tr("下一步")).font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
                 Spacer(minLength: 4)
                 Text(candidate.group.label).font(.system(size: 10, weight: .medium))
                     .foregroundStyle(candidate.task.isOverdue ? Theme.overdue : .secondary)
@@ -112,18 +115,18 @@ struct NextCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain).accessibilityLabel("打开 \(candidate.task.title)")
+            .buttonStyle(.plain).accessibilityLabel(L10n.tr("打开 \(candidate.task.title)"))
             TaskMetadataView(task: candidate.task, emphasized: true)
             HStack {
-                Button { model.complete(candidate.task) } label: { Label("完成", systemImage: "checkmark") }
+                Button { model.complete(candidate.task) } label: { Label(L10n.tr("完成"), systemImage: "checkmark") }
                     .buttonStyle(CueButtonStyle(prominent: true))
                     .disabled(!model.canWrite || model.completingTaskIDs.contains(candidate.task.id))
-                    .accessibilityLabel("完成 \(candidate.task.title)")
+                    .accessibilityLabel(L10n.tr("完成 \(candidate.task.title)"))
                 Spacer()
                 Button { model.routes.append(.detail(candidate.task.id)) } label: {
                     Image(systemName: "chevron.right").foregroundStyle(accent)
                 }
-                .buttonStyle(QuietIconButtonStyle()).accessibilityLabel("查看下一步详情")
+                .buttonStyle(QuietIconButtonStyle()).accessibilityLabel(L10n.tr("查看下一步详情"))
             }
         }
         .padding(12)
@@ -140,6 +143,7 @@ struct NextCard: View {
 }
 
 struct SectionHeader: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let title: String
     var count: Int? = nil
     var color: Color = .secondary
@@ -157,6 +161,7 @@ struct SectionHeader: View {
 }
 
 struct EmptyStateView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     let text: String
@@ -182,7 +187,7 @@ struct EmptyStateView: View {
             }
             .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             if allowsAdd {
-                Button { model.focusQuickAdd() } label: { Label("记下一件事", systemImage: "plus") }
+                Button { model.focusQuickAdd() } label: { Label(L10n.tr("记下一件事"), systemImage: "plus") }
                     .buttonStyle(CueButtonStyle()).disabled(!model.canWrite)
             }
         }
@@ -192,6 +197,7 @@ struct EmptyStateView: View {
 }
 
 struct TodayListView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
 
     private var sections: [(TodaySection, [TodayItem])] {
@@ -205,9 +211,9 @@ struct TodayListView: View {
         if model.today.date.isEmpty && (model.connectionState == .connecting || model.isLoading) {
             LoadingTasksView()
         } else if model.connectionState == .noRuntime && model.today.date.isEmpty {
-            EmptyStateView(text: "连接后，任务会显示在这里", systemImage: "tray")
+            EmptyStateView(text: L10n.tr("连接后，任务会显示在这里"), systemImage: "tray")
         } else if sections.isEmpty && model.next?.next == nil {
-            EmptyStateView(text: model.today.completed.isEmpty ? "从一件小事开始\n记下来，就不用一直惦记。" : "今天已清空\n完成了 \(model.today.completed.count) 件事，留点时间给自己。", systemImage: model.today.completed.isEmpty ? "plus" : "checkmark", allowsAdd: true)
+            EmptyStateView(text: model.today.completed.isEmpty ? L10n.tr("从一件小事开始\n记下来，就不用一直惦记。") : L10n.tr("今天已清空\n完成了 \(model.today.completed.count) 件事，留点时间给自己。"), systemImage: model.today.completed.isEmpty ? "plus" : "checkmark", allowsAdd: true)
         } else {
             ForEach(sections, id: \.0) { section, items in
                 VStack(spacing: 2) {
@@ -225,6 +231,7 @@ struct TodayListView: View {
 }
 
 struct UpcomingListView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
 
     private var groups: [(String, [TodoTask])] {
@@ -234,7 +241,7 @@ struct UpcomingListView: View {
 
     var body: some View {
         if groups.isEmpty {
-            EmptyStateView(text: "没有即将到来的任务", systemImage: "calendar")
+            EmptyStateView(text: L10n.tr("没有即将到来的任务"), systemImage: "calendar")
         } else {
             ForEach(groups, id: \.0) { date, tasks in
                 VStack(spacing: 2) {
@@ -251,6 +258,7 @@ struct UpcomingListView: View {
 }
 
 struct AllListView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @State private var query = ""
 
@@ -268,23 +276,23 @@ struct AllListView: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("搜索任务、项目或备注", text: $query).textFieldStyle(.plain).accessibilityLabel("搜索任务")
+            TextField(L10n.tr("搜索任务、项目或备注"), text: $query).textFieldStyle(.plain).accessibilityLabel(L10n.tr("搜索任务"))
             if !query.isEmpty {
                 Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                    .buttonStyle(.plain).accessibilityLabel("清除搜索")
+                    .buttonStyle(.plain).accessibilityLabel(L10n.tr("清除搜索"))
             }
         }
         .font(.system(size: 12)).padding(10).background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
         if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Text("清除搜索后可拖动调整顺序").font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 4)
+            Text(L10n.tr("清除搜索后可拖动调整顺序")).font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 4)
         }
         if groups.isEmpty {
-            EmptyStateView(text: query.isEmpty ? "所有事情，都已妥当\n有新想法时，随时记下来。" : "没有找到相关任务\n试试其他关键词。", systemImage: query.isEmpty ? "tray" : "magnifyingglass", allowsAdd: query.isEmpty)
+            EmptyStateView(text: query.isEmpty ? L10n.tr("所有事情，都已妥当\n有新想法时，随时记下来。") : L10n.tr("没有找到相关任务\n试试其他关键词。"), systemImage: query.isEmpty ? "tray" : "magnifyingglass", allowsAdd: query.isEmpty)
         } else {
             ForEach(groups, id: \.0) { project, tasks in
                 VStack(spacing: 2) {
                     let enabled = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    DraggableSectionHeader(title: project.isEmpty ? "未分组" : project, count: tasks.count, view: .all, group: project, firstId: tasks.first?.id, enabled: enabled)
+                    DraggableSectionHeader(title: project.isEmpty ? L10n.tr("未分组") : project, count: tasks.count, view: .all, group: project, firstId: tasks.first?.id, enabled: enabled)
                     ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                         DraggableTaskRow(task: task, view: .all, group: project, nextId: index + 1 < tasks.count ? tasks[index + 1].id : nil, enabled: enabled, showProject: false, compact: true)
                     }
@@ -297,6 +305,7 @@ struct AllListView: View {
 }
 
 struct QuickAddView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
     @FocusState private var focused: Bool
@@ -307,30 +316,30 @@ struct QuickAddView: View {
             HStack(spacing: 8) {
                 Image(systemName: "plus").font(.system(size: 16, weight: .light)).foregroundStyle(accent)
                     .frame(width: 24).accessibilityHidden(true)
-                TextField("添加到今天…", text: $model.quickAddText,
-                          prompt: Text("添加到今天…").foregroundColor(.secondary))
+                TextField(L10n.tr("添加到今天…"), text: $model.quickAddText,
+                          prompt: Text(L10n.tr("添加到今天…")).foregroundColor(.secondary))
                     .textFieldStyle(.plain).font(.system(size: 13))
                     .focused($focused).onSubmit { model.quickAdd() }
                     .disabled(!model.canWrite || model.isQuickAdding)
-                    .accessibilityLabel("快速添加到今天")
+                    .accessibilityLabel(L10n.tr("快速添加到今天"))
                 if model.isQuickAdding { ProgressView().controlSize(.small) }
                 else if hasText {
                     Button { model.quickAdd() } label: { Image(systemName: "arrow.up.circle.fill").font(.system(size: 23)).foregroundStyle(accent) }
-                        .buttonStyle(.plain).accessibilityLabel("添加到今天").help("添加到今天（回车）")
+                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("添加到今天")).help(L10n.tr("添加到今天（回车）"))
                         .disabled(!model.canWrite)
                 } else {
                     Button(action: expand) { Image(systemName: "square.and.pencil") }
                         .buttonStyle(QuietIconButtonStyle()).foregroundStyle(.secondary)
-                        .accessibilityLabel(model.savedDraft == nil ? "展开完整表单" : "继续草稿")
-                        .help(model.savedDraft == nil ? "展开完整表单（⌘N）" : "继续未保存的草稿")
+                        .accessibilityLabel(model.savedDraft == nil ? L10n.tr("展开完整表单") : L10n.tr("继续草稿"))
+                        .help(model.savedDraft == nil ? L10n.tr("展开完整表单（⌘N）") : L10n.tr("继续未保存的草稿"))
                         .disabled(!model.canWrite)
                 }
             }
             if focused || hasText {
                 HStack {
-                    Label("今天", systemImage: "calendar").foregroundStyle(.secondary)
+                    Label(L10n.tr("今天"), systemImage: "calendar").foregroundStyle(.secondary)
                     Spacer()
-                    Button("添加详情", action: expand).buttonStyle(.plain).foregroundStyle(accent)
+                    Button(L10n.tr("添加详情"), action: expand).buttonStyle(.plain).foregroundStyle(accent)
                         .disabled(!model.canWrite || model.isQuickAdding)
                     Text("↵").font(.system(size: 12)).foregroundStyle(.tertiary).accessibilityHidden(true)
                 }
@@ -370,6 +379,7 @@ struct QuickAddView: View {
 }
 
 struct CompletedTodayView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Binding var expanded: Bool
 
@@ -380,7 +390,7 @@ struct CompletedTodayView: View {
                 HStack(spacing: 7) {
                     Image(systemName: "chevron.right").rotationEffect(.degrees(expanded ? 90 : 0))
                         .font(.system(size: 9, weight: .semibold))
-                    Text("今日已完成").font(.system(size: 12, weight: .medium))
+                    Text(L10n.tr("今日已完成")).font(.system(size: 12, weight: .medium))
                     Text("\(model.today.completed.count)").font(.system(size: 12)).monospacedDigit()
                     Spacer()
                 }
@@ -390,7 +400,7 @@ struct CompletedTodayView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(expanded ? "收起今日已完成" : "展开今日已完成")
+            .accessibilityLabel(expanded ? L10n.tr("收起今日已完成") : L10n.tr("展开今日已完成"))
             if expanded {
                 ForEach(model.today.completed) { task in TaskRowView(task: task) }
             }
@@ -399,6 +409,7 @@ struct CompletedTodayView: View {
 }
 
 private struct LoadingTasksView: View {
+    @ObservedObject private var languagePreferences = LanguagePreferences.shared
     var body: some View {
         VStack(spacing: 18) {
             ForEach(0..<3) { _ in
@@ -413,6 +424,6 @@ private struct LoadingTasksView: View {
         }
         .padding(.vertical, 16)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("正在加载任务")
+        .accessibilityLabel(L10n.tr("正在加载任务"))
     }
 }

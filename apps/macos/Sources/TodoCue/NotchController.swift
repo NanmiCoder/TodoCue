@@ -1,3 +1,4 @@
+import TodoCueKit
 import AppKit
 import SwiftUI
 import Combine
@@ -190,7 +191,7 @@ final class NotchController {
         w.becomesKeyOnlyIfNeeded = true
         w.animationBehavior = .none
         w.appearance = NSAppearance(named: .darkAqua)
-        w.setAccessibilityLabel("TodoCue 刘海快览")
+        w.setAccessibilityLabel(L10n.tr("TodoCue 刘海快览"))
         let h = NotchHostingView(rootView: NotchRootView(state: state, model: model))
         // The window frame is derived from the measured card; the hosting view must not size the window.
         h.sizingOptions = []
@@ -501,7 +502,7 @@ final class NotchController {
             RunLoop.main.add(timer, forMode: .common)
             cueTimer = timer
             NSAccessibility.post(element: window, notification: .announcementRequested,
-                                 userInfo: [.announcement: "TodoCue 提醒：\(cue.task.title)", .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+                                 userInfo: [.announcement: L10n.tr("TodoCue 提醒：\(cue.task.title)"), .priority: NSAccessibilityPriorityLevel.medium.rawValue])
             return
         }
     }
@@ -553,7 +554,7 @@ final class NotchController {
             guard state.cue?.id == cue.id else { return }
             state.cueBusy = false
             if success { dismissCue() }
-            else { state.cueError = model.toast?.message ?? "暂时没能保存，请重试"; cueDeadline = Date().addingTimeInterval(12) }
+            else { state.cueError = model.toast?.message ?? L10n.tr("暂时没能保存，请重试"); cueDeadline = Date().addingTimeInterval(12) }
         }
     }
 

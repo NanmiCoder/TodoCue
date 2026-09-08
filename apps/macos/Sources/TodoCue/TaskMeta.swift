@@ -13,7 +13,7 @@ enum TaskMeta {
         var parts: [Item] = []
         if let value = scheduledLabel(t) { parts.append(Item(id: .scheduled, text: value)) }
         if includeDeadline {
-            if let value = dueLabel(t) { parts.append(Item(id: .deadline, text: "截止 " + value)) }
+            if let value = dueLabel(t) { parts.append(Item(id: .deadline, text: L10n.tr("截止 ") + value)) }
         }
         if includeProject, let p = t.project, !p.isEmpty { parts.append(Item(id: .project, text: p)) }
         if let m = t.estimateMinutes, m > 0 { parts.append(Item(id: .estimate, text: estimateLabel(m))) }
@@ -25,8 +25,8 @@ enum TaskMeta {
     }
 
     static func estimateLabel(_ m: Int) -> String {
-        if m >= 60 { return m % 60 == 0 ? "\(m / 60) 小时" : "\(m / 60) 小时 \(m % 60) 分" }
-        return "\(m) 分钟"
+        if m >= 60 { return m % 60 == 0 ? L10n.tr("\(m / 60) 小时") : L10n.tr("\(m / 60) 小时 \(m % 60) 分") }
+        return L10n.tr("\(m) 分钟")
     }
 
     static func dueLabel(_ t: TodoTask) -> String? {

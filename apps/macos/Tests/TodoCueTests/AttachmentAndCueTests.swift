@@ -52,10 +52,10 @@ final class AttachmentAndCueTests: XCTestCase {
         XCTAssertTrue(draft.hasContent)
         draft.title = "资料"
         draft.existingAttachments = Array(repeating: try attachment(), count: 20)
-        XCTAssertEqual(draft.validate(), "每个任务最多 20 个附件")
+        XCTAssertEqual(draft.validate(), L10n.tr("每个任务最多 20 个附件"))
         draft.existingAttachments = []
         draft.pendingAttachments = Array(repeating: PendingAttachment(name: "big", mediaType: "application/octet-stream", data: Data(count: AttachmentLimits.fileBytes)), count: 4)
-        XCTAssertEqual(draft.validate(), "附件总大小不能超过 30 MB")
+        XCTAssertEqual(draft.validate(), L10n.tr("附件总大小不能超过 30 MB"))
     }
 
     func testGalleryUsesTriptychAndFourSquareLayout() {

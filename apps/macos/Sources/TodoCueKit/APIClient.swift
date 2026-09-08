@@ -13,10 +13,10 @@ public enum APIError: Error, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .notConnected: return "未连接到 TodoCue 运行时"
+        case .notConnected: return L10n.tr("未连接到 TodoCue 运行时")
         case .http(_, let code, let message): return "\(message) (\(code))"
         case .transport(let m): return m
-        case .decoding(let m): return "解析响应失败：\(m)"
+        case .decoding(let m): return L10n.tr("解析响应失败：\(m)")
         }
     }
 
@@ -212,7 +212,7 @@ public struct APIClient: Sendable {
         return env.authorization
     }
     public func sendTestNotification() async throws -> TestNotificationEnvelope {
-        try await send("POST", "/v1/notifications/test", json: ["title": JSONValue.string("TodoCue 测试通知"), "body": .string("通知链路正常")])
+        try await send("POST", "/v1/notifications/test", json: ["title": JSONValue.string(L10n.tr("TodoCue 测试通知")), "body": .string(L10n.tr("通知链路正常"))])
     }
 }
 

@@ -5,7 +5,7 @@ enum DateMode: String, CaseIterable, Identifiable, Equatable {
     case none, date, dateTime
     var id: String { rawValue }
     var label: String {
-        switch self { case .none: return "无"; case .date: return "日期"; case .dateTime: return "日期和时间" }
+        switch self { case .none: return L10n.tr("无"); case .date: return L10n.tr("日期"); case .dateTime: return L10n.tr("日期和时间") }
     }
 }
 
@@ -13,7 +13,7 @@ enum RepeatKind: String, CaseIterable, Identifiable, Equatable {
     case none, daily, weekly
     var id: String { rawValue }
     var label: String {
-        switch self { case .none: return "不重复"; case .daily: return "每日"; case .weekly: return "每周" }
+        switch self { case .none: return L10n.tr("不重复"); case .daily: return L10n.tr("每日"); case .weekly: return L10n.tr("每周") }
     }
 }
 
@@ -85,12 +85,12 @@ struct TaskDraft: Equatable {
     }
 
     func validate() -> String? {
-        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请输入标题" }
-        if !estimate.isEmpty, Int(estimate) == nil || Int(estimate)! < 0 { return "预计耗时需要是非负整数分钟" }
-        if repeatKind == .weekly, weekdays.isEmpty { return "每周重复至少选择一天" }
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return L10n.tr("请输入标题") }
+        if !estimate.isEmpty, Int(estimate) == nil || Int(estimate)! < 0 { return L10n.tr("预计耗时需要是非负整数分钟") }
+        if repeatKind == .weekly, weekdays.isEmpty { return L10n.tr("每周重复至少选择一天") }
         let kept = existingAttachments.filter { !removedAttachmentIds.contains($0.id) }
-        if kept.count + pendingAttachments.count > AttachmentLimits.count { return "每个任务最多 20 个附件" }
-        if kept.reduce(0, { $0 + $1.size }) + pendingAttachments.reduce(0, { $0 + $1.data.count }) > AttachmentLimits.totalBytes { return "附件总大小不能超过 30 MB" }
+        if kept.count + pendingAttachments.count > AttachmentLimits.count { return L10n.tr("每个任务最多 20 个附件") }
+        if kept.reduce(0, { $0 + $1.size }) + pendingAttachments.reduce(0, { $0 + $1.data.count }) > AttachmentLimits.totalBytes { return L10n.tr("附件总大小不能超过 30 MB") }
         return nil
     }
 

@@ -1,44 +1,36 @@
-# README art direction · 2026-09-07
+# README art direction · 2026-09-08
 
 ## Product story
 
-- **Audience:** macOS users who want a quiet task companion, including people working with local coding agents.
-- **One-sentence value:** You and your agents manage the same local tasks through a native floating panel, CLI or MCP.
-- **Primary proof:** Computer Use captures of the real SwiftUI / AppKit app: Today, task detail, quick input and the expanded form.
-- **First successful action:** Download the signed DMG, drag TodoCue into Applications, then add one task.
-- **Visual theme:** The app's open-ring cue, forest green, mint and warm glass.
-
-## Visual system
-
-- Palette: warm white `#F6F8F5`, forest green `#086E59`, mint `#7BD9BD`, charcoal `#252D2A`, muted sage `#778780`.
-- Typography: restrained sans-serif in the hero; GitHub's native system typography for searchable, selectable body copy.
-- Shape: the app's rounded glass panel and open circular cue. No extra decorative frames around screenshots.
-- Motif: the open C-shaped ring and its dot, paired with an unfinished / finished checkbox.
-- Composition: quiet product illustration first, full readable native windows immediately after the introduction.
+Agent conversations are the primary entry point: capture an action item, manage it with natural language through Skills, and see it in TodoCue on the Mac. Forms and drag sorting remain available. The default README is English; `README.zh-CN.md` contains the complete Chinese version.
 
 ## Assets and provenance
 
-| Asset | Source | Size / use |
+| Asset | Source | Resolution |
 | --- | --- | --- |
-| `assets/readme/hero.webp` | Built-in `image_gen`; 3D brand illustration, not an app screenshot | 1774 × 887, WebP quality 90, about 107 KB |
-| `assets/readme/today-light.png` | Computer Use `App.getScreenshot()` | 390 × 680, real light-mode Today view |
-| `assets/readme/task-detail-dark.png` | Computer Use `App.getScreenshot()` | 390 × 680, real dark-mode task detail |
-| `assets/readme/quick-add-light.png` | Computer Use `App.getScreenshot()` | 390 × 680, real quick-entry state |
-| `assets/readme/task-form-light.png` | Computer Use `App.getScreenshot()` | 390 × 680, real expanded form |
+| `assets/readme/hero.webp` | Existing generated brand illustration, not a UI screenshot | 1774 × 887 |
+| `assets/readme/en/*.png` | Four fresh English native panel captures | 840 × 1360 |
+| `assets/readme/zh-CN/*.png` | Four fresh Chinese native panel captures | 840 × 1360 |
+| `assets/readme/demo/alpine-lake.png` | Generated fictional hiking moodboard photo | 1536 × 1024 |
+| `assets/readme/demo/forest-trail.png` | Generated fictional hiking moodboard photo | 1536 × 1024 |
 
-The screenshots use an isolated demo runtime and fictional tasks. They preserve the app's actual layout, text, focus indicators and Computer Use pointer. No generated UI replaces screenshot content. Capture builds use the repository's debug executable with per-process appearance overrides; the user's installed app and task database are unchanged.
+Each language includes Today, a dark task detail with two image attachments, quick add with a title, and the expanded form with the same title. Tasks and projects are written in the corresponding language. The app screenshots are real SwiftUI / AppKit panels, never generated UI.
 
-Screenshots are embedded at 390 pixels each and can wrap onto separate lines on narrow pages. Each image links to its original through GitHub's Markdown rendering. The generated art is explicitly described as an illustration in its alt text; essential product claims and installation commands remain in Markdown.
+## Capture procedure
 
-## Final image prompt
+After building the runtime, run on macOS with screen capture permission:
 
-Built-in image generation was used; no CLI fallback.
+```bash
+npm run build
+node scripts/readme-screenshots.mjs "$PWD/assets/readme/demo/alpine-lake.png"
+```
 
-> Use case: stylized-concept. Asset type: wide GitHub README hero for TodoCue, a native macOS local-first todo app for people and coding agents. Create an exceptionally refined editorial 3D product-brand hero, landscape 3:1 composition, 1800 by 600 or similar. Warm porcelain off-white #F6F8F5 background, forest green #086E59 lettering and accents, soft mint #7BD9BD translucent glass, a trace of warm champagne reflected light. Left 43%: large beautifully typeset exact title 'TodoCue' in a calm modern sans-serif, dark forest green. Under the title, smaller exact text 'A little cue. A clearer day.' One small uppercase eyebrow above title: 'NATIVE macOS · LOCAL FIRST'. Right 57%: a sculptural physical reinterpretation of TodoCue's real logo, an open thick C-shaped rounded ring with opening facing right, and one small separate round dot inside the opening to the right of center. The C and dot are forest-green translucent cast glass standing over a pale mint frosted rounded-square base. Behind and gently overlapping it are TWO slim floating rounded glass task slips, each with a single delicate circular checkbox and short embossed horizontal strokes, one checkbox ticked and one still open: these should read as sculptural representations of to-dos, not fake screenshots. The geometry of the open C cue and the transition from unchecked to checked are the key brand-specific motifs. A compact milky glass capsule with a subtle terminal >_ symbol near the base suggests agent/CLI access to the same task list; subordinate to the main logo. Precision industrial design, soft studio daylight from upper left, tactile glass refraction, thin bright edges, realistic gentle contact shadows, sophisticated depth with restrained perspective, all objects clearly separated. Composition must feel tranquil, focused, and distinctive. Plenty of whitespace and legible typography, no dense UI, no laptop or phone device frame, no generic AI brain, no chrome robot, no purple/blue neon, no gradients used as decoration, no busy background, no extra words or watermark. This is a conceptual brand illustration; actual unaltered app screenshots will be displayed immediately below it in the README.
+The script creates fresh temporary databases for both languages, seeds fictional but realistic tasks and attachments using TaskEngine, and starts random-port runtimes with MemoryNotifier. It then invokes the opt-in `ReadmeScreenshotTests` harness. This harness is skipped in ordinary tests and CI.
 
-## Validation
+ScreenCaptureKit includes only the native panel and its own neutral backdrop, cropped to the panel at 2× resolution. `showsCursor` is false; all other windows are excluded, including computer-use pointer overlays. The capture keeps the app's real layout and typography, without painting over screenshot pixels. Focus is cleared before capture so no insertion caret appears.
 
-- README rendered through GitHub's Markdown API and previewed with GitHub's own stylesheets.
-- Wide and narrow viewport checks, light and dark page backgrounds.
-- All five local image references pass the skill's README audit.
-- Source version contract remains `v0.1.0`; license metadata is MIT across workspace manifests and lockfile entries.
+The user's installed app, runtime, notification settings, and task database are not used. Language and window preferences are isolated too. Demo task titles, notes, and images are not copied from personal data.
+
+## README presentation
+
+The original PNGs are embedded at 390 pixels wide. Each README uses only its matching language folder. Alt text describes the visible content; the prose explains that these are demo tasks and generated photo attachments. The hero remains a conceptual brand illustration.

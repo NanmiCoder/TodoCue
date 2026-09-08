@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 import TodoCueKit
 
 /// Borderless floating panel that accepts keyboard input.
@@ -15,6 +16,7 @@ final class SidePanelController: NSObject, NSWindowDelegate {
     private let defaults: UserDefaults
     private var presentationRevision = 0
     private var observers: [NSObjectProtocol] = []
+    private var languageSubscription: AnyCancellable?
     var onShow: (() -> Void)?
 
     var isVisible: Bool { window.isVisible }
@@ -42,7 +44,7 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         else { window.hasShadow = true }
         window.isReleasedWhenClosed = false
         window.animationBehavior = .utilityWindow
-        window.setAccessibilityLabel("TodoCue 任务面板")
+        window.setAccessibilityLabel(L10n.tr("TodoCue 任务面板"))
 
         let root = PanelRootView().environmentObject(model)
         let hosting = NSHostingView(rootView: root)
@@ -55,6 +57,12 @@ final class SidePanelController: NSObject, NSWindowDelegate {
             self?.resize(to: width, persist: finished)
         }
         window.contentView = background
+        languageSubscription = LanguagePreferences.shared.$language.sink { [weak self, weak background] _ in
+            DispatchQueue.main.async {
+                self?.window.setAccessibilityLabel(L10n.tr("TodoCue 任务面板"))
+                background?.resizeHandle.updateLanguage()
+            }
+        }
 
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.repositionIfVisible() }
