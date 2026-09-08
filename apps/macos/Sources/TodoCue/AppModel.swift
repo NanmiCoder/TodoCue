@@ -33,6 +33,7 @@ enum Route: Equatable {
     case detail(String)
     case form(TaskDraft)
     case settings
+    case calendar
 }
 
 struct Toast: Equatable {
@@ -69,6 +70,20 @@ final class AppModel: ObservableObject {
     @Published var toast: Toast?
     @Published var tab: PanelTab = .today
     @Published var routes: [Route] = []
+    @Published private(set) var calendarSpan: CalendarSpan = .month
+    @Published private(set) var calendarAnchor = TCDate.todayString()
+    @Published private(set) var calendarSelected = TCDate.todayString()
+    /// nil = follow the height ladder; a value is an explicit user choice that overrides it.
+    @Published var calendarGridExpanded: Bool?
+    @Published private(set) var calendarBuckets: [String: CalendarDayBucket] = [:]
+    /// Completed/cancelled/skipped tasks for the visible range — the board snapshot is todo-only.
+    /// True when the last history fetch failed, so an empty day can say so instead of lying.
+    @Published private(set) var calendarHistoryFailed = false
+    private var historyTasks: [String: TodoTask] = [:]
+    private var loadedHistory: (from: String, to: String)?
+    private var historyRequest: Task<Void, Never>?
+    /// Todo ids as of the last board. Only an id *leaving* this set can invalidate fetched history.
+    private var calendarTodoIDs: Set<String> = []
     @Published var pinned = false
     @Published var quickAddFocusRequest = 0
     @Published var quickAddText = ""
@@ -235,6 +250,10 @@ final class AppModel: ObservableObject {
                 onReminderCue?(cue)
             }
         case .dayChanged, .runtimeStarted:
+            loadedHistory = nil
+            // Only a date rollover moves the reader. `.runtimeStarted` also fires on a connection
+            // rewrite or a runtime restart, and yanking someone out of March 2027 for that is rude.
+            if ev.type == .dayChanged, isShowingCalendar, calendarShowsToday { calendarGoToToday() }
             Task { await refreshAll() }
         case .taskCreated, .taskUpdated, .seriesCreated, .seriesUpdated, .reminderUpdated:
             scheduleLiveRefresh()
@@ -294,6 +313,17 @@ final class AppModel: ObservableObject {
             allTasks = board.all
             upcoming = board.upcoming
             ordering = board.ordering
+        }
+        // `refreshLive` reaches here on every SSE burst but only replaces todo snapshots, so the
+        // calendar's fetched history would otherwise stay stale until the route is reopened.
+        // Invalidate on content, never on arrival: an unconditional reset would refetch a
+        // four-month window on every event and cancel the previous request each time, so a steady
+        // stream of events — a bulk agent write, or series top-up — would starve it entirely.
+        if isShowingCalendar {
+            let todoIDs = Set(allTasks.map(\.id))
+            if !calendarTodoIDs.subtracting(todoIDs).isEmpty { loadedHistory = nil }
+            calendarTodoIDs = todoIDs
+            refreshCalendar()
         }
     }
 
@@ -511,6 +541,7 @@ final class AppModel: ObservableObject {
             if let i = upcoming.firstIndex(where: { $0.id == t.id }) { upcoming[i] = t }
             if t.status != .done { today.completed.removeAll { $0.id == t.id } }
             today.remaining = today.items.filter { $0.task.status == .todo }.count
+            mergeCalendarHistory(t)
         }
     }
 
@@ -706,6 +737,136 @@ final class AppModel: ObservableObject {
         if routes.last != .settings { routes.append(.settings) }
         onOpenPanel?(true)
         Task { await loadDoctor() }
+    }
+
+    // MARK: - Calendar
+
+    /// Anywhere in the stack, not just on top: tapping an agenda row pushes `.detail` over the
+    /// calendar, and the calendar behind it must still take live updates or it goes stale — and
+    /// then submits a stale `expectedVersion` when the user acts on it after popping back.
+    var isShowingCalendar: Bool { routes.contains(.calendar) }
+
+    /// Opens the calendar on today. Unlike the form, it has no text field, so it must not steal
+    /// keyboard focus — `NavigationTests` pins that only explicit editing does.
+    func showCalendar() {
+        preserveDraft()
+        let today = TCDate.todayString()
+        calendarSpan = .month
+        calendarAnchor = today
+        calendarSelected = today
+        calendarGridExpanded = nil
+        // Reopening returns to the calendar already on the stack instead of pushing a second one.
+        if let index = routes.firstIndex(of: .calendar) { routes.removeSubrange(routes.index(after: index)...) }
+        else { routes.append(.calendar) }
+        onOpenPanel?(false)
+        refreshCalendar()
+        // `refreshLive` never refetches series, so a repeat created since the last full refresh
+        // would be missing from the projection until then.
+        Task { await refreshSeries() }
+    }
+
+    func setCalendar(span: CalendarSpan? = nil, anchor: String? = nil, selected: String? = nil) {
+        var rangeChanged = false
+        if let span, span != calendarSpan { calendarSpan = span; calendarGridExpanded = nil; rangeChanged = true }
+        if let anchor, anchor != calendarAnchor { calendarAnchor = anchor; rangeChanged = true }
+        if let selected { calendarSelected = selected }
+        // Picking a day inside the visible span changes the selection, not the data — rebuilding
+        // 42 buckets (and re-deriving every `planDate`) on each cell tap would be pure waste.
+        if rangeChanged { refreshCalendar() }
+    }
+
+    func stepCalendar(_ steps: Int) {
+        let anchor = CalendarRange.shift(span: calendarSpan, anchor: calendarAnchor, by: steps)
+        // A month step keeps the day of month — `shift` already clamped it — so paging forward and
+        // back returns you where you were. A week step keeps the weekday, which is the same idea.
+        let selected: String
+        if calendarSpan == .month {
+            selected = anchor
+        } else {
+            let days = CalendarRange.days(span: .week, anchor: anchor, firstWeekday: calendarFirstWeekday)
+            selected = days.first { CivilDate.isoWeekday($0) == CivilDate.isoWeekday(calendarSelected) } ?? anchor
+        }
+        setCalendar(anchor: anchor, selected: selected)
+    }
+
+    func calendarGoToToday() {
+        let today = TCDate.todayString()
+        setCalendar(anchor: today, selected: today)
+    }
+
+    var calendarFirstWeekday: Int { CalendarRange.firstWeekday(L10n.language) }
+
+    /// Distinguishes "this day is empty" from "the completed history could not be loaded".
+    var calendarHistoryUnavailable: Bool { calendarHistoryFailed || client == nil }
+
+    var calendarShowsToday: Bool {
+        CalendarRange.contains(span: calendarSpan, anchor: calendarAnchor,
+                               date: TCDate.todayString(), firstWeekday: calendarFirstWeekday)
+    }
+
+    func calendarBucket(_ date: String) -> CalendarDayBucket { calendarBuckets[date] ?? .init() }
+
+    /// Rebuilds the buckets and, when the visible range moved outside what has been fetched,
+    /// reloads the completed history behind it.
+    private func refreshCalendar() {
+        let bounds = CalendarRange.bounds(span: calendarSpan, anchor: calendarAnchor, firstWeekday: calendarFirstWeekday)
+        rebuildCalendarBuckets(from: bounds.from, to: bounds.to)
+        let covered = loadedHistory.map { $0.from <= bounds.from && $0.to >= bounds.to } ?? false
+        if !covered { loadCalendarHistory(from: bounds.from, to: bounds.to) }
+    }
+
+    /// `CalendarBuckets.build` walks every task and allocates date formatters through
+    /// `TodoTask.planDate`; it must never run from a view body.
+    private func rebuildCalendarBuckets(from: String, to: String) {
+        // `Dictionary.values` has no defined order and rehashes on mutation, which would let one
+        // completion visibly reshuffle an unrelated day's completed list.
+        let history = historyTasks.values.sorted { ($0.completedAt ?? $0.updatedAt, $0.id) > ($1.completedAt ?? $1.updatedAt, $1.id) }
+        calendarBuckets = CalendarBuckets.build(todo: allTasks, history: history,
+                                                series: Array(seriesById.values), from: from, to: to)
+    }
+
+    /// Fetches a month of padding on each side so ordinary paging does not hit the network.
+    private func loadCalendarHistory(from: String, to: String) {
+        guard let client else { return }
+        let paddedFrom = CivilDate.addingMonths(-1, to: from)
+        let paddedTo = CivilDate.addingMonths(1, to: to)
+        historyRequest?.cancel()
+        historyRequest = Task { [weak self] in
+            do {
+                let tasks = try await client.tasks(status: [.done, .cancelled, .skipped],
+                                                   from: paddedFrom, to: paddedTo,
+                                                   includeUnscheduled: false, limit: 1000)
+                guard !Task.isCancelled, let self else { return }
+                // Replace the window rather than merge into it: tasks that left `done` disappear,
+                // and paging across a year cannot accumulate every completed task in the session.
+                self.historyTasks = Dictionary(tasks.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                self.loadedHistory = (paddedFrom, paddedTo)
+                self.calendarTodoIDs = Set(self.allTasks.map(\.id))
+                self.calendarHistoryFailed = false
+                self.rebuildCalendarBuckets(from: from, to: to)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                self.calendarHistoryFailed = true
+            }
+        }
+    }
+
+    private func refreshSeries() async {
+        guard let client, let series = try? await client.series() else { return }
+        seriesById = Dictionary(uniqueKeysWithValues: series.map { ($0.id, $0) })
+        if isShowingCalendar { refreshCalendar() }
+    }
+
+    /// Keeps the history buckets in step with an optimistic local mutation, so completing a task
+    /// from the calendar greys its dot instead of making the task disappear.
+    private func mergeCalendarHistory(_ task: TodoTask) {
+        if task.status == .todo { historyTasks.removeValue(forKey: task.id) }
+        else { historyTasks[task.id] = task }
+        guard isShowingCalendar else { return }
+        let bounds = CalendarRange.bounds(span: calendarSpan, anchor: calendarAnchor, firstWeekday: calendarFirstWeekday)
+        rebuildCalendarBuckets(from: bounds.from, to: bounds.to)
     }
 
     func preserveDraft() {

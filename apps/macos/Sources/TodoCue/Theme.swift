@@ -93,20 +93,24 @@ extension View {
 }
 
 /// Consistent pointer target and feedback for the panel's utility buttons.
+/// `width` narrows the target where several of these share one line, as in the calendar navigator.
 struct QuietIconButtonStyle: ButtonStyle {
+    var width: CGFloat = 30
+
     func makeBody(configuration: Configuration) -> some View {
-        IconBody(configuration: configuration)
+        IconBody(configuration: configuration, width: width)
     }
 
     private struct IconBody: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
         let configuration: ButtonStyle.Configuration
+        let width: CGFloat
         @Environment(\.isEnabled) private var enabled
         @State private var hovering = false
         var body: some View {
             configuration.label
                 .font(.system(size: 13, weight: .medium))
-                .frame(width: 30, height: 30)
+                .frame(width: width, height: 30)
                 .contentShape(Circle())
                 .background(Color.primary.opacity(configuration.isPressed ? 0.10 : (hovering ? 0.06 : 0)),
                             in: Circle())

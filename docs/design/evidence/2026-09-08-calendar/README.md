@@ -1,0 +1,33 @@
+# 日历视图渲染证据（2026-09-08）
+
+由 `node scripts/calendar-screenshots.mjs <输出目录>` 生成。脚本在临时 `TODOCUE_HOME` 里起一个
+一次性 runtime 并写入示例任务，用户真实的 `~/.todocue` 不被读取或修改。
+
+渲染走 `ImageRenderer` 离屏输出（`CalendarSnapshotTests`），不开窗口、不抢焦点、不占用指针。
+代价是 `ImageRenderer` 会把 `ScrollView` 布局成零高度、也画不出 `Menu` 与 `TextField` 的
+placeholder（整页图里日程区是空的、头部菜单和快速输入框是黄色占位块）。因此日程区与周视图
+另外以 `-agenda-*` / `-week-bare*` 脱离滚动容器单独渲染。
+
+测试内置两道自检：每个 `month-*` 场景断言 `calendarSpan == .month`，并且所有输出两两不得字节相同。
+这两道是补上的——第一版证据里 `showCalendar()` 没有重置跨度，导致所有月视图截图其实渲染的是周视图。
+
+示例数据：今天一件、两天前一件逾期、六天前一件已完成、明天计划且 5 天后截止一件、
+62 天后一件（远超 30 天预生成范围）、每日重复一条、每周一三五重复一条。
+
+| 文件 | 验证点 |
+|---|---|
+| `*-today-tabs` | 「今日/即将到来/全部」三段控件——它和日历跨度切换现在共用 `SegmentedCapsule`，这张图守住既有外观 |
+| `*-month-today` / `-dark` | 340×680 月视图，明暗两套：今天实心圆底、逾期日号染红、已完成空心圈、日程区独立卡面 |
+| `*-month-narrow` | 300pt 最窄宽度：跨度切换与「Sep 2026」均不截断，网格不横向溢出 |
+| `*-month-collapsed-short` | 300×360 最矮面板自动收起为单周条 |
+| `*-month-ghosts` | 两个月后：重复任务全部为空心「待生成」圈，真实的一次性任务仍是实心 |
+| `*-month-past` | 选中过去的日期 |
+| `*-agenda-today` / `-dark` | 日程区任务行 |
+| `*-agenda-ghost` | 「待生成」只读行（分区标题已说明状态，行内不再重复挂 chip） |
+| `*-agenda-past` | 历史拉取生效；当天只有历史时自动展开且不画多余分隔线 |
+| `*-agenda-deadline` | 计划日与截止日不同的任务，在截止日以「截止」分区出现 |
+| `*-agenda-empty` | 空日占位是一行文字，不是整页空状态插图（日程区最矮只有 120pt） |
+| `*-week-bare` / `-dark` | 周视图 7 个日区块 |
+
+未覆盖，需真机手测：拖拽改变面板宽高时的实时重排、SSE 实时变化、离线降级、⌘⇧K 与 Esc 导航、
+VoiceOver 实际朗读、以及 `ImageRenderer` 画不出的滚动行为。

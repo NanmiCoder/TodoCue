@@ -30,6 +30,7 @@ struct PanelRootView: View {
         case .detail(let id): TaskDetailView(taskId: id).transition(.opacity)
         case .form(let draft): TaskFormView(draft: draft).transition(.opacity)
         case .settings: SettingsView().transition(.opacity)
+        case .calendar: CalendarView().transition(.opacity)
         case nil: ListRootView().transition(.opacity)
         }
     }
@@ -54,6 +55,13 @@ struct HeaderView: View {
                 Text("TodoCue").font(.system(size: 12, weight: .semibold)).tracking(0.3).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 if model.isLoading { ProgressView().controlSize(.mini).padding(.trailing, 4) }
+                if model.routes.isEmpty {
+                    // ⌘⇧K lives in AppDelegate's key monitor with the other panel shortcuts, so it
+                    // still works from a sub-route where this button is not mounted.
+                    Button(action: model.showCalendar) { Image(systemName: "calendar") }
+                        .buttonStyle(QuietIconButtonStyle()).foregroundStyle(.secondary)
+                        .help(L10n.tr("打开日历（⌘⇧K）")).accessibilityLabel(L10n.tr("打开日历"))
+                }
                 Button { model.pinned.toggle() } label: {
                     Image(systemName: model.pinned ? "pin.fill" : "pin")
                         .foregroundStyle(model.pinned ? accent : .secondary)
@@ -107,6 +115,7 @@ struct HeaderView: View {
         case .detail: return L10n.tr("这件事")
         case .form(let draft): return draft.isEditing ? L10n.tr("编辑任务") : L10n.tr("记下一件事")
         case .settings: return L10n.tr("偏好设置")
+        case .calendar: return L10n.tr("日历")
         case nil:
             switch model.tab { case .today: return L10n.tr("今天"); case .upcoming: return L10n.tr("接下来"); case .all: return L10n.tr("所有任务") }
         }
