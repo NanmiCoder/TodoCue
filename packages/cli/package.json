@@ -1,6 +1,6 @@
 {
   "name": "@todocue/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "bin": {
@@ -10,9 +10,9 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
-    "@todocue/engine": "0.1.2",
-    "@todocue/server": "0.1.2",
-    "@todocue/shared": "0.1.2",
+    "@todocue/engine": "0.1.3",
+    "@todocue/server": "0.1.3",
+    "@todocue/shared": "0.1.3",
     "commander": "^14.0.0",
     "zod": "^4.1.0"
   },
