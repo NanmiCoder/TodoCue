@@ -11,9 +11,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyMonitor: Any?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        installEditMenu()
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURLEvent(_:reply:)),
                                                      forEventClass: AEEventClass(kInternetEventClass),
                                                      andEventID: AEEventID(kAEGetURL))
+    }
+
+    /// An accessory app shows no menu bar, but AppKit still dispatches the standard editing
+    /// shortcuts through main-menu key equivalents: with no main menu the field editor never
+    /// receives `copy:`/`paste:`, so ⌘C/⌘V/⌘X/⌘A just beep. Undo stays out on purpose —
+    /// ⌘Z belongs to the toast's "undo completion" shortcut.
+    private func installEditMenu() {
+        let mainMenu = NSMenu()
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: L10n.tr("编辑"))
+        edit.addItem(withTitle: L10n.tr("剪切"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: L10n.tr("拷贝"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: L10n.tr("粘贴"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(NSMenuItem.separator())
+        edit.addItem(withTitle: L10n.tr("全选"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit
+        mainMenu.addItem(editItem)
+        NSApp.mainMenu = mainMenu
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
