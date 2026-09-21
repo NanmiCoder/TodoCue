@@ -74,8 +74,14 @@ CLI, MCP and the macOS client are all thin clients of this API.
 | GET | `/v1/events` | SSE, optional `Last-Event-ID` | stream of RuntimeEvent |
 | GET | `/v1/export` | – | ExportBundle |
 | GET | `/v1/doctor` | – | DoctorReport |
-| POST | `/v1/notifications/request-authorization` | – | `{ authorization }` |
+| POST | `/v1/notifications/request-authorization` | – | `{ authorization, available, detail, needsSystemSettings }` |
+| POST | `/v1/notifications/open-settings` | – | `{ ok, url }` |
 | POST | `/v1/notifications/test` | `{ title?, body? }` | `{ ok, channel }` |
+
+`request-authorization` 只在 macOS 尚未记录过决定时才会真正弹出系统授权窗。一旦用户做过选择（无论允许或
+拒绝），`needsSystemSettings` 为 `true`，表示系统不会再询问，必须由用户到「系统设置 › 通知」里手动开启；
+此时调用 `open-settings` 可直接打开该面板并定位到 TodoCueNotifier。`open-settings` 的 `ok` 为 `false`
+表示打开失败（例如运行环境没有 GUI 会话），调用方应退回到显示手动操作路径的文案。
 
 ### CreateTaskInput
 

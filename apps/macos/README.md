@@ -47,9 +47,23 @@ Every command prints exactly one JSON line on stdout.
 | Command | Output |
 |---|---|
 | `status` | `{"ok":true,"authorization":"authorized\|provisional\|denied\|notDetermined","alertStyle":"none\|banner\|alert"}` |
-| `request` | requests alert+sound+badge, then prints the same shape as `status` (plus `error` if the request failed) |
+| `request` | state-aware, always **exit 0**. Emits the `status` shape plus `needsSystemSettings` (see below) |
+| `open-settings` | opens System Settings › Notifications with TodoCueNotifier revealed: `{"ok":true,"url":"x-apple.systempreferences:…"}` |
 | `deliver --id <id> --title <t> [--body b] [--subtitle s] [--task-id tid] [--thread th] [--sound]` | `{"ok":true,"channel":"helper","authorization":"…"}` (exit 0) or `{"ok":false,"error":"…"}` (exit 1; `notifications denied` when authorization is denied) |
 | *(no args)* | launched by macOS for a notification click/action; handles it and exits (5 s idle timeout) |
+
+**`request` only prompts once.** macOS never shows the notification permission prompt twice for the same
+bundle identifier, so the command branches on the current status instead of calling the API blindly:
+
+| Current status | Behaviour |
+|---|---|
+| `notDetermined` | calls `requestAuthorization` — the only state where a prompt actually appears |
+| `denied` | returns immediately without calling anything: `{"ok":false,"authorization":"denied","needsSystemSettings":true}`. The user has to enable the app by hand, so callers should follow up with `open-settings` |
+| anything else | returns the current status unchanged |
+
+It exits **0 in every case**, including `denied` — deliberately unlike `deliver`. The runtime's helper
+bridge turns a non-zero exit into an exception carrying only the `error` field, which would discard
+`needsSystemSettings` along with the real authorization status.
 
 Delivered notifications use the stable identifier passed with `--id` (re-delivery replaces the old one),
 category `TODOCUE_REMINDER` with actions `COMPLETE` (完成) and `SNOOZE` (10 分钟后提醒), and
@@ -106,6 +120,10 @@ bottom; date/repeat options unfold only when needed. See [design rationale and v
   to stay at a stable path (copy it to `/Applications` or `~/Applications`).
 - Notification authorization is per bundle: the helper's bundle identifier `com.todocue.notifier` is what
   appears in System Settings › Notifications.
+- macOS prompts for notification permission **once per bundle, ever**. After a denial the prompt cannot be
+  brought back — no API exists to reset it and `tccutil` does not cover notifications (they are not
+  TCC-managed). The only recovery is enabling the app by hand in System Settings › Notifications, which is
+  what `open-settings` and the app's 打开系统设置 button are for.
 - `SMAppService.mainApp` status is only meaningful once the app has been launched from its final location.
 - Notch geometry comes from `auxiliaryTopLeftArea` / `auxiliaryTopRightArea`; if those are unavailable a
   180 pt centered notch is assumed.

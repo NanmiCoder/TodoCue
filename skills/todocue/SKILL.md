@@ -71,7 +71,7 @@ Success is JSON on stdout. Business errors are JSON on stderr with a nonzero exi
 - `IDEMPOTENCY_MISMATCH`: the key was used with a different payload; reconcile the previous request rather than bypassing it with a new key.
 - `UNAVAILABLE`: diagnose the runtime as above. Repeated failure or an unresolved write outcome should be reported, not retried indefinitely.
 
-Report the actual returned task, including the relevant local date/time and ID. A saved reminder is not proof that a system notification was delivered. When notification delivery matters, inspect `doctor` and `reminders`; `submitted` means submitted to the notification system.
+Report the actual returned task, including the relevant local date/time and ID. A saved reminder is not proof that a system notification was delivered. When notification delivery matters, inspect `doctor` and `reminders`; `submitted` means submitted to the notification system. If the notification authorization shows `denied`, macOS has already recorded a decision and will never show the prompt again: ask the user to enable TodoCueNotifier in System Settings › Notifications (`todocue doctor --open-notification-settings` opens that pane) instead of retrying the request.
 
 ## Recurring tasks
 

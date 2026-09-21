@@ -766,7 +766,23 @@ final class AppModel: ObservableObject {
         do {
             let a = try await client.requestNotificationAuthorization()
             await loadDoctor()
-            return a
+            switch a {
+            case "authorized", "provisional": return L10n.tr("已授权")
+            // macOS only ever shows the prompt once per app, so a denial here means no
+            // window appeared at all — say so instead of echoing the raw status back.
+            case "denied": return L10n.tr("macOS 每个 App 只询问一次，请在系统设置 › 通知中手动开启")
+            default: return L10n.tr("授权：") + a
+            }
+        } catch { return error.localizedDescription }
+    }
+
+    func openNotificationSettings() async -> String {
+        guard let client else { return L10n.tr("未连接") }
+        do {
+            let ok = try await client.openNotificationSettings()
+            return ok
+                ? L10n.tr("已打开系统设置 › 通知，请开启 TodoCueNotifier")
+                : L10n.tr("无法自动打开系统设置，请手动前往：系统设置 › 通知 › TodoCueNotifier")
         } catch { return error.localizedDescription }
     }
 

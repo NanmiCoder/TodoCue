@@ -194,7 +194,16 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
         const client = TodoCueClient.fromHome(paths.home)!;
         try {
           const auth = await client.requestNotificationAuthorization();
-          steps.push({ step: "notifications", ok: auth.authorization === "authorized" || auth.authorization === "provisional", detail: `authorization: ${auth.authorization}${auth.detail ? ` (${auth.detail})` : ""}` });
+          const authorized = auth.authorization === "authorized" || auth.authorization === "provisional";
+          steps.push({
+            step: "notifications",
+            ok: authorized,
+            detail: authorized
+              ? `authorization: ${auth.authorization}${auth.detail ? ` (${auth.detail})` : ""}`
+              : auth.needsSystemSettings
+                ? "macOS already recorded a decision for TodoCueNotifier and will not prompt again; enable it in System Settings › Notifications"
+                : `authorization: ${auth.authorization}${auth.detail ? ` (${auth.detail})` : ""}`,
+          });
         } catch (e) {
           steps.push({ step: "notifications", ok: false, detail: (e as Error).message });
         }
@@ -208,7 +217,8 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
   program
     .command("doctor")
     .description("diagnose installation, runtime, notifications and reminders")
-    .option("--request-notifications", "trigger the system notification permission prompt")
+    .option("--request-notifications", "trigger the system notification permission prompt (macOS only ever prompts once per app)")
+    .option("--open-notification-settings", "open System Settings › Notifications so the helper can be enabled by hand")
     .action(async (opts) => {
       const home = resolveHome(ctx.home());
       const paths = runtimePaths(home);
@@ -223,11 +233,29 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
       add("notifierHelper", !!helper, helper ?? "TodoCueNotifier not found; reminders fall back to osascript (no click-through). Run `npm run macos:build && todocue install`");
       const alive = await isRuntimeAlive(paths);
       add("runtime", !!alive, alive ? `reachable at ${alive.baseUrl} (pid ${alive.pid})` : "not reachable; run `todocue service start` or `todocue serve`", alive ? "ok" : "error");
+      // Handled before the runtime branch: opening System Settings needs only the helper,
+      // so it still works when the runtime is down.
+      if (opts.openNotificationSettings) {
+        const r = await notifier.openSystemSettings();
+        add(
+          "notificationSettings",
+          r.ok,
+          r.ok ? `opened ${r.url}` : "could not open System Settings; open it manually: System Settings › Notifications › TodoCueNotifier",
+          r.ok ? "ok" : "warn",
+        );
+      }
       let report: unknown = null;
       if (alive) {
         const client = TodoCueClient.fromHome(home)!;
         if (opts.requestNotifications) {
           const auth = await client.requestNotificationAuthorization();
+          if (auth.needsSystemSettings) {
+            add(
+              "notificationSettings",
+              false,
+              "macOS will not prompt again — enable TodoCueNotifier in System Settings › Notifications, or run `todocue doctor --open-notification-settings`",
+            );
+          }
           add("notificationRequest", auth.authorization === "authorized" || auth.authorization === "provisional", `authorization now: ${auth.authorization}`);
         }
         const r = await client.doctor();

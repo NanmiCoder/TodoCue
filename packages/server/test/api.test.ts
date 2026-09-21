@@ -83,6 +83,35 @@ describe("local api", () => {
     expect(doctor.checks.find((c) => c.name === "notifier")!.ok).toBe(true);
   });
 
+  it("reports notification authorization and can open System Settings", async () => {
+    const auth = await client.requestNotificationAuthorization();
+    expect(auth.authorization).toBe("authorized");
+    expect(auth.needsSystemSettings).toBe(false);
+
+    // Once macOS has recorded a decision it never prompts again. The route has to say so
+    // rather than report a bare "denied" that looks like a successful request.
+    notifier.authorization = "denied";
+    notifier.needsSystemSettings = true;
+    try {
+      const denied = await client.requestNotificationAuthorization();
+      expect(denied.authorization).toBe("denied");
+      expect(denied.needsSystemSettings).toBe(true);
+
+      await expect(client.openNotificationSettings()).resolves.toEqual({ ok: true, url: null });
+      expect(notifier.settingsOpened).toBe(1);
+    } finally {
+      notifier.authorization = "authorized";
+      notifier.needsSystemSettings = false;
+    }
+  });
+
+  it("submits a test notification through the runtime", async () => {
+    const res = await client.testNotification({ title: "测试", body: "正文" });
+    expect(res.ok).toBe(true);
+    expect(res.channel).toBe("memory");
+    expect(notifier.delivered.at(-1)).toMatchObject({ title: "测试", body: "正文", thread: "todocue.test" });
+  });
+
   it("series endpoints", async () => {
     const created = await client.createSeries({ title: "站会", rule: { kind: "weekly", weekdays: [1, 2, 3, 4, 5] }, scheduledTime: "09:30" });
     expect(created.tasks.length).toBeGreaterThan(20);

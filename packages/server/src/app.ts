@@ -255,7 +255,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         level: n.authorization === "authorized" || n.authorization === "provisional" ? "ok" : n.authorization === "denied" ? "error" : "warn",
         detail:
           n.authorization === "denied"
-            ? "notifications denied in System Settings > Notifications > TodoCueNotifier; tasks still work, reminders will not show"
+            ? "notifications denied; macOS only prompts once per app, so enable TodoCueNotifier in System Settings > Notifications (or run `todocue doctor --open-notification-settings`). Tasks still work, reminders will not show"
             : n.authorization === "notDetermined"
               ? "not requested yet; run `todocue doctor --request-notifications`"
               : `authorization: ${n.authorization}`,
@@ -287,7 +287,16 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.post(`${API_PREFIX}/notifications/request-authorization`, async () => {
     const s = await notifier.requestAuthorization();
-    return { authorization: s.authorization, available: s.available, detail: s.detail };
+    return {
+      authorization: s.authorization,
+      available: s.available,
+      detail: s.detail,
+      needsSystemSettings: s.needsSystemSettings === true,
+    };
+  });
+  app.post(`${API_PREFIX}/notifications/open-settings`, async () => {
+    const r = await notifier.openSystemSettings();
+    return { ok: r.ok, url: r.url };
   });
   app.post(`${API_PREFIX}/notifications/test`, async (req) => {
     const body = (req.body ?? {}) as { title?: string; body?: string };

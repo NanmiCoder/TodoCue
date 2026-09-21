@@ -97,6 +97,7 @@ public struct APIClient: Sendable {
     public struct StopSeriesEnvelope: Codable, Sendable { public var series: Series; public var cancelledTaskIds: [String] }
     public struct RemindersEnvelope: Codable, Sendable { public var reminders: [Reminder] }
     public struct AuthorizationEnvelope: Codable, Sendable { public var authorization: String }
+    public struct OpenSettingsEnvelope: Codable, Sendable { public var ok: Bool; public var url: String? }
     public struct TestNotificationEnvelope: Codable, Sendable { public var ok: Bool; public var channel: String? }
     public struct HealthEnvelope: Codable, Sendable { public var ok: Bool; public var runtimeVersion: String; public var pid: Int }
 
@@ -210,6 +211,13 @@ public struct APIClient: Sendable {
     public func requestNotificationAuthorization() async throws -> String {
         let env: AuthorizationEnvelope = try await send("POST", "/v1/notifications/request-authorization", json: [String: JSONValue]())
         return env.authorization
+    }
+    /// Asks the runtime to open System Settings › Notifications. The only way back once
+    /// macOS has recorded a denial, since it never shows the permission prompt twice.
+    @discardableResult
+    public func openNotificationSettings() async throws -> Bool {
+        let env: OpenSettingsEnvelope = try await send("POST", "/v1/notifications/open-settings", json: [String: JSONValue]())
+        return env.ok
     }
     public func sendTestNotification() async throws -> TestNotificationEnvelope {
         try await send("POST", "/v1/notifications/test", json: ["title": JSONValue.string(L10n.tr("TodoCue 测试通知")), "body": .string(L10n.tr("通知链路正常"))])

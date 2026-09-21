@@ -8,14 +8,26 @@ import TodoCueKit
 //
 //   TodoCueNotifier status
 //   TodoCueNotifier request
+//   TodoCueNotifier open-settings
 //   TodoCueNotifier deliver --id <id> --title <t> [--body <b>] [--subtitle <s>] [--task-id <id>] [--thread <id>] [--sound]
 //   TodoCueNotifier              (launched by macOS for a notification response)
 //
 // Prints exactly one JSON line on stdout for the command forms.
+//
+// Exit codes: 0 success, 1 `deliver` failure, 2 usage/bundle error.
+// `request` always exits 0, including when the app is already denied: macOS only ever
+// prompts once per bundle, so a denial is reported in the body as
+// {"ok":false,"authorization":"denied","needsSystemSettings":true} rather than as an
+// error. A non-zero exit would be turned into an exception by the runtime's helper
+// bridge, which keeps only the `error` field and drops the rest of the payload.
 
 let categoryId = "TODOCUE_REMINDER"
 let actionComplete = "COMPLETE"
 let actionSnooze = "SNOOZE"
+
+/// Bundle identifier macOS files our notification authorization under; also the row the
+/// user has to enable by hand after a denial. Fixed in scripts/build-macos.sh.
+let notifierBundleId = "com.todocue.notifier"
 
 struct Args {
     var command: String?
@@ -85,6 +97,42 @@ func statusPayload(_ settings: UNNotificationSettings) -> [String: Any] {
     ["ok": true, "authorization": authString(settings.authorizationStatus), "alertStyle": alertStyleString(settings.alertStyle)]
 }
 
+/// Opens System Settings › Notifications, ideally with our own row revealed.
+///
+/// This is the only way back once macOS has recorded a denial: `requestAuthorization`
+/// never shows a prompt again for a given bundle, so the user has to flip the switch by
+/// hand. Tries the modern extension pane first and degrades to the legacy pane id.
+func openNotificationSettings() -> (ok: Bool, url: String) {
+    let candidates = [
+        "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(notifierBundleId)",
+        "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
+        "x-apple.systempreferences:com.apple.preference.notifications?id=\(notifierBundleId)",
+    ]
+    for candidate in candidates where launch(candidate) { return (true, candidate) }
+    // Report no URL rather than the first candidate: none of them actually opened, and
+    // naming one would read as if it had.
+    return (false, "")
+}
+
+/// Shells out to `/usr/bin/open` instead of `NSWorkspace.shared.open`: both route through
+/// LaunchServices, but `open` returns a real exit status. The helper is spawned directly by
+/// the runtime (never via LaunchServices) and may be running outside a GUI session, so an
+/// honest failure signal matters more here than avoiding the subprocess.
+private func launch(_ url: String) -> Bool {
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+    proc.arguments = [url]
+    proc.standardOutput = FileHandle.nullDevice
+    proc.standardError = FileHandle.nullDevice
+    do {
+        try proc.run()
+        proc.waitUntilExit()
+        return proc.terminationStatus == 0
+    } catch {
+        return false
+    }
+}
+
 final class ResponseDelegate: NSObject, UNUserNotificationCenterDelegate {
     var handled = false
 
@@ -135,14 +183,42 @@ case "status":
 case "request":
     requireBundle()
     registerCategory(center)
-    center.requestAuthorization(options: [.alert, .sound, .badge]) { _, err in
-        center.getNotificationSettings { s in
-            var p = statusPayload(s)
-            if let err { p["error"] = err.localizedDescription }
+    // Ask only when macOS can still show a prompt. After a denial every call returns
+    // immediately without any UI, which is what made the Settings button look dead.
+    center.getNotificationSettings { current in
+        switch current.authorizationStatus {
+        case .notDetermined:
+            center.requestAuthorization(options: [.alert, .sound, .badge]) { _, err in
+                center.getNotificationSettings { s in
+                    var p = statusPayload(s)
+                    let denied = s.authorizationStatus == .denied
+                    p["ok"] = !denied
+                    p["needsSystemSettings"] = denied
+                    if let err { p["error"] = err.localizedDescription }
+                    emit(p, exit: 0)
+                }
+            }
+        case .denied:
+            // No point calling requestAuthorization: macOS has already recorded a decision
+            // and will never ask again. Point the caller at System Settings instead.
+            var p = statusPayload(current)
+            p["ok"] = false
+            p["needsSystemSettings"] = true
+            p["error"] = "notifications denied; macOS will not prompt again"
+            emit(p, exit: 0)
+        default:
+            // Already authorized/provisional/ephemeral — nothing left to ask for.
+            var p = statusPayload(current)
+            p["needsSystemSettings"] = false
             emit(p, exit: 0)
         }
     }
     RunLoop.main.run()
+
+case "open-settings":
+    requireBundle()
+    let result = openNotificationSettings()
+    emit(["ok": result.ok, "url": result.url], exit: 0)
 
 case "deliver":
     requireBundle()

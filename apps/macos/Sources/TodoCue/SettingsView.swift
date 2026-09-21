@@ -62,8 +62,15 @@ struct SettingsView: View {
                 group(L10n.tr("提醒通知"), icon: "bell") {
                     row(L10n.tr("授权"), authLabel)
                     FlowLayout {
-                        Button(L10n.tr("请求授权")) { Task { message = L10n.tr("授权：") + (await model.requestNotificationAuthorization()) } }
-                            .buttonStyle(CueButtonStyle())
+                        // Once macOS has recorded a denial it will never prompt again, so
+                        // asking is a no-op — send the user to the only thing that works.
+                        if model.doctor?.notifier.authorization == "denied" {
+                            Button(L10n.tr("打开系统设置")) { Task { message = await model.openNotificationSettings() } }
+                                .buttonStyle(CueButtonStyle())
+                        } else {
+                            Button(L10n.tr("请求授权")) { Task { message = await model.requestNotificationAuthorization() } }
+                                .buttonStyle(CueButtonStyle())
+                        }
                         Button(L10n.tr("测试通知")) { Task { message = await model.sendTestNotification() } }
                             .buttonStyle(CueButtonStyle())
                     }.disabled(!model.canWrite)
@@ -114,6 +121,12 @@ struct SettingsView: View {
         }
         .onAppear { loginEnabled = SMAppService.mainApp.status == .enabled }
         .onDisappear { stopRecording() }
+        // The notification switch can only be flipped over in System Settings, so re-read
+        // the state when the user comes back — otherwise the panel still says 已拒绝 and
+        // the fix looks like it did nothing.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.loadDoctor() }
+        }
     }
 
     private func settingToggle(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -129,7 +142,7 @@ struct SettingsView: View {
         switch model.doctor?.notifier.authorization {
         case "authorized": return L10n.tr("已授权")
         case "provisional": return L10n.tr("临时授权")
-        case "denied": return L10n.tr("已拒绝（在系统设置 › 通知中开启 TodoCueNotifier）")
+        case "denied": return L10n.tr("已拒绝（macOS 只询问一次，需在系统设置 › 通知中开启 TodoCueNotifier）")
         case "notDetermined": return L10n.tr("尚未请求")
         case nil: return L10n.tr("未知（点击“诊断”获取）")
         default: return model.doctor?.notifier.authorization ?? L10n.tr("未知")

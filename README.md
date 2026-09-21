@@ -75,7 +75,7 @@ Current version: **[v0.1.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
-The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders. To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
+The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
 [Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.1.2/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
 

@@ -22,13 +22,30 @@ export interface NotifierStatus {
   path: string | null;
   authorization: NotificationAuthorization;
   detail: string | null;
+  /**
+   * True when macOS has already recorded a decision for the helper's bundle. It only ever
+   * shows the permission prompt once, so there is no point asking again — the user has to
+   * flip the switch in System Settings, which `openSystemSettings()` takes them to.
+   */
+  needsSystemSettings?: boolean;
+}
+
+export interface OpenSettingsResult {
+  ok: boolean;
+  url: string | null;
 }
 
 export interface NotificationSink {
   /** Returns the channel used (e.g. "helper", "osascript"). Throws on failure. */
   deliver(payload: NotificationPayload): Promise<string>;
   status(): Promise<NotifierStatus>;
+  /**
+   * Asks macOS to prompt. This only has an effect the first time; once a decision exists
+   * the result carries `needsSystemSettings` instead.
+   */
   requestAuthorization(): Promise<NotifierStatus>;
+  /** Opens System Settings › Notifications so the user can enable the helper by hand. */
+  openSystemSettings(): Promise<OpenSettingsResult>;
 }
 
 /** In-memory sink for tests. */
@@ -36,6 +53,10 @@ export class MemoryNotifier implements NotificationSink {
   delivered: NotificationPayload[] = [];
   failNext: string | null = null;
   authorization: NotificationAuthorization = "authorized";
+  /** Set by tests to simulate macOS refusing to prompt again. */
+  needsSystemSettings = false;
+  /** Number of times `openSystemSettings()` was called. */
+  settingsOpened = 0;
   async deliver(payload: NotificationPayload): Promise<string> {
     if (this.failNext) {
       const err = this.failNext;
@@ -49,7 +70,11 @@ export class MemoryNotifier implements NotificationSink {
     return { available: true, path: null, authorization: this.authorization, detail: null };
   }
   async requestAuthorization(): Promise<NotifierStatus> {
-    return this.status();
+    return { ...(await this.status()), needsSystemSettings: this.needsSystemSettings };
+  }
+  async openSystemSettings(): Promise<OpenSettingsResult> {
+    this.settingsOpened += 1;
+    return { ok: true, url: null };
   }
 }
 
@@ -179,15 +204,30 @@ export class HelperNotifier implements NotificationSink {
     const helper = this.resolveHelper();
     if (!helper) return this.status();
     try {
+      // The timeout stays generous: this is the one call that blocks on a human answering
+      // the system prompt. Every other state returns immediately.
       const res = await this.runHelper(["request"], 120_000);
       return {
         available: true,
         path: helper,
         authorization: normalizeAuth(res.authorization),
         detail: typeof res.alertStyle === "string" ? `alert style: ${res.alertStyle}` : null,
+        needsSystemSettings: res.needsSystemSettings === true,
       };
     } catch (e) {
       return { available: true, path: helper, authorization: "unknown", detail: (e as Error).message };
+    }
+  }
+
+  async openSystemSettings(): Promise<OpenSettingsResult> {
+    const helper = this.resolveHelper();
+    if (!helper) return { ok: false, url: null };
+    try {
+      const res = await this.runHelper(["open-settings"], 10_000);
+      return { ok: res.ok === true, url: typeof res.url === "string" ? res.url : null };
+    } catch (e) {
+      this.opts.log?.(`could not open notification settings: ${(e as Error).message}`);
+      return { ok: false, url: null };
     }
   }
 }

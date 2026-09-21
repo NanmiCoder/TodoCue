@@ -9,6 +9,18 @@
 
 首次启动若提示有另一个开发运行时，请停止之前的 `todocue serve` 后重试。不要直接从挂载的 DMG 内运行日常后台服务。
 
+### 如果曾经拒绝过通知授权
+
+macOS 对同一个 App **一辈子只弹出一次**授权窗。如果当初点了“不允许”，之后再点 App 里的“请求授权”不会
+再出现任何窗口——这不是 TodoCue 的问题，系统就是这么设计的，也没有任何接口能重置它（`tccutil` 不覆盖通知，
+通知不归 TCC 管）。恢复办法只有一个：
+
+1. 点 App 设置里的“打开系统设置”（或手动进入 **系统设置 › 通知**），在列表里找到 **TodoCueNotifier**；
+2. 打开“允许通知”开关；
+3. 切回 TodoCue，授权状态会自动刷新；点“测试通知”确认横幅能正常出现。
+
+命令行下等价操作：`todocue doctor --open-notification-settings`。
+
 App 本体和辅助程序位于 `/Applications/TodoCue.app`。Node、生产依赖、CLI 在 App 的 `Contents/Resources/runtime`，通知辅助程序在 `Contents/Helpers`。`~/.todocue/bin/todocue` 指向安装版 CLI；若 PATH 没找到命令，可直接使用这个绝对路径。
 
 后台服务由 `~/Library/LaunchAgents/com.todocue.runtime.plist` 管理，登录时运行、异常退出后重启。关闭面板或退出 App 不会停止后台提醒。App 升级后再次打开，会检查构建标识并更新运行时。菜单栏界面是否登录时出现，由设置中的“登录时启动”控制。

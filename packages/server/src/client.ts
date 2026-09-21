@@ -164,7 +164,17 @@ export class TodoCueClient {
     return this.request<DoctorReport>("GET", "/doctor");
   }
   requestNotificationAuthorization() {
-    return this.request<{ authorization: string; available: boolean; detail: string | null }>("POST", "/notifications/request-authorization", {});
+    return this.request<{
+      authorization: string;
+      available: boolean;
+      detail: string | null;
+      /** macOS has already recorded a decision, so it will not prompt again. */
+      needsSystemSettings: boolean;
+    }>("POST", "/notifications/request-authorization", {});
+  }
+  /** Opens System Settings › Notifications so the user can enable the helper by hand. */
+  openNotificationSettings() {
+    return this.request<{ ok: boolean; url: string | null }>("POST", "/notifications/open-settings", {});
   }
   testNotification(body: { title?: string; body?: string } = {}) {
     return this.request<{ ok: boolean; channel: string }>("POST", "/notifications/test", body);
