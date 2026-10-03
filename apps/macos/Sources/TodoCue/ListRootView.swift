@@ -71,21 +71,28 @@ struct NextCard: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
+    @Environment(\.colorScheme) private var scheme
     let candidate: NextCandidate
     @State private var hovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 6) {
-                Circle().fill(accent).frame(width: 5, height: 5)
+                ZStack {
+                    Circle().fill(accent.opacity(0.25)).frame(width: 8, height: 8)
+                    Circle().fill(accent).frame(width: 4.5, height: 4.5)
+                }
                 Text(L10n.tr("下一步")).font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
                 Spacer(minLength: 4)
-                Text(candidate.group.label).font(.system(size: 10, weight: .medium))
+                Text(candidate.group.label)
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(candidate.task.isOverdue ? Theme.overdue : .secondary)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background((candidate.task.isOverdue ? Theme.overdue : accent).opacity(0.08), in: Capsule())
             }
             Button { model.routes.append(.detail(candidate.task.id)) } label: {
                 Text(candidate.task.title)
-                    .font(.system(size: 17, weight: .semibold)).tracking(-0.3)
+                    .font(.system(size: 16.5, weight: .semibold, design: .rounded)).tracking(-0.25)
                     .lineLimit(3).fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -100,18 +107,27 @@ struct NextCard: View {
                     .accessibilityLabel(L10n.tr("完成 \(candidate.task.title)"))
                 Spacer()
                 Button { model.routes.append(.detail(candidate.task.id)) } label: {
-                    Image(systemName: "chevron.right").foregroundStyle(accent)
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .medium)).foregroundStyle(accent)
                 }
                 .buttonStyle(QuietIconButtonStyle()).accessibilityLabel(L10n.tr("查看下一步详情"))
             }
         }
-        .padding(12)
+        .padding(13)
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(accent.opacity(hovered ? 0.10 : 0.065))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(hovered ? 0.12 : 0.075),
+                            accent.opacity(hovered ? 0.07 : 0.035)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
         }
-        .overlay(alignment: .leading) {
-            Capsule().fill(accent.opacity(0.5)).frame(width: 2, height: 22).padding(.leading, -1)
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(accent.opacity(hovered ? 0.35 : 0.2), lineWidth: 0.5)
         }
         .onHover { hovered = $0 }
         .animation(Theme.interaction, value: hovered)
@@ -276,6 +292,7 @@ struct QuickAddView: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
+    @Environment(\.colorScheme) private var scheme
     /// nil adds to today; the calendar passes the day the reader is looking at.
     var date: String? = nil
     @FocusState private var focused: Bool
@@ -322,10 +339,10 @@ struct QuickAddView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 11)
-        // Fill and stroke must share the corner style, or the fill peeks past the stroke at the corners.
-        .background(Theme.insetSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(focused ? accent.opacity(0.55) : Color.white.opacity(0.12), lineWidth: focused ? 1 : 0.5))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(focused ? accent.opacity(0.65) : (scheme == .dark ? Color.white.opacity(0.09) : Color.black.opacity(0.055)), lineWidth: focused ? 1 : 0.5))
+        .shadow(color: Color.black.opacity(scheme == .dark ? 0.22 : 0.035), radius: 6, y: 2)
         .padding(.bottom, 12)
         .animation(Theme.interaction, value: focused || hasText)
         .onChange(of: model.quickAddFocusRequest) { _, _ in focused = true }

@@ -286,6 +286,7 @@ struct DraggableTaskRow: View {
     var reasons: [TodayReason] = []
     var showProject = true
     var compact = false
+    @State private var hovered = false
     /// The calendar drags to change a date, not to reorder, so its rows are not landing places.
     var reorderable = true
 
@@ -301,9 +302,11 @@ struct DraggableTaskRow: View {
                            begin: { model.beginTaskDrag(task, surface: surface, group: group) },
                            reschedulesOnly: !reorderable)
                 .frame(width: 16, height: 30).padding(.top, compact ? 4 : 7)
-                .opacity(canDrag ? 0.65 : 0.2)
+                .opacity(canDrag ? (hovered || model.draggedTask != nil ? 0.75 : 0.05) : 0.0)
+                .animation(Theme.interaction, value: hovered)
             TaskRowView(task: task, reasons: reasons, showProject: showProject, compact: compact)
         }
+        .onHover { hovered = $0 }
         .opacity(lifted == nil ? 1 : 0)
         .offset(y: model.dragOffset(slot))
         .animation(Theme.dragShift, value: model.dragOffset(slot))

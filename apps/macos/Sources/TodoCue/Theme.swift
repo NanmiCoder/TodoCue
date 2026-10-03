@@ -32,23 +32,24 @@ enum Theme {
     })
 
     static func accent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 0.48, green: 0.85, blue: 0.74) : Color(red: 0.03, green: 0.43, blue: 0.35)
+        scheme == .dark ? Color(red: 0.42, green: 0.88, blue: 0.74) : Color(red: 0.02, green: 0.54, blue: 0.43)
     }
 
     static let surface = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 1, alpha: 0.055) : NSColor(white: 1, alpha: 0.72)
+            ? NSColor(white: 1, alpha: 0.075) : NSColor(white: 1, alpha: 0.82)
     })
     static let insetSurface = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 1, alpha: 0.065) : NSColor(white: 1, alpha: 0.55)
+            ? NSColor(white: 1, alpha: 0.05) : NSColor(white: 1, alpha: 0.62)
     })
     // Keep the dark glass shell quiet without creating an opaque inner well.
     static let shellTint = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 0, alpha: 0.32) : .clear
+            ? NSColor(white: 0, alpha: 0.25) : .clear
     })
     static var interaction: Animation { reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.26, dampingFraction: 0.86) }
+    static var bouncy: Animation { reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.32, dampingFraction: 0.65) }
 
     static var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     static var reduceTransparency: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency }
@@ -134,9 +135,9 @@ extension Priority {
     var color: Color {
         switch self {
         case .none: return .secondary
-        case .low: return .secondary
-        case .medium: return .orange
-        case .high: return .red
+        case .low: return Color(red: 0.45, green: 0.65, blue: 0.85)
+        case .medium: return Color(red: 1.0, green: 0.62, blue: 0.22)
+        case .high: return Color(red: 1.0, green: 0.35, blue: 0.35)
         }
     }
 }

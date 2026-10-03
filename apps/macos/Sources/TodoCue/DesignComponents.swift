@@ -52,22 +52,52 @@ struct CueButtonStyle: ButtonStyle {
         ButtonBody(configuration: configuration, prominent: prominent)
     }
     private struct ButtonBody: View {
-    @ObservedObject private var languagePreferences = LanguagePreferences.shared
+        @ObservedObject private var languagePreferences = LanguagePreferences.shared
         let configuration: Configuration
         let prominent: Bool
         @Environment(\.accent) private var accent
         @Environment(\.colorScheme) private var scheme
         @Environment(\.isEnabled) private var enabled
         @State private var hovered = false
+
+        private var foregroundColor: Color {
+            if prominent {
+                return scheme == .dark ? Color.black.opacity(0.9) : .white
+            }
+            return Color.primary
+        }
+
+        @ViewBuilder
+        private var backgroundView: some View {
+            if prominent {
+                LinearGradient(
+                    colors: [accent, accent.opacity(0.88)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .clipShape(Capsule())
+            } else {
+                Capsule().fill(Color.primary.opacity(hovered ? 0.08 : 0.04))
+            }
+        }
+
+        private var borderStrokeColor: Color {
+            if scheme == .dark {
+                return Color.white.opacity(prominent ? 0.2 : 0.08)
+            } else {
+                return prominent ? Color.white.opacity(0.25) : Color.black.opacity(0.06)
+            }
+        }
+
         var body: some View {
             configuration.label
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12, weight: prominent ? .semibold : .medium))
                 .padding(.horizontal, 14).frame(minHeight: 32)
-                .foregroundStyle(prominent ? (scheme == .dark ? Color.black.opacity(0.88) : .white) : Color.primary)
-                .background(prominent ? accent : Color.primary.opacity(hovered ? 0.095 : 0.055), in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.white.opacity(prominent ? 0.12 : 0.08), lineWidth: 0.5))
-                .opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
-                .scaleEffect(configuration.isPressed && !Theme.reduceMotion ? 0.97 : 1)
+                .foregroundStyle(foregroundColor)
+                .background(backgroundView)
+                .overlay(Capsule().strokeBorder(borderStrokeColor, lineWidth: 0.5))
+                .shadow(color: prominent ? accent.opacity(scheme == .dark ? 0.35 : 0.22) : Color.black.opacity(0.02), radius: prominent ? 5 : 2, y: prominent ? 2 : 1)
+                .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.4)
+                .scaleEffect(configuration.isPressed && !Theme.reduceMotion ? 0.96 : (hovered && !Theme.reduceMotion ? 1.01 : 1))
                 .animation(Theme.interaction, value: configuration.isPressed)
                 .animation(Theme.interaction, value: hovered)
                 .onHover { hovered = $0 }
@@ -116,8 +146,8 @@ struct SegmentedCapsule<Item: Identifiable & Equatable>: View {
                 .background {
                     if isSelected {
                         Capsule().fill(Theme.surface)
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.3), lineWidth: 0.5))
-                            .shadow(color: .black.opacity(0.055), radius: 3, y: 1)
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
+                            .shadow(color: .black.opacity(0.06), radius: 4, y: 1.5)
                             .matchedGeometryEffect(id: "selected-segment", in: slider)
                     }
                 }
@@ -126,17 +156,72 @@ struct SegmentedCapsule<Item: Identifiable & Equatable>: View {
             }
         }
         .padding(trackPadding)
-        .background(Color.primary.opacity(0.045), in: Capsule())
+        .background(Color.primary.opacity(0.04), in: Capsule())
         .accessibilityElement(children: .contain).accessibilityLabel(label)
+    }
+}
+
+/// A compact, tactile chip for interactive metadata selection.
+struct AttributeChipLabel: View {
+    let title: String
+    var icon: String? = nil
+    var isActive: Bool = false
+    var tint: Color? = nil
+    var onClear: (() -> Void)? = nil
+    @State private var hovered = false
+    @Environment(\.accent) private var accent
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: isActive ? .semibold : .medium))
+                    .foregroundStyle(isActive ? (tint ?? accent) : .secondary)
+            }
+            Text(title)
+                .font(.system(size: 11, weight: isActive ? .medium : .regular))
+                .foregroundStyle(isActive ? Color.primary : .secondary)
+            if isActive, let onClear {
+                Button(action: onClear) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr("清除"))
+            }
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 26)
+        .background {
+            Capsule()
+                .fill(isActive
+                      ? (tint ?? accent).opacity(scheme == .dark ? 0.16 : 0.10)
+                      : Color.primary.opacity(hovered ? 0.07 : 0.035))
+        }
+        .overlay {
+            Capsule()
+                .strokeBorder(isActive
+                              ? (tint ?? accent).opacity(scheme == .dark ? 0.35 : 0.28)
+                              : (scheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)),
+                              lineWidth: 0.5)
+        }
+        .contentShape(Capsule())
+        .onHover { hovered = $0 }
+        .animation(Theme.interaction, value: hovered)
+        .animation(Theme.interaction, value: isActive)
     }
 }
 
 struct SurfaceModifier: ViewModifier {
     var radius: CGFloat
+    @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
         content.background(Theme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5).allowsHitTesting(false))
+                .strokeBorder(scheme == .dark ? Color.white.opacity(0.09) : Color.black.opacity(0.055), lineWidth: 0.5).allowsHitTesting(false))
+            .shadow(color: Color.black.opacity(scheme == .dark ? 0.2 : 0.035), radius: 6, y: 2)
     }
 }
 
