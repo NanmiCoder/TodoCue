@@ -127,7 +127,7 @@ struct AttachmentEditorView: View {
     }
 }
 
-private struct PendingAttachmentTile: View {
+struct PendingAttachmentTile: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let item: PendingAttachment
     let remove: () -> Void
