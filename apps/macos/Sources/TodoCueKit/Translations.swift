@@ -229,6 +229,7 @@ extension L10n {
         "请选择文件，暂不支持文件夹": "Choose a file. Folders are not supported.",
         "「{0}」超过 10 MB": "“{0}” exceeds 10 MB",
         "单个附件不能超过 10 MB": "Each attachment must not exceed 10 MB",
+        "附件": "Attachments",
         "图片与附件": "Images & attachments",
         "添加附件": "Add attachments",
         "粘贴图片": "Paste image",

@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import SwiftUI
 import ScreenCaptureKit
 import TodoCueKit
 @testable import TodoCue
@@ -15,6 +16,14 @@ final class ReadmeScreenshotTests: XCTestCase {
         let draftTitle: String
         let draftNotes: String
         let project: String
+    }
+
+    @MainActor private func findHostingView(in view: NSView) -> NSView? {
+        if NSStringFromClass(type(of: view)).contains("Hosting") { return view }
+        for sub in view.subviews {
+            if let found = findHostingView(in: sub) { return found }
+        }
+        return nil
     }
 
     @MainActor func testCaptureReadmePanels() async throws {
@@ -70,24 +79,64 @@ final class ReadmeScreenshotTests: XCTestCase {
                 panel.window.makeFirstResponder(nil)
                 panel.window.contentView?.layoutSubtreeIfNeeded()
                 try await Task.sleep(nanoseconds: 500_000_000)
-                let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
-                let window = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(panel.window.windowNumber) })
-                let background = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(backdrop.windowNumber) })
-                let display = try XCTUnwrap(content.displays.first { $0.frame.contains(window.frame.origin) })
-                // Capture the panel over our own neutral backdrop, excluding every other
-                // window (including the computer-use cursor overlay). This preserves glass.
-                let filter = SCContentFilter(display: display, including: [background, window])
-                let config = SCStreamConfiguration()
-                config.width = Int(panel.window.frame.width * 2)
-                config.height = Int(panel.window.frame.height * 2)
-                config.sourceRect = CGRect(x: window.frame.minX - display.frame.minX, y: window.frame.minY - display.frame.minY,
-                                           width: window.frame.width, height: window.frame.height)
-                config.showsCursor = false
-                config.ignoreShadowsSingleWindow = true
-                let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-                XCTAssertEqual(image.width, 840)
-                XCTAssertGreaterThanOrEqual(image.height, 1200)
-                let png = try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                let png: Data
+                do {
+                    let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+                    let window = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(panel.window.windowNumber) })
+                    let background = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(backdrop.windowNumber) })
+                    let display = try XCTUnwrap(content.displays.first { $0.frame.contains(window.frame.origin) })
+                    // Capture the panel over our own neutral backdrop, excluding every other
+                    // window (including the computer-use cursor overlay). This preserves glass.
+                    let filter = SCContentFilter(display: display, including: [background, window])
+                    let config = SCStreamConfiguration()
+                    config.width = Int(panel.window.frame.width * 2)
+                    config.height = Int(panel.window.frame.height * 2)
+                    config.sourceRect = CGRect(x: window.frame.minX - display.frame.minX, y: window.frame.minY - display.frame.minY,
+                                               width: window.frame.width, height: window.frame.height)
+                    config.showsCursor = false
+                    config.ignoreShadowsSingleWindow = true
+                    let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                    XCTAssertEqual(image.width, 840)
+                    XCTAssertGreaterThanOrEqual(image.height, 1200)
+                    png = try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
+                } catch {
+                    // Fallback when ScreenCaptureKit lacks TCC screen recording permission
+                    let targetView = findHostingView(in: panel.window.contentView ?? NSView()) ?? panel.window.contentView ?? NSView()
+                    targetView.layoutSubtreeIfNeeded()
+                    let bounds = targetView.bounds
+
+                    let viewRep = targetView.bitmapImageRepForCachingDisplay(in: bounds) ??
+                        NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 840, pixelsHigh: 1360,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0)!
+                    targetView.cacheDisplay(in: bounds, to: viewRep)
+
+                    let finalRep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 840, pixelsHigh: 1360,
+                                                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                                                   isPlanar: false, colorSpaceName: .deviceRGB,
+                                                                   bytesPerRow: 0, bitsPerPixel: 0))
+                    finalRep.size = bounds.size
+                    NSGraphicsContext.saveGraphicsState()
+                    let ctx = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: finalRep))
+                    NSGraphicsContext.current = ctx
+
+                    let isDark = scene.hasSuffix("dark")
+                    let backdropColor = isDark ? NSColor(white: 0.09, alpha: 1) : .white
+                    backdropColor.setFill()
+                    bounds.fill()
+
+                    let panelPath = NSBezierPath(roundedRect: bounds, xRadius: Theme.panelCorner, yRadius: Theme.panelCorner)
+                    let panelBgColor = isDark ? NSColor(red: 0.12, green: 0.12, blue: 0.14, alpha: 0.98) : NSColor(red: 0.98, green: 0.98, blue: 0.99, alpha: 0.98)
+                    panelBgColor.setFill()
+                    panelPath.fill()
+
+                    panelPath.addClip()
+                    viewRep.draw(in: bounds)
+                    NSGraphicsContext.restoreGraphicsState()
+
+                    png = try XCTUnwrap(finalRep.representation(using: .png, properties: [:]))
+                }
                 try png.write(to: folder.appendingPathComponent(scene + ".png"))
             }
         }
