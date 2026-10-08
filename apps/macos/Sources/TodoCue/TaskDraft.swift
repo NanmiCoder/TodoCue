@@ -22,6 +22,7 @@ struct TaskDraft: Equatable {
     var editingTaskId: String?
     var version: Int?
     var isSeriesInstance = false
+    private var originalTask: TodoTask?
 
     var existingAttachments: [TaskAttachment] = []
     var pendingAttachments: [PendingAttachment] = []
@@ -51,6 +52,7 @@ struct TaskDraft: Equatable {
     init() {}
 
     init(editing t: TodoTask) {
+        originalTask = t
         existingAttachments = t.attachments
         editingTaskId = t.id
         version = t.version
@@ -82,6 +84,26 @@ struct TaskDraft: Equatable {
 
     var hasContent: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !notes.isEmpty || !project.isEmpty || priority != .none || !estimate.isEmpty || scheduledMode != .none || dueMode != .none || reminderOn || repeatKind != .none || !pendingAttachments.isEmpty || !removedAttachmentIds.isEmpty
+    }
+
+    var hasUnsavedEdits: Bool {
+        guard let originalTask else { return hasContent }
+        if !pendingAttachments.isEmpty || !removedAttachmentIds.isEmpty { return true }
+        return updatePayload().fields != TaskDraft(editing: originalTask).updatePayload().fields
+    }
+
+    mutating func addAttachments(_ items: [PendingAttachment]) throws {
+        for item in items where item.data.count > AttachmentLimits.fileBytes {
+            throw APIError.transport(L10n.tr("「\(item.name)」超过 10 MB"))
+        }
+        let kept = existingAttachments.filter { !removedAttachmentIds.contains($0.id) }
+        guard kept.count + pendingAttachments.count + items.count <= AttachmentLimits.count else {
+            throw APIError.transport(L10n.tr("每个任务最多 20 个附件"))
+        }
+        guard kept.reduce(0, { $0 + $1.size }) + pendingAttachments.reduce(0, { $0 + $1.data.count }) + items.reduce(0, { $0 + $1.data.count }) <= AttachmentLimits.totalBytes else {
+            throw APIError.transport(L10n.tr("附件总大小不能超过 30 MB"))
+        }
+        pendingAttachments.append(contentsOf: items)
     }
 
     func validate() -> String? {

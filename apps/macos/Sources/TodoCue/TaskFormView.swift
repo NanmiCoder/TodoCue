@@ -10,6 +10,7 @@ struct TaskFormView: View {
     @State var draft: TaskDraft
     @State private var error: String?
     @State private var saving = false
+    @State private var versionConflict = false
     @State private var importingAttachments = false
     @FocusState private var titleFocused: Bool
 
@@ -59,7 +60,7 @@ struct TaskFormView: View {
 
                         // Interactive Attribute Chip Bar
                         FlowLayout(spacing: 7, rowSpacing: 7) {
-                            scheduleChip
+                            if draft.repeatKind == .none { scheduleChip }
                             projectChip
                             priorityChip
                             estimateChip
@@ -71,6 +72,15 @@ struct TaskFormView: View {
                         if totalAttachmentCount > 0 {
                             Divider().opacity(0.35).padding(.vertical, 2)
                             attachmentDrawer
+                        }
+                        if let attachmentError {
+                            Text(attachmentError)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.red)
+                        }
+                        if draft.repeatKind != .none {
+                            Text(L10n.tr("附件仅保存到首次任务。"))
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                     }
                     .padding(16)
@@ -113,140 +123,108 @@ struct TaskFormView: View {
         }
         .onChange(of: draft) { old, new in
             if error != nil && error == old.validate() { error = new.validate() }
-            if case .form = model.routes.last { model.routes[model.routes.count - 1] = .form(new) }
+            model.updateFormDraft(new)
         }
     }
 
     // MARK: - Attribute Chips
 
+    private var hasSchedule: Bool {
+        draft.scheduledMode != .none || draft.dueMode != .none || draft.reminderOn
+    }
+
     private var scheduleChip: some View {
-        Button {
-            showSchedulePopover.toggle()
-        } label: {
-            AttributeChipLabel(
-                title: scheduleChipTitle,
-                icon: "calendar",
-                isActive: draft.scheduledMode != .none || draft.dueMode != .none || draft.reminderOn,
-                onClear: (draft.scheduledMode != .none || draft.dueMode != .none || draft.reminderOn) ? {
-                    draft.scheduledMode = .none
-                    draft.dueMode = .none
-                    draft.reminderOn = false
-                } : nil
-            )
+        AttributeChip(isActive: hasSchedule, onClear: hasSchedule ? {
+            draft.scheduledMode = .none
+            draft.dueMode = .none
+            draft.reminderOn = false
+        } : nil) {
+            Button { showSchedulePopover.toggle() } label: {
+                AttributeChipLabel(title: scheduleChipTitle, icon: "calendar", isActive: hasSchedule)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showSchedulePopover, arrowEdge: .bottom) {
+                SchedulePopoverView(draft: $draft, close: { showSchedulePopover = false })
+            }
         }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showSchedulePopover, arrowEdge: .bottom) {
-            SchedulePopoverView(draft: $draft, close: { showSchedulePopover = false })
-        }
+        .help(L10n.tr("计划、截止与提醒"))
     }
 
     private var scheduleChipTitle: String {
         if draft.scheduledMode != .none {
             let label = TCDate.dateLabel(TCDate.localDateString(draft.scheduledDate))
-            if draft.scheduledMode == .dateTime {
-                return label + " " + TCDate.time(draft.scheduledDate)
-            }
+            if draft.scheduledMode == .dateTime { return label + " " + TCDate.time(draft.scheduledDate) }
             return label
         }
-        if draft.dueMode != .none {
-            return L10n.tr("截止 ") + TCDate.dateLabel(TCDate.localDateString(draft.dueDate))
-        }
-        if draft.reminderOn {
-            return L10n.tr("提醒 ") + TCDate.time(draft.reminderDate)
-        }
+        if draft.dueMode != .none { return L10n.tr("截止 ") + TCDate.dateLabel(TCDate.localDateString(draft.dueDate)) }
+        if draft.reminderOn { return L10n.tr("提醒 ") + TCDate.time(draft.reminderDate) }
         return L10n.tr("日期")
     }
 
     private var projectChip: some View {
-        Button {
-            showProjectPopover.toggle()
-        } label: {
-            AttributeChipLabel(
-                title: draft.project.isEmpty ? L10n.tr("项目") : draft.project,
-                icon: "folder",
-                isActive: !draft.project.isEmpty,
-                onClear: !draft.project.isEmpty ? { draft.project = "" } : nil
-            )
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showProjectPopover, arrowEdge: .bottom) {
-            ProjectPopoverView(
-                project: $draft.project,
-                existingProjects: model.projects,
-                close: { showProjectPopover = false }
-            )
+        AttributeChip(isActive: !draft.project.isEmpty, onClear: !draft.project.isEmpty ? { draft.project = "" } : nil) {
+            Button { showProjectPopover.toggle() } label: {
+                AttributeChipLabel(title: draft.project.isEmpty ? L10n.tr("项目") : draft.project, icon: "folder", isActive: !draft.project.isEmpty)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showProjectPopover, arrowEdge: .bottom) {
+                ProjectPopoverView(project: $draft.project, existingProjects: model.projects, close: { showProjectPopover = false })
+            }
         }
     }
 
     private var priorityChip: some View {
-        Menu {
-            Button(L10n.tr("无")) { draft.priority = .none }
-            Button(L10n.tr("低")) { draft.priority = .low }
-            Button(L10n.tr("中")) { draft.priority = .medium }
-            Button(L10n.tr("高")) { draft.priority = .high }
-        } label: {
-            AttributeChipLabel(
-                title: draft.priority == .none ? L10n.tr("优先级") : draft.priority.label,
-                icon: draft.priority.symbol ?? "flag",
-                isActive: draft.priority != .none,
-                tint: draft.priority.color,
-                onClear: draft.priority != .none ? { draft.priority = .none } : nil
-            )
+        AttributeChip(isActive: draft.priority != .none, tint: draft.priority.color,
+                      onClear: draft.priority != .none ? { draft.priority = .none } : nil) {
+            Menu {
+                Button(L10n.tr("无")) { draft.priority = .none }
+                Button(L10n.tr("低")) { draft.priority = .low }
+                Button(L10n.tr("中")) { draft.priority = .medium }
+                Button(L10n.tr("高")) { draft.priority = .high }
+            } label: {
+                AttributeChipLabel(title: draft.priority == .none ? L10n.tr("优先级") : draft.priority.label,
+                                   icon: draft.priority.symbol ?? "flag", isActive: draft.priority != .none, tint: draft.priority.color)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
     }
 
     private var estimateChip: some View {
-        Button {
-            showEstimatePopover.toggle()
-        } label: {
-            AttributeChipLabel(
-                title: draft.estimate.isEmpty ? L10n.tr("预估") : "\(draft.estimate)m",
-                icon: "timer",
-                isActive: !draft.estimate.isEmpty,
-                onClear: !draft.estimate.isEmpty ? { draft.estimate = "" } : nil
-            )
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showEstimatePopover, arrowEdge: .bottom) {
-            EstimatePopoverView(estimate: $draft.estimate, close: { showEstimatePopover = false })
+        AttributeChip(isActive: !draft.estimate.isEmpty, onClear: !draft.estimate.isEmpty ? { draft.estimate = "" } : nil) {
+            Button { showEstimatePopover.toggle() } label: {
+                AttributeChipLabel(title: draft.estimate.isEmpty ? L10n.tr("预估") : "\(draft.estimate)m", icon: "timer", isActive: !draft.estimate.isEmpty)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showEstimatePopover, arrowEdge: .bottom) {
+                EstimatePopoverView(estimate: $draft.estimate, close: { showEstimatePopover = false })
+            }
         }
     }
 
     private var repeatChip: some View {
-        Button {
-            showRepeatPopover.toggle()
-        } label: {
-            AttributeChipLabel(
-                title: draft.repeatKind == .none ? L10n.tr("重复") : draft.repeatKind.label,
-                icon: "repeat",
-                isActive: draft.repeatKind != .none,
-                onClear: draft.repeatKind != .none ? { draft.repeatKind = .none } : nil
-            )
+        AttributeChip(isActive: draft.repeatKind != .none, onClear: draft.repeatKind != .none ? { draft.repeatKind = .none } : nil) {
+            Button { showRepeatPopover.toggle() } label: {
+                AttributeChipLabel(title: draft.repeatKind == .none ? L10n.tr("重复") : draft.repeatKind.label, icon: "repeat", isActive: draft.repeatKind != .none)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showRepeatPopover, arrowEdge: .bottom) {
+                RepeatPopoverView(draft: $draft, close: { showRepeatPopover = false })
+            }
         }
-        .buttonStyle(.plain)
         .disabled(draft.isEditing)
-        .popover(isPresented: $showRepeatPopover, arrowEdge: .bottom) {
-            RepeatPopoverView(draft: $draft, close: { showRepeatPopover = false })
-        }
     }
 
     private var attachmentChip: some View {
-        Menu {
-            Button(L10n.tr("添加附件")) { choosingFiles = true }
-            Button(L10n.tr("粘贴图片"), action: pasteImage)
-        } label: {
-            AttributeChipLabel(
-                title: totalAttachmentCount > 0 ? "\(totalAttachmentCount)" : L10n.tr("附件"),
-                icon: "paperclip",
-                isActive: totalAttachmentCount > 0
-            )
+        AttributeChip(isActive: totalAttachmentCount > 0) {
+            Menu {
+                Button(L10n.tr("添加附件")) { choosingFiles = true }
+                Button(L10n.tr("粘贴图片"), action: pasteImage)
+            } label: {
+                AttributeChipLabel(title: totalAttachmentCount > 0 ? "\(totalAttachmentCount)" : L10n.tr("附件"), icon: "paperclip", isActive: totalAttachmentCount > 0)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .disabled(importingAttachments)
     }
 
     // MARK: - Attachment Drawer
@@ -275,11 +253,6 @@ struct TaskFormView: View {
                     }
                 }
             }
-            if let attachmentError {
-                Text(attachmentError)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-            }
         }
     }
 
@@ -292,6 +265,11 @@ struct TaskFormView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if versionConflict {
+                Button(L10n.tr("重新载入最新任务（替换当前草稿）"), action: reload)
+                    .controlSize(.small)
+                    .disabled(saving || importingAttachments || !model.canWrite)
             }
             HStack(spacing: 8) {
                 Text(model.canWrite ? L10n.tr("返回会保留草稿") : L10n.tr("离线，草稿已保留"))
@@ -308,7 +286,7 @@ struct TaskFormView: View {
                 Button(draft.isEditing ? L10n.tr("保存更改") : L10n.tr("添加任务"), action: save)
                     .buttonStyle(CueButtonStyle(prominent: true))
                     .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(saving || importingAttachments || !model.canWrite)
+                    .disabled(saving || importingAttachments || versionConflict || !model.canWrite)
                     .help(L10n.tr("⌘Return 保存"))
             }
         }
@@ -325,43 +303,60 @@ struct TaskFormView: View {
         saving = true
         let submitted = draft
         Task {
-            let err = await model.save(submitted)
-            saving = false
-            if let err { error = err }
-            else if case .form(let current) = model.routes.last, current == submitted {
-                model.pop(preservingDraft: false)
+            defer { saving = false }
+            do {
+                try await model.save(submitted)
+            } catch let err as APIError where err.isVersionConflict {
+                versionConflict = true
+                error = L10n.tr("任务已在别处修改。当前草稿已保留，请复制需要的内容后重新载入最新任务。")
+            } catch {
+                self.error = error.localizedDescription
             }
+        }
+    }
+
+    private func reload() {
+        guard !saving, !importingAttachments else { return }
+        saving = true
+        Task {
+            defer { saving = false }
+            do { try await model.reloadForm(draft) }
+            catch { self.error = error.localizedDescription }
         }
     }
 
     private func addAttachments(_ urls: [URL]) {
-        guard keptAttachments.count + draft.pendingAttachments.count + urls.count <= AttachmentLimits.count else {
-            attachmentError = L10n.tr("每个任务最多 20 个附件")
-            return
-        }
+        guard !saving, !importingAttachments else { return }
         attachmentError = nil
         importingAttachments = true
         Task { @MainActor in
             defer { importingAttachments = false }
-            do {
-                var items: [PendingAttachment] = []
-                var bytes = keptAttachments.reduce(0) { $0 + $1.size } + draft.pendingAttachments.reduce(0) { $0 + $1.data.count }
-                for url in urls {
-                    let item = try await PendingAttachment.read(url)
-                    bytes += item.data.count
-                    guard bytes <= AttachmentLimits.totalBytes else {
-                        throw APIError.transport(L10n.tr("附件总大小不能超过 30 MB"))
-                    }
-                    items.append(item)
-                }
-                draft.pendingAttachments.append(contentsOf: items)
-            } catch {
-                attachmentError = error.localizedDescription
-            }
+            await importAttachments(urls)
         }
     }
 
+    @MainActor private func importAttachments(_ urls: [URL]) async {
+        do {
+            guard totalAttachmentCount + urls.count <= AttachmentLimits.count else {
+                throw APIError.transport(L10n.tr("每个任务最多 20 个附件"))
+            }
+            var items: [PendingAttachment] = []
+            var bytes = keptAttachments.reduce(0) { $0 + $1.size } + draft.pendingAttachments.reduce(0) { $0 + $1.data.count }
+            for url in urls {
+                let item = try await PendingAttachment.read(url)
+                bytes += item.data.count
+                guard bytes <= AttachmentLimits.totalBytes else {
+                    throw APIError.transport(L10n.tr("附件总大小不能超过 30 MB"))
+                }
+                items.append(item)
+            }
+            try draft.addAttachments(items)
+            model.updateFormDraft(draft)
+        } catch { attachmentError = error.localizedDescription }
+    }
+
     private func pasteImage() {
+        guard !saving, !importingAttachments else { return }
         guard let image = NSImage(pasteboard: .general), let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff), let data = rep.representation(using: .png, properties: [:]) else {
             attachmentError = L10n.tr("剪贴板里还没有图片")
@@ -381,24 +376,30 @@ struct TaskFormView: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
-        var found = false
-        for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                found = true
-                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                    if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
-                        DispatchQueue.main.async {
-                            addAttachments([url])
-                        }
-                    } else if let url = item as? URL {
-                        DispatchQueue.main.async {
-                            addAttachments([url])
+        let files = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+        guard !files.isEmpty, !saving, !importingAttachments else { return false }
+        importingAttachments = true
+        attachmentError = nil
+        Task { @MainActor in
+            defer { importingAttachments = false }
+            do {
+                var urls: [URL] = []
+                for provider in files {
+                    let url: URL = try await withCheckedThrowingContinuation { continuation in
+                        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                            if let error { continuation.resume(throwing: error) }
+                            else if let url = item as? URL { continuation.resume(returning: url) }
+                            else if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                                continuation.resume(returning: url)
+                            } else { continuation.resume(throwing: APIError.transport(L10n.tr("无法读取拖入的文件"))) }
                         }
                     }
+                    urls.append(url)
                 }
-            }
+                await importAttachments(urls)
+            } catch { attachmentError = error.localizedDescription }
         }
-        return found
+        return true
     }
 }
 
@@ -693,6 +694,8 @@ struct RepeatPopoverView: View {
                         DatePicker("", selection: $draft.repeatReminderTime, displayedComponents: .hourAndMinute).labelsHidden()
                     }
                 }
+                Text(L10n.tr("重复任务使用这里的开始日期、时间与提醒。"))
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
                 Text(L10n.tr("按所选日期自动重复，每次可单独编辑或跳过。"))
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
@@ -706,6 +709,9 @@ struct RepeatPopoverView: View {
         }
         .padding(14)
         .frame(width: 270)
+        .onChange(of: draft.repeatKind) { old, new in
+            if old == .none, new != .none, draft.scheduledMode != .none { draft.repeatStart = draft.scheduledDate }
+        }
         .todoCueAccent()
     }
 }
