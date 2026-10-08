@@ -358,19 +358,7 @@ struct QuickAddView: View {
     }
 
     private func expand() {
-        var draft = model.savedDraft ?? TaskDraft()
-        // The day comes from the surface, not from whether anything was typed: opening the form
-        // from a row labelled "Add to Sep 20" must not quietly default to today.
-        if let date, let parsed = TCDate.parseLocalDate(date) {
-            draft.scheduledMode = .date
-            draft.scheduledDate = parsed
-        }
-        if hasText {
-            draft.title = model.quickAddText
-            draft.scheduledMode = .date
-            model.quickAddText = ""
-        }
-        model.presentForm(draft)
+        model.expandQuickAdd(on: date)
     }
 }
 

@@ -35,7 +35,9 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         window.hidesOnDeactivate = false
         window.level = .floating
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-        window.isMovableByWindowBackground = true
+        // Plain SwiftUI text fields can otherwise hand their selection drag to the window.
+        // Window movement is explicit and confined to the header's drag area.
+        window.isMovableByWindowBackground = false
         window.isOpaque = false
         window.backgroundColor = .clear
         // Tahoe's window shadow adds a rectangular rim even to transparent,
@@ -202,6 +204,17 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         }
     }
 
+}
+
+struct PanelDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> DragView { DragView() }
+    func updateNSView(_ nsView: DragView, context: Context) {}
+
+    final class DragView: NSView {
+        override var mouseDownCanMoveWindow: Bool { false }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
+    }
 }
 
 /// One native glass plane for the floating utility. Content uses quiet, readable fills.

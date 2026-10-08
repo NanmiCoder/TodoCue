@@ -3,6 +3,16 @@ import Foundation
 
 extension L10n {
     static let english: [String: String] = [
+        "准备做什么？": "What would you like to do?",
+        "添加备注、链接或详细想法...": "Add notes, links, or details...",
+        "项目名称": "Project name",
+        "计划、截止与提醒": "Schedule, deadline, and reminder",
+        "预估": "Estimate",
+        "提醒 ": "Reminder ",
+        "重新载入最新任务（替换当前草稿）": "Reload latest task (replace this draft)",
+        "任务已在别处修改。当前草稿已保留，请复制需要的内容后重新载入最新任务。": "This task changed elsewhere. Your draft is kept. Copy anything you need before reloading the latest task.",
+        "无法读取拖入的文件": "Could not read the dropped file",
+        "重复任务使用这里的开始日期、时间与提醒。": "Repeating tasks use the start date, time, and reminder set here.",
         "{0}日期": "{0} date",
         "{0}时间": "{0} time",
         "选择{0}日期": "Choose {0} date",

@@ -162,26 +162,18 @@ struct SegmentedCapsule<Item: Identifiable & Equatable>: View {
 }
 
 /// A compact, tactile chip for interactive metadata selection.
-struct AttributeChipLabel: View {
-    let title: String
-    var icon: String? = nil
+struct AttributeChip<Control: View>: View {
     var isActive: Bool = false
     var tint: Color? = nil
     var onClear: (() -> Void)? = nil
+    @ViewBuilder var control: () -> Control
     @State private var hovered = false
     @Environment(\.accent) private var accent
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 5) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: isActive ? .semibold : .medium))
-                    .foregroundStyle(isActive ? (tint ?? accent) : .secondary)
-            }
-            Text(title)
-                .font(.system(size: 11, weight: isActive ? .medium : .regular))
-                .foregroundStyle(isActive ? Color.primary : .secondary)
+            control()
             if isActive, let onClear {
                 Button(action: onClear) {
                     Image(systemName: "xmark.circle.fill")
@@ -190,6 +182,7 @@ struct AttributeChipLabel: View {
                 }
                 .buttonStyle(.plain)
                 .help(L10n.tr("清除"))
+                .accessibilityLabel(L10n.tr("清除"))
             }
         }
         .padding(.horizontal, 9)
@@ -211,6 +204,31 @@ struct AttributeChipLabel: View {
         .onHover { hovered = $0 }
         .animation(Theme.interaction, value: hovered)
         .animation(Theme.interaction, value: isActive)
+    }
+}
+
+/// Pure label: clear actions live beside the control, never inside a Button or Menu.
+struct AttributeChipLabel: View {
+    let title: String
+    var icon: String? = nil
+    var isActive = false
+    var tint: Color? = nil
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: isActive ? .semibold : .medium))
+                    .foregroundStyle(isActive ? (tint ?? accent) : .secondary)
+            }
+            Text(title)
+                .font(.system(size: 11, weight: isActive ? .medium : .regular))
+                .foregroundStyle(isActive ? Color.primary : .secondary)
+                .lineLimit(1).truncationMode(.middle)
+        }
+        .frame(height: 26)
+        .contentShape(Rectangle())
     }
 }
 

@@ -106,8 +106,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var completingTaskIDs: Set<String> = []
     @Published private(set) var doctor: DoctorReport?
 
-    /// Draft kept when an unsaved form is dismissed.
+    /// Only the unsaved creation draft is offered by new-task entry points.
     @Published var savedDraft: TaskDraft?
+    private var editingDrafts: [String: TaskDraft] = [:]
 
     // Wiring to the AppKit shell.
     var onReminderCue: ((ReminderCue) -> Void)?
@@ -718,30 +719,40 @@ final class AppModel: ObservableObject {
         return true
     }
 
-    /// Saves a form draft. Returns an error message to show inline, or nil on success.
-    func save(_ draft: TaskDraft) async -> String? {
-        guard canWrite, let client else { return L10n.tr("离线状态下无法保存") }
-        if let err = draft.validate() { return err }
-        do {
-            if let id = draft.editingTaskId {
-                let t = try await client.updateTask(id, draft.updatePayload(), expectedVersion: draft.version)
-                merge(t)
-                showToast(Toast(message: L10n.tr("已保存")))
-            } else {
-                let env = try await client.createTask(draft.createPayload(), idempotencyKey: draft.saveIdempotencyKey)
-                merge(env.task)
-                if let s = env.series { seriesById[s.id] = s }
-                showToast(Toast(message: env.series == nil ? L10n.tr("已添加「\(env.task.title)」") : L10n.tr("已创建重复任务")))
-            }
-            savedDraft = nil
-            scheduleLiveRefresh()
-            return nil
-        } catch let e as APIError where e.isVersionConflict {
-            await refreshLive()
-            return L10n.tr("任务已在别处修改，已刷新，请重新编辑")
-        } catch {
-            return error.localizedDescription
+    /// Keep typed errors so the form can offer a real recovery action for version conflicts.
+    func save(_ draft: TaskDraft) async throws {
+        guard canWrite, let client else { throw APIError.transport(L10n.tr("离线状态下无法保存")) }
+        if let err = draft.validate() { throw APIError.transport(err) }
+        if let id = draft.editingTaskId {
+            let t = try await client.updateTask(id, draft.updatePayload(), expectedVersion: draft.version)
+            merge(t)
+            showToast(Toast(message: L10n.tr("已保存")))
+        } else {
+            let env = try await client.createTask(draft.createPayload(), idempotencyKey: draft.saveIdempotencyKey)
+            merge(env.task)
+            if let s = env.series { seriesById[s.id] = s }
+            showToast(Toast(message: env.series == nil ? L10n.tr("已添加「\(env.task.title)」") : L10n.tr("已创建重复任务")))
         }
+        if let id = draft.editingTaskId {
+            if editingDrafts[id] == draft { editingDrafts.removeValue(forKey: id) }
+        } else if savedDraft == draft {
+            savedDraft = nil
+        }
+        // Saving can finish after Back, Settings, or another form was opened. Remove only
+        // the submitted form; never dismiss the new route or resurrect a saved task as a draft.
+        routes.removeAll { $0 == .form(draft) }
+        scheduleLiveRefresh()
+    }
+
+    /// Explicitly replaces the stale form only after the user chooses to reload it.
+    func reloadForm(_ draft: TaskDraft) async throws {
+        guard let client, let id = draft.editingTaskId else { throw APIError.notConnected }
+        let latest = try await client.task(id).task
+        merge(latest)
+        guard case .form(let current) = routes.last,
+              current.saveIdempotencyKey == draft.saveIdempotencyKey else { return }
+        editingDrafts.removeValue(forKey: id)
+        routes[routes.count - 1] = .form(TaskDraft(editing: latest))
     }
 
     func exportJSON() {
@@ -826,17 +837,23 @@ final class AppModel: ObservableObject {
     }
 
     func newTask() {
-        if case .form = routes.last { onOpenPanel?(true); return }
+        if case .form(let current) = routes.last, !current.isEditing { onOpenPanel?(true); return }
+        preserveDraft()
         routes = [.form(savedDraft ?? TaskDraft())]
         onOpenPanel?(true)
     }
 
     func edit(_ task: TodoTask) {
-        let draft = savedDraft?.editingTaskId == task.id ? savedDraft! : TaskDraft(editing: task)
+        if case .form(let current) = routes.last, current.editingTaskId == task.id {
+            onOpenPanel?(true)
+            return
+        }
+        let draft = editingDrafts[task.id] ?? TaskDraft(editing: task)
         presentForm(draft)
     }
 
     func presentForm(_ draft: TaskDraft) {
+        preserveDraft()
         routes.append(.form(draft))
         onOpenPanel?(true)
     }
@@ -1046,7 +1063,47 @@ final class AppModel: ObservableObject {
     }
 
     func preserveDraft() {
-        if case .form(let d) = routes.last, d.hasContent { savedDraft = d }
+        // Settings/history can cover a form; leaving that stack must still preserve its edits.
+        for route in routes {
+            guard case .form(let draft) = route else { continue }
+            if let id = draft.editingTaskId {
+                editingDrafts[id] = draft.hasUnsavedEdits ? draft : nil
+            } else {
+                // Clearing a resumed draft must clear its old cached content too.
+                savedDraft = draft.hasContent ? draft : nil
+            }
+        }
+    }
+
+    func updateFormDraft(_ draft: TaskDraft) {
+        if let index = routes.lastIndex(where: {
+            if case .form(let current) = $0 { return current.saveIdempotencyKey == draft.saveIdempotencyKey }
+            return false
+        }) {
+            routes[index] = .form(draft)
+        }
+        if let id = draft.editingTaskId {
+            if editingDrafts[id]?.saveIdempotencyKey == draft.saveIdempotencyKey {
+                editingDrafts[id] = draft.hasUnsavedEdits ? draft : nil
+            }
+        } else if savedDraft?.saveIdempotencyKey == draft.saveIdempotencyKey {
+            savedDraft = draft.hasContent ? draft : nil
+        }
+    }
+
+    func expandQuickAdd(on date: String? = nil) {
+        let hasTitle = !quickAddText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // An explicitly typed new task must never inherit another task's notes or attachments.
+        var draft = hasTitle ? TaskDraft() : (savedDraft ?? TaskDraft())
+        if let date, let parsed = TCDate.parseLocalDate(date) {
+            draft.scheduledMode = .date
+            draft.scheduledDate = parsed
+        } else if hasTitle {
+            draft.scheduledMode = .date
+            draft.scheduledDate = TaskDraft.defaultDate()
+        }
+        if hasTitle { draft.title = quickAddText; quickAddText = "" }
+        presentForm(draft)
     }
 
     func pop(preservingDraft: Bool = true) {

@@ -28,7 +28,7 @@ struct PanelRootView: View {
     @ViewBuilder private var content: some View {
         switch model.routes.last {
         case .detail(let id): TaskDetailView(taskId: id).transition(.opacity)
-        case .form(let draft): TaskFormView(draft: draft).transition(.opacity)
+        case .form(let draft): TaskFormView(draft: draft).id(draft.saveIdempotencyKey).transition(.opacity)
         case .settings: SettingsView().transition(.opacity)
         case .calendar: CalendarView().transition(.opacity)
         case .completed: CompletedView().transition(.opacity)
@@ -54,7 +54,7 @@ struct HeaderView: View {
                     CueMark().padding(.trailing, 5)
                 }
                 Text("TodoCue").font(.system(size: 12, weight: .semibold)).tracking(0.3).foregroundStyle(.secondary)
-                Spacer(minLength: 0)
+                PanelDragArea().frame(maxWidth: .infinity).frame(height: 30)
                 if model.isLoading { ProgressView().controlSize(.mini).padding(.trailing, 4) }
                 if model.routes.isEmpty {
                     // ⌘⇧K lives in AppDelegate's key monitor with the other panel shortcuts, so it
