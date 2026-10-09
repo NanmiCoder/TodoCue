@@ -9,6 +9,8 @@ private final class FakeItemStore: AppleItemStore {
     var onChange: (() -> Void)?
     var granted = true
     var sourceAvailable = true
+    /// The account the containers currently live in (macOS can migrate a calendar between accounts).
+    var source = "local"
     var containers: [AppleSyncKind: String] = [:]
     var items: [AppleSyncKind: [String: Stored]] = [.event: [:], .reminder: [:]]
     /// Linked items that still exist but were moved to another calendar or made recurring.
@@ -23,14 +25,16 @@ private final class FakeItemStore: AppleItemStore {
 
     func container(_ kind: AppleSyncKind, identifier: String?, sourceIdentifier: String?, title: String) throws -> AppleSyncContainer {
         if let identifier, containers[kind] == identifier {
-            return AppleSyncContainer(identifier: identifier, title: title, sourceTitle: "iCloud", sourceIdentifier: "icloud", isICloud: true)
+            return AppleSyncContainer(identifier: identifier, title: title, sourceTitle: source, sourceIdentifier: source,
+                                      isICloud: source == "icloud")
         }
         if sourceIdentifier != nil && !sourceAvailable { throw AppleSyncStoreError.accountUnavailable }
         next += 1
         let id = "\(kind)-container-\(next)"
         containers[kind] = id
         items[kind] = [:]
-        return AppleSyncContainer(identifier: id, title: title, sourceTitle: "iCloud", sourceIdentifier: "icloud", isICloud: true)
+        return AppleSyncContainer(identifier: id, title: title, sourceTitle: source, sourceIdentifier: source,
+                                  isICloud: source == "icloud")
     }
 
     private func item(_ id: String, _ stored: Stored) -> AppleItem {
@@ -398,6 +402,22 @@ final class AppleSyncControllerTests: XCTestCase {
         XCTAssertEqual(sync.lastError, AppleSyncStoreError.accountUnavailable.errorDescription)
         XCTAssertNil(store.containers[.event])
         XCTAssertEqual(sync.links.count, 1)
+    }
+
+    func testContainerMigratedToICloudIsFollowed() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
+        let sync = make(store, backend)
+        await sync.syncNow()
+        XCTAssertEqual(sync.containers[.event]?.isICloud, false)
+
+        store.source = "icloud" // the user turned on iCloud Calendars; macOS moved the calendar
+        await sync.syncNow()
+        XCTAssertEqual(sync.containers[.event]?.isICloud, true)
+        let saved = AppleSyncState.load(from: dir.appendingPathComponent("apple-sync.json"))
+        XCTAssertEqual(saved.sourceId(.event), "icloud")
+        XCTAssertEqual(sync.links.count, 1, "same calendar: links are kept")
+        XCTAssertEqual(backend.calls, [])
     }
 
     // MARK: - Merging

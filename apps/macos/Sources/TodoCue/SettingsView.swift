@@ -201,6 +201,13 @@ private struct AppleSyncSection: View {
             channel(.reminder, title: L10n.tr("同步到提醒事项"))
             Text(L10n.tr("有日期的待办会出现在 Apple 日历和提醒事项的「TodoCue」中，经 iCloud 同步到 iPhone。在那边修改、完成或删除，会写回 TodoCue（删除即取消任务）。仅在 TodoCue 运行时同步，不设闹钟。"))
                 .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            // Both on shows every dated task twice in Calendar: once as an event, once as a reminder.
+            Text(sync.isEnabled(.event) && sync.isEnabled(.reminder)
+                 ? L10n.tr("两个都开着：同一任务会在日历里显示两次。建议只保留「同步到提醒事项」。")
+                 : L10n.tr("推荐只开「同步到提醒事项」：可直接勾选完成，带日期的提醒也会显示在日历里（iOS 18 / macOS 15 起）。"))
+                .font(.system(size: 11))
+                .foregroundStyle(sync.isEnabled(.event) && sync.isEnabled(.reminder) ? Color.orange : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if sync.isAnyEnabled {
                 HStack(spacing: 8) {
                     Text(statusText).font(.system(size: 11))
@@ -271,7 +278,10 @@ private struct AppleSyncSection: View {
                     Text(L10n.tr("「\(container.title)」· \(container.sourceTitle)"))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                     if !container.isICloud {
-                        Text(L10n.tr("不在 iCloud 账户中，不会同步到 iPhone"))
+                        Text(kind == .event
+                             ? L10n.tr("这台 Mac 未开启 iCloud 日历，不会同步到 iPhone。可在系统设置 › Apple 账户 › iCloud 中开启「日历」。")
+                             : L10n.tr("这台 Mac 未开启 iCloud 提醒事项，不会同步到 iPhone。可在系统设置 › Apple 账户 › iCloud 中开启「提醒事项」。"))
+                            .fixedSize(horizontal: false, vertical: true)
                             .font(.system(size: 11)).foregroundStyle(.orange)
                     }
                 }

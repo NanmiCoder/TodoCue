@@ -238,6 +238,11 @@ final class AppleSyncController: ObservableObject {
             state.links.removeAll { $0.kind == kind }
             state.setContainer(container.identifier, source: container.sourceIdentifier, for: kind)
             persist()
+        } else if container.sourceIdentifier != state.sourceId(kind) {
+            // The container moved accounts under us — turning on iCloud Calendars migrates local
+            // calendars into iCloud. Follow it, so a later re-creation lands in iCloud too.
+            state.setContainer(container.identifier, source: container.sourceIdentifier, for: kind)
+            persist()
         }
         if containers[kind] != container { containers[kind] = container }
         return container
