@@ -106,7 +106,8 @@ console.log(`Signing ${identity === '-' ? 'with an ad-hoc identity' : 'with Deve
 sign(path.join(prebuilds, `darwin-${arch}.node`));
 sign(path.join(runtime, 'bin/node'), path.join(root, 'scripts/node.entitlements.plist'));
 sign(path.join(app, 'Contents/Helpers/TodoCueNotifier.app'));
-sign(app);
+// Hardened runtime blocks Calendar and Reminders without this entitlement.
+sign(app, path.join(root, 'scripts/app.entitlements.plist'));
 run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
 
 console.log('Checking the bundled runtime without Homebrew or repository dependencies…');

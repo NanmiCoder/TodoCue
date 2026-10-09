@@ -75,6 +75,7 @@ struct SettingsView: View {
                             .buttonStyle(CueButtonStyle())
                     }.disabled(!model.canWrite)
                 }
+                AppleSyncSection(sync: model.appleSync)
                 if let message {
                     Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 6)
@@ -184,5 +185,99 @@ struct SettingsView: View {
             Text(v).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Two switches that mirror tasks into Apple Calendar and Reminders, which iCloud carries to the phone.
+private struct AppleSyncSection: View {
+    @ObservedObject var sync: AppleSyncController
+    @State private var message: String?
+    @State private var pendingRemoval: AppleSyncKind?
+
+    var body: some View {
+        EditorSection(title: L10n.tr("Apple 日历与提醒事项"), icon: "calendar") {
+            channel(.event, title: L10n.tr("同步到日历"))
+            Divider().opacity(0.3)
+            channel(.reminder, title: L10n.tr("同步到提醒事项"))
+            Text(L10n.tr("有日期的待办会出现在 Apple 日历和提醒事项的「TodoCue」中，经 iCloud 同步到 iPhone。在那边修改、完成或删除，会写回 TodoCue（删除即取消任务）。仅在 TodoCue 运行时同步，不设闹钟。"))
+                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if sync.isAnyEnabled {
+                HStack(spacing: 8) {
+                    Text(statusText).font(.system(size: 11))
+                        .foregroundStyle(sync.lastError == nil ? Color.secondary : .orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button(L10n.tr("立即同步")) { Task { await sync.syncNow() } }
+                        .buttonStyle(CueButtonStyle()).disabled(sync.isSyncing)
+                }
+            }
+            if let message {
+                Text(message).font(.system(size: 11)).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch).controlSize(.small)
+        // The panel rarely activates the app, so didBecomeActive cannot be relied on to notice a
+        // permission granted in System Settings. Re-read it while this section is on screen.
+        .task {
+            while !Task.isCancelled {
+                sync.refreshAccess()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+        .confirmationDialog(L10n.tr("移除 Apple 中的 TodoCue 数据？"), isPresented: Binding(
+            get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } })) {
+            Button(L10n.tr("移除"), role: .destructive) {
+                guard let kind = pendingRemoval else { return }
+                Task { message = await sync.removeData(kind) }
+            }
+        } message: {
+            Text(L10n.tr("将关闭同步，并删除 Apple 侧的「TodoCue」日历或列表。TodoCue 里的任务不受影响。"))
+        }
+    }
+
+    private var statusText: String {
+        if sync.isSyncing { return L10n.tr("正在同步…") }
+        if let error = sync.lastError { return L10n.tr("同步出错：\(error)") }
+        if let at = sync.lastSyncAt { return L10n.tr("上次同步 \(TCDate.time(at))") }
+        return L10n.tr("等待连接运行时后同步")
+    }
+
+    @ViewBuilder
+    private func channel(_ kind: AppleSyncKind, title: String) -> some View {
+        let enabled = sync.isEnabled(kind)
+        HStack(spacing: 12) {
+            Text(title)
+            Spacer(minLength: 8)
+            if sync.changing.contains(kind) { ProgressView().controlSize(.mini) }
+            Toggle(title, isOn: Binding(get: { sync.isEnabled(kind) }, set: { on in
+                Task { message = await sync.setEnabled(kind, on) }
+            })).labelsHidden().fixedSize().accessibilityLabel(title)
+                .disabled(sync.changing.contains(kind))
+        }
+        .frame(minHeight: 28)
+        if sync.access[kind] == .writeOnly {
+            Text(L10n.tr("目前只有写入权限，打开开关可申请完整访问"))
+                .font(.system(size: 11)).foregroundStyle(.orange)
+        } else if sync.access[kind] == .denied {
+            HStack(spacing: 8) {
+                Text(L10n.tr("macOS 未允许访问")).font(.system(size: 11)).foregroundStyle(.orange)
+                Spacer(minLength: 8)
+                Button(L10n.tr("打开系统设置")) { sync.openPrivacySettings(kind) }.buttonStyle(CueButtonStyle())
+            }
+        } else if enabled, let container = sync.containers[kind] {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr("「\(container.title)」· \(container.sourceTitle)"))
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    if !container.isICloud {
+                        Text(L10n.tr("不在 iCloud 账户中，不会同步到 iPhone"))
+                            .font(.system(size: 11)).foregroundStyle(.orange)
+                    }
+                }
+                Spacer(minLength: 8)
+                Button(L10n.tr("移除同步数据")) { pendingRemoval = kind }.buttonStyle(CueButtonStyle())
+            }
+        }
     }
 }

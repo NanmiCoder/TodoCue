@@ -117,6 +117,8 @@ final class AppModel: ObservableObject {
     var onCollapseNotch: (() -> Void)?
 
     private(set) var client: APIClient?
+    /// Mirror into Apple Calendar / Reminders. Lazy so tests and previews never touch EventKit.
+    private(set) lazy var appleSync = AppleSyncController(store: EventKitStore())
     private var sse: SSEClient?
     private var sseTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
@@ -169,6 +171,7 @@ final class AppModel: ObservableObject {
         loadConnection()
         watchConnectionFile()
         prepareBundledRuntime()
+        appleSync.attach(to: self)
     }
 
     func reconnect() {

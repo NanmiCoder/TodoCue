@@ -15,7 +15,7 @@ let package = Package(
             name: "TodoCue",
             dependencies: ["TodoCueKit"],
             path: "Sources/TodoCue",
-            linkerSettings: [.linkedFramework("Carbon"), .linkedFramework("ServiceManagement")]
+            linkerSettings: [.linkedFramework("Carbon"), .linkedFramework("ServiceManagement"), .linkedFramework("EventKit")]
         ),
         .executableTarget(
             name: "TodoCueNotifier",

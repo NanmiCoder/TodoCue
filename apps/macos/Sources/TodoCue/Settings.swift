@@ -1,4 +1,5 @@
 import Foundation
+import TodoCueKit
 
 /// User preferences persisted in UserDefaults.
 enum Prefs {
@@ -34,6 +35,19 @@ enum Prefs {
     static var disableNotchInFullscreen: Bool {
         get { UserDefaults.standard.object(forKey: notchDisableInFullscreen) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: notchDisableInFullscreen) }
+    }
+
+    /// Mirror tasks into Apple Calendar / Reminders. Off until the user turns it on and grants access.
+    static func isAppleSyncEnabled(_ kind: AppleSyncKind, in defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: appleSyncKey(kind)) as? Bool ?? false
+    }
+
+    static func setAppleSyncEnabled(_ on: Bool, for kind: AppleSyncKind, in defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: appleSyncKey(kind))
+    }
+
+    private static func appleSyncKey(_ kind: AppleSyncKind) -> String {
+        kind == .event ? "appleCalendarSyncEnabled" : "appleRemindersSyncEnabled"
     }
 
     /// Collapsed notch shows the cue mark and today's remaining count beside the camera.
