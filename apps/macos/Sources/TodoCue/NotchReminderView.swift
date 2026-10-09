@@ -7,22 +7,31 @@ struct NotchReminderView: View {
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
     @State private var arrivedAt = Date()
-    private let mint = Theme.accent(.dark)
+    private let signal = Dial.orange
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 13) {
                 TimelineView(.animation(minimumInterval: 1 / 30, paused: state.reduceMotion)) { context in
                     let pose = CueMotion.pose(at: context.date.timeIntervalSince(arrivedAt), reduceMotion: state.reduceMotion)
+                    let elapsed = context.date.timeIntervalSince(arrivedAt)
                     ZStack {
-                        Circle().fill(mint.opacity(0.13)).frame(width: 46, height: 46)
-                        CueMark().scaleEffect(1.1)
+                        // Two rings leave the disc as the Cue lands, then it rests.
+                        ForEach(0..<2, id: \.self) { ring in
+                            let p = CueMotion.ripple(at: elapsed - Double(ring) * 0.32, reduceMotion: state.reduceMotion)
+                            Circle().stroke(signal, lineWidth: 1.5)
+                                .frame(width: 46, height: 46)
+                                .scaleEffect(1 + 0.55 * p)
+                                .opacity(p > 0 && p < 1 ? 0.55 * (1 - p) : 0)
+                        }
+                        Circle().fill(signal).frame(width: 46, height: 46)
+                        CueMark().environment(\.accent, .white).scaleEffect(1.1)
+                            .scaleEffect(x: pose.scaleX, y: pose.scaleY).rotationEffect(.degrees(pose.rotation)).offset(y: pose.offsetY)
                     }
-                    .scaleEffect(x: pose.scaleX, y: pose.scaleY).rotationEffect(.degrees(pose.rotation)).offset(y: pose.offsetY)
                 }.frame(width: 48, height: 48).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 5) {
-                        Text(L10n.tr("轻轻 Cue 你一下")).font(.system(size: 12, weight: .semibold)).foregroundStyle(mint)
+                        Text(L10n.tr("轻轻 Cue 你一下")).font(.system(size: 12, weight: .semibold)).foregroundStyle(signal)
                         if cue.late { Text(L10n.tr("· 刚才错过了")).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)) }
                     }
                     Button { state.onCueOpen?() } label: {
@@ -47,7 +56,7 @@ struct NotchReminderView: View {
                     .buttonStyle(CueButtonStyle()).accessibilityLabel(L10n.tr("Cue 提醒延后 10 分钟"))
                 Spacer(minLength: 0)
                 if state.cueBusy { ProgressView().controlSize(.small) }
-                else { Text("TodoCue").font(.system(size: 10, weight: .medium)).tracking(0.5).foregroundStyle(.white.opacity(0.3)) }
+                else { Text("TodoCue").font(Dial.numeral(9.5)).foregroundStyle(.white.opacity(0.35)) }
             }.disabled(!model.canWrite || state.cueBusy)
             if let error = state.cueError { Text(error).font(.system(size: 11)).foregroundStyle(.orange).lineLimit(2) }
         }

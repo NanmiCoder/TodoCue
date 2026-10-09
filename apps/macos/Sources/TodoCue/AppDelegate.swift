@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default: break
         }
         #endif
+        Dial.registerFonts()
         sidePanel = SidePanelController(model: model)
         notch = NotchController(model: model)
         statusItem = StatusItemController(model: model, delegate: self)
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onClosePanel = { [weak self] in self?.sidePanel.hide() }
         model.onCollapseNotch = { [weak self] in self?.notch.collapse(immediately: true) }
         sidePanel.onShow = { [weak self] in self?.notch.collapse(immediately: true) }
+        sidePanel.onReveal = { [weak self] in self?.model.revealTick += 1 }
         notch.isPanelVisible = { [weak self] in self?.sidePanel.isVisible ?? false }
 
         HotKeyCenter.shared.handler = { [weak self] in self?.togglePanel() }

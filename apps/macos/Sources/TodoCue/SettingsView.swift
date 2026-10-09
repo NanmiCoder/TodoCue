@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var notchEnabled = Prefs.isNotchEnabled
     @State private var noFullscreen = Prefs.disableNotchInFullscreen
     @State private var notchSummary = Prefs.notchShowsSummary
+    @State private var notchVirtual = Prefs.notchOnDisplaysWithoutNotch
     @State private var loginEnabled = false
     @State private var hotkey: HotKeyCombo? = HotKeyCenter.shared.combo
     @State private var recording = false
@@ -40,6 +41,11 @@ struct SettingsView: View {
                     settingToggle(L10n.tr("收起时显示今日剩余"), isOn: $notchSummary)
                         .onChange(of: notchSummary) { _, value in Prefs.notchShowsSummary = value }
                         .disabled(!notchEnabled)
+                    settingToggle(L10n.tr("没有刘海的显示器也显示"), isOn: $notchVirtual)
+                        .onChange(of: notchVirtual) { _, value in Prefs.notchOnDisplaysWithoutNotch = value }
+                        .disabled(!notchEnabled)
+                    Text(L10n.tr("合上笔记本或使用外接显示器时，在菜单栏中间画一个刘海，跟着鼠标出现在当前屏幕上。"))
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                     settingToggle(L10n.tr("全屏时保持安静"), isOn: $noFullscreen)
                         .onChange(of: noFullscreen) { _, value in Prefs.disableNotchInFullscreen = value }
                         .disabled(!notchEnabled)

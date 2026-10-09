@@ -1,7 +1,7 @@
 **English** · [简体中文](README.zh-CN.md)
 
 <p align="center">
-  <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. A dark green open ring beside glass task cards.">
+  <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. A large signal-orange open ring behind a Dial panel on a glass tray, with a reminder dropping from the notch.">
 </p>
 
 <p align="center">
@@ -40,20 +40,14 @@ Your Agent interprets the language. TodoCue stores the tasks and runs the remind
 Tasks created by your Agent appear in the panel. Start with the next suggestion, then see the rest of today's plans. Open a task to see its notes, project, estimate, and deadline together.
 
 <p align="center">
-  <img src="assets/readme/en/today-light.png" width="390" alt="Light-mode Today panel with a next task, scheduled tasks, daily progress, and quick add.">
-  <img src="assets/readme/en/task-detail-dark.png" width="390" alt="Dark-mode task detail with notes, hiking photo attachments, schedule, and task actions.">
+  <img src="assets/readme/en/dial.png" width="100%" alt="The Dial design language: a graphite header tile with a large wide numeral and dot tabs, a frosted Next tile with a dotted progress gauge, a graphite task list, the notch reminder cue, the notch quick look, and signal-orange components.">
 </p>
 
-These are fresh English app screenshots at 2× resolution, captured with fictional tasks in a separate demo database. The hiking photos are generated demo attachments. **The app supports English and Simplified Chinese**—switch in Settings and your choice takes effect immediately. Resize the panel from 300 to 600 points; TodoCue remembers its width. The menu bar and notch quick look keep your tasks close by.
+**Dial** is TodoCue's design language: graphite tiles for what you read at a glance, frosted tiles for what you act on, wide numerals, and a single signal orange. The tiles sit together in one tray — Liquid Glass on macOS 26 — so the panel reads as a single object on any wallpaper. Finishing a task draws its checkmark and advances the dotted gauge; reminders drop from the notch with a soft ripple. **The app supports English and Simplified Chinese**—switch in Settings and your choice takes effect immediately. Resize the panel from 300 to 600 points; TodoCue remembers its width.
 
 ## Prefer a form? It's still here.
 
 Away from an Agent conversation, type a task title at the bottom of the panel and press Return to add it to today. Choose **Add details** to fill in a project, priority, time, reminder, or repeat rule. Your existing text stays in place.
-
-<p align="center">
-  <img src="assets/readme/en/quick-add-light.png" width="390" alt="Quick add in the Today panel, with an option to add details.">
-  <img src="assets/readme/en/task-form-light.png" width="390" alt="Full task form with notes, project, priority, and estimate.">
-</p>
 
 Drag the empty area in the top bar to move the panel; dragging in titles and notes selects text. Back keeps drafts, with new tasks and each task’s edits stored separately. If a task changes elsewhere, the editor keeps your input and offers an explicit reload of the latest task.
 
@@ -62,25 +56,25 @@ Drag the empty area in the top bar to move the panel; dragging in titles and not
 - **Carry it to your iPhone.** Turn on **Sync to Calendar** or **Sync to Reminders** in Settings and dated tasks appear in a "TodoCue" calendar or reminder list that iCloud brings to your iPhone. Changes go both ways: reschedule, rename, or check off there and TodoCue follows; deleting an item cancels its task. Reminders alone is the recommended setup — dated reminders also appear in Calendar on iOS 18 and macOS 15. Sync runs while the app is open and adds no alerts of its own. [Details (中文)](docs/apple-sync.md)
 - **Reorder as you go.** Drag a task and its neighbors move out of the way. Move between projects in All or dates in Upcoming; reorder within a group in Today. Undo a move or restore automatic sorting.
 - **Choose your language.** English and Simplified Chinese are available in Settings. The first launch follows your system language, with English as the fallback. Task content stays in its original language.
-- **Keep it close.** A native SwiftUI and AppKit floating panel with light and dark appearances. macOS 26 uses Liquid Glass; earlier systems use compatible materials.
-- **A glance at the notch.** On MacBooks with a notch, see the remaining count beside it. Hover to expand today's tasks, then complete, snooze, reschedule, or add a task. Click to pin and type; Esc collapses it.
+- **Keep it close.** A native SwiftUI and AppKit floating panel in light and dark appearances. Graphite tiles stay dark; frosted tiles follow your system and blur the desktop behind them.
+- **A glance at the notch.** On MacBooks with a notch, see the remaining count beside it. Hover to expand today's tasks, then complete, snooze, reschedule, or add a task. Click to pin and type; Esc collapses it. With the lid closed or on external displays, TodoCue draws a notch in the middle of the menu bar that follows the pointer to whichever screen you are using; turn it off in Settings.
 - **Reminders that follow through.** Repeat tasks, set reminders, snooze, and undo completion. Closing the panel leaves the background reminder service running.
 - **Your data stays yours.** Tasks live in `~/.todocue/todocue.sqlite`. Replacing, removing, or reinstalling the app keeps that directory intact.
 
 ## Download & install
 
-Current version: **[v0.2.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.2.1)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
+Current version: **[v0.4.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.4.0)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
 
 | Your Mac | Installer |
 | --- | --- |
-| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.2.1/TodoCue-0.2.1-macOS-arm64.dmg) |
-| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.2.1/TodoCue-0.2.1-macOS-x64.dmg) |
+| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.0/TodoCue-0.4.0-macOS-arm64.dmg) |
+| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.0/TodoCue-0.4.0-macOS-x64.dmg) |
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
 The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
-[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.2.1/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.0/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
 
 ## Install the Skill
 

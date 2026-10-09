@@ -25,6 +25,20 @@ enum NotchLayout {
         return CGRect(x: notch.minX - extra, y: notch.minY, width: notch.width + 2 * extra, height: notch.height)
     }
 
+    /// Width of the notch drawn on displays without a camera housing, close to the 16" MacBook's.
+    static let virtualNotchWidth: CGFloat = 185
+    /// Height used when the screen shows no menu bar (auto-hidden, or a display without its own).
+    static let virtualNotchFallbackHeight: CGFloat = 24
+
+    /// A notch for a display without one: centred in the menu bar and exactly as tall as it, so
+    /// the expanded card still starts just below the bar. Coordinates are AppKit's.
+    static func virtualNotch(screen: CGRect, visible: CGRect) -> CGRect {
+        let menuBar = screen.maxY - visible.maxY
+        let height = menuBar >= 18 ? menuBar : virtualNotchFallbackHeight
+        let width = min(virtualNotchWidth, screen.width)
+        return CGRect(x: screen.midX - width / 2, y: screen.maxY - height, width: width, height: height)
+    }
+
     /// Expanded card: hangs from the top edge, centered on the notch, clamped into the screen.
     static func expandedFrame(notch: CGRect, screen: CGRect, contentHeight: CGFloat, width: CGFloat, maxHeight: CGFloat) -> CGRect {
         let w = min(width, screen.width)

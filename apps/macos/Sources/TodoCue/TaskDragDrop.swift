@@ -313,8 +313,8 @@ struct DraggableTaskRow: View {
         .overlay {
             if let lifted {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.accentColor.opacity(0.045))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.accentColor.opacity(0.16), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                    .fill(Dial.orange.opacity(0.06))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Dial.orange.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
                     .offset(lifted.projection.landingOffset)
                     .animation(Theme.dragShift, value: lifted.projection.landingOffset)
                     .allowsHitTesting(false)
@@ -323,7 +323,8 @@ struct DraggableTaskRow: View {
                         .frame(width: 16, height: 30).padding(.top, compact ? 4 : 7)
                     TaskRowView(task: task, reasons: reasons, showProject: showProject, compact: compact)
                 }
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color(white: 0.2), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Dial.orange.opacity(0.5), lineWidth: 1))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
                 .shadow(color: .black.opacity(lifted.phase == .dragging ? 0.17 : 0.06), radius: lifted.phase == .dragging ? 12 : 3, y: lifted.phase == .dragging ? 5 : 1)
                 .scaleEffect(lifted.phase == .dragging && !Theme.reduceMotion ? 1.02 : 1)
@@ -335,6 +336,10 @@ struct DraggableTaskRow: View {
             }
         }
         .zIndex(lifted == nil ? 0 : 10)
+        // A finished row lifts away slightly smaller while its neighbours close ranks.
+        .transition(Theme.reduceMotion ? .opacity : .asymmetric(
+            insertion: .opacity.combined(with: .offset(y: -6)),
+            removal: .opacity.combined(with: .scale(scale: 0.94, anchor: .leading))))
         // The measurement/hit region stays at its original layout position.
         .background(TaskDropRegion(surface: surface, group: group, beforeId: task.id, afterId: nextId,
                                    isRow: true, enabled: enabled, droppable: reorderable))

@@ -1,7 +1,7 @@
 [English](README.md) · **简体中文**
 
 <p align="center">
-  <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. 深绿色开口圆环与玻璃任务卡片组成的 3D 品牌插画。">
+  <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. 信号橙开口圆环衬在玻璃托盘上的 Dial 面板后方，刘海里落下一条提醒。">
 </p>
 
 <p align="center">
@@ -40,20 +40,14 @@
 Agent 创建的任务会同步出现在面板中。打开后，先看下一步建议，再看今天的其余安排。点开任务，备注、项目、预计耗时和截止时间都在同一处。
 
 <p align="center">
-  <img src="assets/readme/zh-CN/today-light.png" width="390" alt="浅色今日面板：下一步建议、已安排任务、今日完成进度与底部快速输入。">
-  <img src="assets/readme/zh-CN/task-detail-dark.png" width="390" alt="深色任务详情：备注、徒步图片附件、任务安排，以及完成和稍后提醒操作。">
+  <img src="assets/readme/zh-CN/dial.png" width="100%" alt="「仪表 Dial」设计语言：石墨色头部块上的宽体大数字和圆点切换、带点阵进度表盘的雾面「下一步」块、石墨色任务列表、刘海提醒、刘海速览，以及信号橙组件。">
 </p>
 
-**浅色的今天，深色的详情。** 上图为重新截取的中文 macOS 界面，保留 2× 分辨率，任务来自独立的演示数据库；徒步图片为生成的演示附件。窗口可在 300–600 点之间调整宽度并记住选择；菜单栏和刘海快览提供随手查看的入口。
+**「仪表 Dial」是 TodoCue 的设计语言。** 一眼要看的放在石墨色块上，要动手处理的放在雾面块上；数字用宽体字，强调只用一种信号橙。各个块放在同一块托盘里（macOS 26 上是 Liquid Glass），换什么壁纸，面板看起来都是一个整体。完成任务时勾选标记会一笔画出，点阵表盘随之前进；提醒从刘海落下，并带一圈轻柔的波纹。窗口可在 300–600 点之间调整宽度并记住选择。
 
 ## 也可以打开面板，手动安排
 
 不在 Agent 对话里时，在底部输入任务标题，回车就加入今天。需要更完整的安排时，点「添加详情」继续填写项目、优先级、时间、提醒或重复规则，已经输入的内容会保留。
-
-<p align="center">
-  <img src="assets/readme/zh-CN/quick-add-light.png" width="390" alt="交互第一步：在今日面板底部输入新任务，可直接提交或添加详情。">
-  <img src="assets/readme/zh-CN/task-form-light.png" width="390" alt="交互第二步：同一条输入展开为任务表单，可补充备注、项目、预计耗时和时间安排。">
-</p>
 
 面板可从顶部空白区域拖动，标题和备注里的鼠标拖拽用于选择文字。返回会保留草稿，新建草稿与各任务的编辑草稿分别保存；如果任务在别处发生修改，编辑器会保留当前输入，并提供重新载入最新任务的入口。
 
@@ -61,26 +55,26 @@ Agent 创建的任务会同步出现在面板中。打开后，先看下一步�
 - **看得更远。** 从面板头部（⌘⇧K）打开日历，做过的、在做的和排到几个月后的任务在同一个平面上。可以在月视图和周视图之间切换，点某一天就展开这天的完整安排。改期直接把任务拖到另一天，时刻保留、截止与提醒不动；也可以直接往正在看的那天添加。超出 30 天预生成范围的重复任务会显示为「待生成」占位，而不是让远期月份看起来空空如也。
 - **带到 iPhone 上。** 在设置里打开「同步到日历」或「同步到提醒事项」，有日期的待办会出现在「TodoCue」日历或提醒事项列表里，经 iCloud 同步到 iPhone。双向同步：在那边改期、改标题或勾选完成，TodoCue 跟着变；删除即取消对应任务。推荐只开提醒事项：iOS 18 / macOS 15 起，带日期的提醒也会显示在日历里。仅在 App 运行时同步，不额外设闹钟。[详细说明](docs/apple-sync.md)
 - **中英切换。** 在设置中选择简体中文或 English，立即生效并记住选择；首次启动跟随系统语言，任务内容保持原文。
-- **待在手边。** 原生 SwiftUI + AppKit 浮动面板，支持浅色与深色外观。macOS 26 使用 Liquid Glass，旧系统采用兼容材质。
-- **刘海就是入口。** 在有刘海的 MacBook 上，刘海两侧常显今日剩余数；鼠标停上去就展开今日任务：下一步、逾期与已安排各项，可直接完成、稍后提醒、改期到明天，或回车添加新任务。点一下刘海可固定并直接输入，Esc 收起。
+- **待在手边。** 原生 SwiftUI + AppKit 浮动面板，支持浅色与深色外观。石墨色块始终保持深色；雾面块跟随系统外观，并模糊背后的桌面。
+- **刘海就是入口。** 在有刘海的 MacBook 上，刘海两侧常显今日剩余数；鼠标停上去就展开今日任务：下一步、逾期与已安排各项，可直接完成、稍后提醒、改期到明天，或回车添加新任务。点一下刘海可固定并直接输入，Esc 收起。合上笔记本或使用外接显示器时，TodoCue 会在菜单栏中间画一个刘海，跟着鼠标出现在你正在用的屏幕上；不需要可以在设置里关掉。
 - **顺序随手调。** 拖动任务时，上下条目平滑让位。「全部」可跨项目移动，「即将到来」可跨日期改期；「今日」在同组内调整顺序，支持撤销和恢复自动排序。
 - **安排有后续。** 支持重复任务、提醒、稍后提醒，以及完成后的撤销。关闭面板后，后台服务继续负责提醒。
 - **数据属于你。** 任务保存在 `~/.todocue/todocue.sqlite`。覆盖、删除或重新安装 App 后，这个目录仍然保留。
 
 ## 下载与安装
 
-当前版本 **[v0.2.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.2.1)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
+当前版本 **[v0.4.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.4.0)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
 
 | 你的 Mac | 安装包 |
 | --- | --- |
-| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.2.1/TodoCue-0.2.1-macOS-arm64.dmg) |
-| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.2.1/TodoCue-0.2.1-macOS-x64.dmg) |
+| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.0/TodoCue-0.4.0-macOS-arm64.dmg) |
+| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.0/TodoCue-0.4.0-macOS-x64.dmg) |
 
 打开 DMG → 将 **TodoCue.app 拖入 Applications** → 从应用程序中启动。
 
 App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无需另装运行时。需要提醒时，在设置中允许通知。更新时下载新 DMG 并替换 App；当前尚无 App 内自动更新。
 
-[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.2.1/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
+[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.0/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
 ## 安装 Skills
 

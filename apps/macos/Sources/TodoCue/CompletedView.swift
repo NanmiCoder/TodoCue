@@ -12,22 +12,20 @@ struct CompletedView: View {
     @State private var query = ""
 
     var body: some View {
-        GeometryReader { geometry in
-            // Match the list's gutter ramp: 12pt at 300pt, 16pt at 340pt and above.
-            let inset = min(16, 12 + max(0, geometry.size.width - Theme.panelMinWidth) * 0.1)
-            VStack(spacing: 10) {
-                SearchField(query: $query, placeholder: L10n.tr("搜索已完成的任务"))
-                    .padding(.horizontal, inset)
-                ScrollView {
-                    CompletedList(query: query)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .scrollIndicators(.automatic)
-                .cueSurface(radius: 18)
-                .padding(.horizontal, inset)
-                .padding(.bottom, 12)
+        VStack(spacing: Dial.gap) {
+            SearchField(query: $query, placeholder: L10n.tr("搜索已完成的任务"))
+                .padding(8)
+                .dialTile(.frost, radius: 24)
+                .dialReveal(1)
+            ScrollView {
+                CompletedList(query: query)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .scrollIndicators(.never)
+            .frame(maxHeight: .infinity)
+            .dialTile(.graphite)
+            .dialReveal(2)
         }
         .onAppear { if model.completedTasks.isEmpty { model.loadCompleted(reset: true) } }
     }
@@ -147,7 +145,7 @@ struct SearchField: View {
                     .buttonStyle(.plain).accessibilityLabel(L10n.tr("清除搜索"))
             }
         }
-        .font(.system(size: 12)).padding(10)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+        .font(.system(size: 12)).padding(.horizontal, 12).frame(height: 36)
+        .background(Color.primary.opacity(0.07), in: Capsule())
     }
 }

@@ -10,33 +10,41 @@ import TodoCueKit
 struct CalendarView: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
+    /// The anchor as of the last render, so a page turn knows which way to slide.
+    @State private var previousAnchor = ""
 
     var body: some View {
         GeometryReader { geometry in
-            // Match the list's gutter ramp: 12pt at 300pt, 16pt at 340pt and above.
-            let inset = min(16, 12 + max(0, geometry.size.width - Theme.panelMinWidth) * 0.1)
-            // The quick-add row is pinned under the calendar, so it is not the grid's to spend.
-            let available = geometry.size.height - CalendarLayout.quickAdd
-            VStack(spacing: 0) {
-                CalendarNavigator(available: available)
-                    .frame(height: CalendarLayout.navigator)
-                    .padding(.horizontal, inset)
-                switch model.calendarSpan {
-                case .month: monthBody(available: available, inset: inset)
-                case .week: weekBody(inset: inset)
+            let inset: CGFloat = 12
+            // The quick-add pill is pinned under the calendar, and the tiles' own gaps and
+            // padding are chrome too, so neither is the grid's to spend.
+            let available = geometry.size.height - CalendarLayout.quickAdd - CalendarLayout.tileChrome
+            VStack(spacing: Dial.gap) {
+                // Month and week replace each other in one frame instead of stacking mid-switch.
+                ZStack {
+                    VStack(spacing: Dial.gap) {
+                        switch model.calendarSpan {
+                        case .month: monthBody(available: available, inset: inset)
+                        case .week: weekBody(available: available, inset: inset)
+                        }
+                    }
+                    .id(model.calendarSpan)
+                    .transition(Self.swap)
                 }
-                QuickAddView(date: model.calendarSelected).padding(.horizontal, inset)
+                QuickAddView(date: model.calendarSelected).dialReveal(3)
             }
             .overlay(alignment: .bottom) {
                 if let hint = model.dragHint, model.draggedTask?.surface == .calendar {
-                    Text(hint).font(.system(size: 11)).padding(8)
-                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
+                    Text(hint).font(.system(size: 11)).padding(.horizontal, 12).padding(.vertical, 8)
+                        .dialTile(.graphite, radius: 16)
                         .padding(.bottom, CalendarLayout.quickAdd + 6)
                         .allowsHitTesting(false)
                 }
             }
         }
-        .animation(Theme.interaction, value: model.calendarSpan)
+        .animation(Dial.snap, value: model.calendarSpan)
+        .onAppear { previousAnchor = model.calendarAnchor }
+        .onChange(of: model.calendarAnchor) { _, new in previousAnchor = new }
         .alert(L10n.tr("计划晚于截止时间"), isPresented: Binding(get: { model.pendingReschedule != nil },
                                                     set: { if !$0 { model.pendingReschedule = nil } }),
                presenting: model.pendingReschedule) { pending in
@@ -59,10 +67,21 @@ struct CalendarView: View {
             : CalendarRange.days(span: .month, anchor: model.calendarAnchor, firstWeekday: model.calendarFirstWeekday)
 
         VStack(spacing: 0) {
-            WeekdayHeader().frame(height: CalendarLayout.weekdayHeader).padding(.horizontal, inset)
-            MonthGridView(days: days, cellHeight: metrics.cellHeight)
-                .frame(height: metrics.gridHeight)
-                .padding(.horizontal, inset)
+            CalendarNavigator(available: available)
+                .frame(height: CalendarLayout.navigator)
+            WeekdayHeader().frame(height: CalendarLayout.weekdayHeader)
+            ZStack {
+                MonthGridView(days: days, cellHeight: metrics.cellHeight)
+                    .id(days.first ?? "")
+                    .transition(pageTurn)
+            }
+            .frame(height: metrics.gridHeight)
+            .clipped()
+        }
+        .padding(.horizontal, inset).padding(.vertical, CalendarLayout.tilePadding)
+        .dialTile(.frost)
+        .dialReveal(1)
+        ZStack {
             ScrollView {
                 DayAgendaList(date: model.calendarSelected)
                     .padding(10)
@@ -71,18 +90,24 @@ struct CalendarView: View {
             // A new day starts at the top of its own list, and a toast must squeeze this pane
             // rather than the grid, so the height stays flexible instead of pinned.
             .id(model.calendarSelected)
-            .frame(maxHeight: .infinity)
-            .scrollIndicators(.automatic)
-            // Same rows as the week span, so the same substrate as the week span.
-            .cueSurface(radius: 18)
-            .padding(.horizontal, inset)
-            .padding(.top, 8)
+            .scrollIndicators(.never)
+            .transition(Self.swap)
         }
+        .frame(maxHeight: .infinity)
+        // Same rows as the week span, so the same graphite tile as the week span and the lists.
+        .dialTile(.graphite)
+        .dialReveal(2)
     }
 
-    @ViewBuilder private func weekBody(inset: CGFloat) -> some View {
+    @ViewBuilder private func weekBody(available: CGFloat, inset: CGFloat) -> some View {
         let days = CalendarRange.days(span: .week, anchor: model.calendarAnchor,
                                       firstWeekday: model.calendarFirstWeekday)
+        CalendarNavigator(available: available)
+            .frame(height: CalendarLayout.navigator)
+            .padding(.horizontal, inset).padding(.vertical, CalendarLayout.tilePadding)
+            .dialTile(.frost)
+            .dialReveal(1)
+        ZStack {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 // All seven days, always: a week planner that hides its empty days is the one you
@@ -101,10 +126,31 @@ struct CalendarView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .id(model.calendarAnchor)
+        .scrollIndicators(.never)
+        .transition(pageTurn)
+        }
         .frame(maxHeight: .infinity)
-        .scrollIndicators(.automatic)
-        .cueSurface(radius: 18)
-        .padding(.horizontal, inset)
+        .clipped()
+        .dialTile(.graphite)
+        .dialReveal(2)
+    }
+
+    /// Content that replaces content in place: out quickly, in just behind it.
+    static var swap: AnyTransition {
+        Theme.reduceMotion ? .opacity
+            : .asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.16)),
+                          removal: .opacity.animation(.easeIn(duration: 0.1).delay(0.08)))
+    }
+
+    /// Paging slides the new month or week in from the side you moved towards.
+    private var pageTurn: AnyTransition {
+        if Theme.reduceMotion { return .opacity }
+        let forward = model.calendarAnchor >= previousAnchor
+        return .asymmetric(
+            insertion: .offset(x: forward ? 24 : -24).combined(with: .opacity)
+                .animation(.spring(response: 0.34, dampingFraction: 0.9)),
+            removal: .offset(x: forward ? -24 : 24).combined(with: .opacity)
+                .animation(.easeOut(duration: 0.14)))
     }
 }
 
@@ -156,12 +202,12 @@ private struct CalendarNavigator: View {
                 .accessibilityLabel(expanded ? L10n.tr("收起月历") : L10n.tr("展开月历"))
             }
 
-            Button { model.stepCalendar(-1) } label: { Image(systemName: "chevron.left") }
+            Button { withAnimation(Dial.snap) { model.stepCalendar(-1) } } label: { Image(systemName: "chevron.left") }
                 .buttonStyle(QuietIconButtonStyle(width: 22)).foregroundStyle(.secondary)
                 .help(model.calendarSpan == .month ? L10n.tr("上个月") : L10n.tr("上一周"))
                 .accessibilityLabel(model.calendarSpan == .month ? L10n.tr("上个月") : L10n.tr("上一周"))
 
-            Button(action: model.calendarGoToToday) {
+            Button { withAnimation(Dial.snap) { model.calendarGoToToday() } } label: {
                 HStack(spacing: 4) {
                     Text(CalendarRange.title(span: model.calendarSpan, anchor: model.calendarAnchor,
                                              firstWeekday: model.calendarFirstWeekday,
@@ -184,7 +230,7 @@ private struct CalendarNavigator: View {
             .help(L10n.tr("回到今天"))
             .accessibilityLabel(L10n.tr("回到今天"))
 
-            Button { model.stepCalendar(1) } label: { Image(systemName: "chevron.right") }
+            Button { withAnimation(Dial.snap) { model.stepCalendar(1) } } label: { Image(systemName: "chevron.right") }
                 .buttonStyle(QuietIconButtonStyle(width: 22)).foregroundStyle(.secondary)
                 .help(model.calendarSpan == .month ? L10n.tr("下个月") : L10n.tr("下一周"))
                 .accessibilityLabel(model.calendarSpan == .month ? L10n.tr("下个月") : L10n.tr("下一周"))
@@ -219,6 +265,7 @@ private struct MonthGridView: View {
     @EnvironmentObject var model: AppModel
     let days: [String]
     let cellHeight: CGFloat
+    @Namespace private var selection
 
     var body: some View {
         // Flexible columns with no minimum: the window proposes the width and content must never
@@ -231,7 +278,7 @@ private struct MonthGridView: View {
                                                                date: day, firstWeekday: model.calendarFirstWeekday),
                                 isToday: day == TCDate.todayString(),
                                 isSelected: day == model.calendarSelected,
-                                height: cellHeight)
+                                height: cellHeight, selection: selection)
             }
         }
         .accessibilityElement(children: .contain)
@@ -255,6 +302,7 @@ private struct CalendarDayCell: View {
     let isToday: Bool
     let isSelected: Bool
     let height: CGFloat
+    let selection: Namespace.ID
 
     private enum Mark: Hashable { case deadline, todo, done, ghost }
 
@@ -275,7 +323,7 @@ private struct CalendarDayCell: View {
     var body: some View {
         let shown = Array(marks.prefix(3))
         let overflow = marks.count > 3
-        Button { model.setCalendar(selected: date) } label: {
+        Button { withAnimation(Dial.snap) { model.setCalendar(selected: date) } } label: {
             VStack(spacing: 2) {
                 Text(CivilDate.parse(date).map { String($0.day) } ?? date)
                     .font(.system(size: 11, weight: isToday || isSelected ? .semibold : .regular))
@@ -283,7 +331,11 @@ private struct CalendarDayCell: View {
                     .foregroundStyle(numberColor)
                     .frame(width: 20, height: 18)
                     .background {
-                        if isSelected { Circle().fill(accent).frame(width: 20, height: 20) }
+                        // The selection disc slides from day to day rather than blinking across.
+                        if isSelected {
+                            Circle().fill(accent).frame(width: 20, height: 20)
+                                .matchedGeometryEffect(id: "selected-day", in: selection)
+                        }
                     }
                 HStack(spacing: 2) {
                     ForEach(Array(shown.enumerated()), id: \.offset) { index, mark in

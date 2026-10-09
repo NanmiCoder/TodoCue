@@ -6,44 +6,51 @@ struct CheckButton: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @EnvironmentObject var model: AppModel
     @Environment(\.accent) private var accent
-    @Environment(\.colorScheme) private var scheme
     let task: TodoTask
     @State private var hovered = false
-    @State private var bounce = false
 
     var body: some View {
         Button {
-            withAnimation(Theme.bouncy) {
-                bounce = true
-            }
             if task.status == .done { model.reopen(task) }
             else { model.complete(task) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                bounce = false
-            }
         } label: {
             ZStack {
                 Circle()
                     .strokeBorder(
-                        isDone ? accent : (hovered ? accent.opacity(0.85) : Color.secondary.opacity(0.38)),
-                        lineWidth: isDone ? 1.5 : (hovered ? 1.4 : 1.2)
+                        isDone ? accent : (hovered ? accent : Color.secondary.opacity(0.5)),
+                        lineWidth: isDone ? 0 : (hovered ? 1.6 : 1.4)
                     )
                 if hovered && !isDone {
                     Circle()
-                        .fill(accent.opacity(0.12))
-                        .frame(width: 13, height: 13)
+                        .fill(accent.opacity(0.16))
+                        .frame(width: 11, height: 11)
                 }
-                if isDone {
-                    Circle().fill(accent)
-                    Image(systemName: "checkmark").font(.system(size: 8.5, weight: .bold))
-                        .foregroundStyle(scheme == .dark ? Color.black.opacity(0.9) : .white)
-                        .transition(.scale.combined(with: .opacity))
+                Circle().fill(accent)
+                    .scaleEffect(isDone ? 1 : 0.2)
+                    .opacity(isDone ? 1 : 0)
+                // Finishing draws the mark rather than popping it in.
+                CheckmarkShape()
+                    .trim(from: 0, to: isDone ? 1 : 0)
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                    .frame(width: 11, height: 11)
+                    .animation(Theme.reduceMotion ? nil : .easeOut(duration: 0.22).delay(0.06), value: isDone)
+            }
+            .animation(Dial.pop, value: isDone)
+            .frame(width: 18, height: 18)
+            .scaleEffect(hovered && !isDone && !Theme.reduceMotion ? 1.06 : 1.0)
+            .animation(Theme.interaction, value: hovered)
+            // Press in, overshoot, settle — one continuous gesture when a task is finished.
+            .keyframeAnimator(initialValue: 1.0, trigger: isDone) { content, scale in
+                content.scaleEffect(scale)
+            } keyframes: { _ in
+                if isDone && !Theme.reduceMotion {
+                    CubicKeyframe(0.82, duration: 0.08)
+                    SpringKeyframe(1.16, duration: 0.16, spring: .snappy)
+                    SpringKeyframe(1.0, duration: 0.3, spring: .smooth)
+                } else {
+                    LinearKeyframe(1.0, duration: 0.01)
                 }
             }
-            .frame(width: 17, height: 17)
-            .scaleEffect(bounce && !Theme.reduceMotion ? 1.2 : (hovered && !isDone && !Theme.reduceMotion ? 1.06 : 1.0))
-            .animation(Theme.bouncy, value: bounce)
-            .animation(Theme.interaction, value: hovered)
             .frame(width: 26, height: 26)
             .contentShape(Rectangle())
         }
@@ -65,6 +72,7 @@ struct TaskRowView: View {
     var showProject = true
     var compact = false
     @State private var hovering = false
+    private var finishing: Bool { task.status == .todo && model.completingTaskIDs.contains(task.id) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
@@ -77,9 +85,11 @@ struct TaskRowView: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
-                        .strikethrough(task.status != .todo, color: Color.secondary.opacity(0.55))
-                        .foregroundStyle(task.status == .todo ? Color.primary : Color.secondary.opacity(0.6))
-                    TaskMetadataView(task: task, showProject: showProject)
+                        // A task being finished already reads as done during its completion beat.
+                        .strikethrough(task.status != .todo || finishing, color: Color.secondary.opacity(0.55))
+                        .foregroundStyle(task.status == .todo && !finishing ? Color.primary : Color.secondary.opacity(0.6))
+                        .animation(.easeOut(duration: 0.2), value: finishing)
+                    TaskMetadataView(task: task, showProject: showProject, omitsTodayTime: true)
                 }
                 .padding(.top, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,14 +97,14 @@ struct TaskRowView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr("打开任务 \(task.title)"))
+            DialTimeBadge(task: task).padding(.trailing, 4)
         }
         .padding(.vertical, compact ? 3 : 5)
         .padding(.horizontal, 5)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(hovering ? Color.primary.opacity(0.045) : .clear))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(hovering ? Color.primary.opacity(0.06) : .clear))
         .onHover { hovering = $0 }
         .animation(Theme.interaction, value: hovering)
         .contextMenu { TaskContextMenu(task: task) }
-        .transition(.opacity)
     }
 }
 
@@ -104,6 +114,13 @@ struct TaskMetadataView: View {
     let task: TodoTask
     var showProject = true
     var emphasized = false
+    /// Rows that show today's time in their trailing badge leave it out of this line.
+    var omitsTodayTime = false
+
+    private var items: [TaskMeta.Item] {
+        TaskMeta.items(for: task, includeProject: showProject,
+                       includeScheduled: !(omitsTodayTime && DialTimeBadge.text(for: task) != nil))
+    }
 
     var body: some View {
         FlowLayout(spacing: 7, rowSpacing: 3) {
@@ -111,13 +128,13 @@ struct TaskMetadataView: View {
                 Image(systemName: "flag.fill").font(.system(size: 10)).foregroundStyle(task.priority.color)
                     .accessibilityLabel(L10n.tr("高优先级"))
             }
-            ForEach(TaskMeta.items(for: task, includeProject: showProject)) { item in
+            ForEach(items) { item in
                 if item.id == .project {
                     Text(item.text)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 4))
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5))
                 } else {
                     Text(item.text)
                         .font(.system(size: 11, weight: item.id == .deadline && emphasized ? .medium : .regular))
