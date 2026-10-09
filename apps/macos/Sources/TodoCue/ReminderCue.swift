@@ -37,6 +37,13 @@ struct ReminderCueQueue {
 }
 
 enum CueMotion {
+    /// Progress of one ripple ring, 0…1, over its 1.1s life; 0 outside it.
+    static func ripple(at time: TimeInterval, reduceMotion: Bool) -> Double {
+        guard !reduceMotion, time > 0, time < 1.1 else { return 0 }
+        let p = time / 1.1
+        return 1 - pow(1 - p, 3)
+    }
+
     struct Pose: Equatable { var scaleX: Double; var scaleY: Double; var offsetY: Double; var rotation: Double }
     /// Preparation, little hop, soft landing, settle; deterministic and confined to the Cue mark.
     static func pose(at time: TimeInterval, reduceMotion: Bool) -> Pose {

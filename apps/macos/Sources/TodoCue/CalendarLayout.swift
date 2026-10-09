@@ -14,6 +14,11 @@ enum CalendarLayout {
     /// It grows by a hint row once focused. The agenda absorbs that — unless the agenda is already
     /// at zero, which is exactly what forcing a grid open can produce, so expansion reserves it.
     static let quickAddFocused: CGFloat = 24
+    /// Vertical padding inside the frosted tile that holds the navigator and grid.
+    static let tilePadding: CGFloat = 8
+    /// Everything between the page edge and the grid that is not the grid: the frost tile's
+    /// padding and the two gaps separating the tiles.
+    static let tileChrome: CGFloat = 2 * tilePadding + 2 * 6
     /// Roughly three task rows — below this the agenda stops being worth showing.
     static let agendaMin: CGFloat = 120
     /// What a cell actually draws: a 20pt number (the selected day's filled circle) + 2 + a 6pt

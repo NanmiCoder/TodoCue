@@ -38,7 +38,8 @@ final class NotchHostingView<Content: View>: NSHostingView<Content> {
 
 struct NotchGeometry: Equatable {
     var screenFrame: NSRect
-    var notchRect: NSRect   // in screen coordinates, the physical notch
+    var notchRect: NSRect   // in screen coordinates: the physical notch, or the drawn one
+    var isVirtual = false
     var notchHeight: CGFloat { notchRect.height }
 }
 
@@ -122,20 +123,43 @@ final class NotchController {
 
     // MARK: - Geometry
 
-    static func notchScreen() -> (NSScreen, NotchGeometry)? {
+    /// The quick look follows the pointer: the screen under it hosts the notch, drawn in its menu bar
+    /// when it has no camera housing. With drawn notches turned off, only a physical notch is used.
+    static func notchScreen(at pointer: NSPoint = NSEvent.mouseLocation) -> (NSScreen, NotchGeometry)? {
+        let allowVirtual = Prefs.notchOnDisplaysWithoutNotch
+        if let screen = NSScreen.screens.first(where: { NSMouseInRect(pointer, $0.frame, false) }),
+           let geo = geometry(of: screen, allowVirtual: allowVirtual) {
+            return (screen, geo)
+        }
         for screen in NSScreen.screens {
-            guard screen.safeAreaInsets.top > 0 else { continue }
-            let f = screen.frame
-            let h = screen.safeAreaInsets.top
-            var left = f.minX + f.width * 0.5 - 90
-            var right = f.minX + f.width * 0.5 + 90
-            if let l = screen.auxiliaryTopLeftArea, let r = screen.auxiliaryTopRightArea {
-                left = l.maxX; right = r.minX
-            }
-            let notch = NSRect(x: left, y: f.maxY - h, width: right - left, height: h)
-            return (screen, NotchGeometry(screenFrame: f, notchRect: notch))
+            if let geo = geometry(of: screen, allowVirtual: false) { return (screen, geo) }
         }
         return nil
+    }
+
+    private static func geometry(of screen: NSScreen, allowVirtual: Bool) -> NotchGeometry? {
+        let f = screen.frame
+        guard screen.safeAreaInsets.top > 0 else {
+            guard allowVirtual else { return nil }
+            return NotchGeometry(screenFrame: f, notchRect: NotchLayout.virtualNotch(screen: f, visible: screen.visibleFrame),
+                                 isVirtual: true)
+        }
+        let h = screen.safeAreaInsets.top
+        var left = f.minX + f.width * 0.5 - 90
+        var right = f.minX + f.width * 0.5 + 90
+        if let l = screen.auxiliaryTopLeftArea, let r = screen.auxiliaryTopRightArea {
+            left = l.maxX; right = r.minX
+        }
+        let notch = NSRect(x: left, y: f.maxY - h, width: right - left, height: h)
+        return NotchGeometry(screenFrame: f, notchRect: notch)
+    }
+
+    /// Moves the collapsed bar to the screen the pointer has crossed onto. An open card or a Cue stays
+    /// where it is, so it never jumps away from what you are reading.
+    private func followPointer() {
+        guard let geo = geometry, !state.expanded, state.cue == nil,
+              !NSMouseInRect(NSEvent.mouseLocation, geo.screenFrame, false) else { return }
+        rebuild()
     }
 
     private func rebuild() {
@@ -293,6 +317,7 @@ final class NotchController {
     }
 
     private func mouseMoved() {
+        followPointer()
         guard geometry != nil, pollTimer == nil else { return }
         if state.expanded {
             if !state.pinned && !state.editing { startPolling() }
@@ -343,7 +368,7 @@ final class NotchController {
     private func isNearTop(_ p: NSPoint) -> Bool {
         guard let geo = geometry else { return false }
         return p.y > geo.screenFrame.maxY - geo.notchHeight - 40
-            && geo.screenFrame.contains(NSPoint(x: p.x, y: min(p.y, geo.screenFrame.maxY - 1)))
+            && NSMouseInRect(p, geo.screenFrame, false)
     }
 
     private func startPolling() {
@@ -480,6 +505,8 @@ final class NotchController {
     }
 
     private func presentNextCue() {
+        // A reminder lands on the screen you are looking at.
+        followPointer()
         guard state.cue == nil, !state.expanded, let window, Prefs.isNotchEnabled,
               geometry != nil, shouldAutoExpand(forReminder: true) else { return }
         while let cue = cueQueue.next() {

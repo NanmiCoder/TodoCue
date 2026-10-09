@@ -50,6 +50,7 @@ struct NotchRootView: View {
     @ObservedObject var model: AppModel
 
     private var corner: CGFloat { (state.expanded || state.cue != nil) ? Theme.notchCorner : Theme.notchCollapsedCorner }
+    private var cardShown: Bool { state.expanded && state.cue == nil }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -71,7 +72,11 @@ struct NotchRootView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGSize.self, of: { $0.size }, action: { state.report(contentSize: $0) })
                 .padding(.top, state.notchHeight)
-                .opacity(state.expanded && state.cue == nil ? 1 : 0)
+                // The black shell grows first; the card settles in just behind it and leaves first.
+                .opacity(cardShown ? 1 : 0)
+                .scaleEffect(cardShown || state.reduceMotion ? 1 : 0.97, anchor: .top)
+                .offset(y: cardShown || state.reduceMotion ? 0 : -8)
+                .animation(cardShown ? Dial.settle.delay(0.06) : .easeOut(duration: 0.12), value: cardShown)
                 .allowsHitTesting(state.expanded && state.cue == nil)
                 .accessibilityHidden(!state.expanded || state.cue != nil)
         }
@@ -102,7 +107,7 @@ private struct NotchSummaryView: View {
             Group {
                 if model.connectionState.isOnline {
                     Text("\(model.remaining)")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .font(Dial.numeral(12)).monospacedDigit()
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
                 } else {
@@ -172,7 +177,7 @@ private struct NotchCardView: View {
         .overlay(alignment: .top) {
             if let toast = model.toast {
                 ToastView(toast: toast)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(white: 0.13)).padding(.horizontal, 16))
+                    .padding(.horizontal, 16)
                     .padding(.top, 7)
                     .transition(state.reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
@@ -192,6 +197,7 @@ private struct NotchHeader: View {
             CueMark()
             VStack(alignment: .leading, spacing: 1) {
                 Text(L10n.tr("今天")).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .accessibilityAddTraits(.isHeader)
                 Text(model.todayDateLabel).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
             }
             Spacer(minLength: 8)
@@ -245,8 +251,8 @@ private struct NotchNextCard: View {
             let countdown = NotchLayout.countdown(for: candidate.task, now: context.date)
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
-                    Circle().fill(accent).frame(width: 5, height: 5)
-                    Text(L10n.tr("下一步")).font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
+                    DialMarker(text: "NEXT", color: accent)
+                    Text(L10n.tr("下一步")).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.6))
                     Spacer(minLength: 4)
                     Text(countdown?.text ?? candidate.group.label)
                         .font(.system(size: 11, weight: .medium)).monospacedDigit()
@@ -286,11 +292,9 @@ private struct NotchNextCard: View {
                     .accessibilityLabel(L10n.tr("查看下一步详情"))
                 }
             }
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(accent.opacity(hovered ? 0.14 : 0.10)))
-            .overlay(alignment: .leading) {
-                Capsule().fill(accent.opacity(0.6)).frame(width: 2, height: 24).padding(.leading, -1)
-            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.white.opacity(hovered ? 0.10 : 0.07)))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
             .onHover { hovered = $0 }
             .animation(Theme.interaction, value: hovered)
         }
@@ -329,7 +333,8 @@ private struct NotchTaskRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.task.title)
                         .font(.system(size: 13, weight: .medium)).foregroundStyle(.white).lineLimit(1)
-                    let meta = TaskMeta.line(for: item.task)
+                    // The trailing badge already carries today's time.
+                    let meta = TaskMeta.line(for: item.task, includeScheduled: DialTimeBadge.text(for: item.task) == nil)
                     if !meta.isEmpty {
                         Text(meta).font(.system(size: 11))
                             .foregroundStyle(item.task.isOverdue || item.section == .overdue ? Theme.overdue : .white.opacity(0.55))
@@ -342,24 +347,29 @@ private struct NotchTaskRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr("打开 \(item.task.title)"))
             if item.task.priority == .high {
-                Image(systemName: "flag.fill").font(.system(size: 10)).foregroundStyle(.red).accessibilityLabel(L10n.tr("高优先级"))
+                Image(systemName: "flag.fill").font(.system(size: 10)).foregroundStyle(Theme.overdue).accessibilityLabel(L10n.tr("高优先级"))
             }
-            HStack(spacing: 0) {
-                Button { model.snooze(item.task) } label: { Image(systemName: "zzz") }
-                    .buttonStyle(QuietIconButtonStyle())
-                    .help(L10n.tr("10 分钟后提醒"))
-                    .accessibilityLabel(L10n.tr("10 分钟后提醒 \(item.task.title)"))
-                Button { model.moveToTomorrow(item.task) } label: { Image(systemName: "arrow.turn.down.right") }
-                    .buttonStyle(QuietIconButtonStyle())
-                    .help(L10n.tr("改期到明天"))
-                    .accessibilityLabel(L10n.tr("把 \(item.task.title) 改期到明天"))
+            // The time and the row actions share one slot and cross-fade on hover, so the title's
+            // width never changes under the pointer.
+            ZStack(alignment: .trailing) {
+                DialTimeBadge(task: item.task).padding(.top, -4).opacity(hovering ? 0 : 1)
+                HStack(spacing: 0) {
+                    Button { model.snooze(item.task) } label: { Image(systemName: "zzz") }
+                        .buttonStyle(QuietIconButtonStyle())
+                        .help(L10n.tr("10 分钟后提醒"))
+                        .accessibilityLabel(L10n.tr("10 分钟后提醒 \(item.task.title)"))
+                    Button { model.moveToTomorrow(item.task) } label: { Image(systemName: "arrow.turn.down.right") }
+                        .buttonStyle(QuietIconButtonStyle())
+                        .help(L10n.tr("改期到明天"))
+                        .accessibilityLabel(L10n.tr("把 \(item.task.title) 改期到明天"))
+                }
+                .foregroundStyle(.white.opacity(0.7))
+                .opacity(hovering ? 1 : 0)
+                .disabled(!model.canWrite)
             }
-            .foregroundStyle(.white.opacity(0.7))
-            .opacity(hovering ? 1 : 0)
-            .disabled(!model.canWrite)
         }
         .padding(.vertical, 2).padding(.horizontal, 4)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(hovering ? 0.07 : 0)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(hovering ? 0.07 : 0)))
         .onHover { hovering = $0 }
         .animation(Theme.interaction, value: hovering)
         .contextMenu { TaskContextMenu(task: item.task) }
@@ -376,8 +386,8 @@ private struct NotchEmptyView: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(accent.opacity(0.10)).frame(width: 36, height: 36)
-                Image(systemName: cleared ? "checkmark" : "plus").font(.system(size: 15, weight: .medium)).foregroundStyle(accent)
+                Circle().fill(accent).frame(width: 36, height: 36)
+                Image(systemName: cleared ? "checkmark" : "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
             }
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
@@ -405,8 +415,14 @@ private struct NotchFooter: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "plus").font(.system(size: 14, weight: .medium)).foregroundStyle(accent).accessibilityHidden(true)
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(focused || hasText ? accent : Color.white.opacity(0.14))
+                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                        .rotationEffect(.degrees(focused && !Theme.reduceMotion ? 90 : 0))
+                }
+                .frame(width: 26, height: 26)
+                .accessibilityHidden(true)
                 TextField(L10n.tr("添加到今天"), text: $state.quickAddText,
                           prompt: Text(L10n.tr("添加到今天，回车创建")).foregroundColor(.white.opacity(0.4)))
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(.white)
@@ -425,16 +441,15 @@ private struct NotchFooter: View {
                     .accessibilityLabel(L10n.tr("添加到今天"))
                 }
             }
-            .padding(.horizontal, 12).frame(height: 36)
-            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(focused ? accent.opacity(0.6) : Color.white.opacity(0.10), lineWidth: focused ? 1 : 0.5))
+            .padding(.leading, 5).padding(.trailing, 12).frame(height: 36)
+            .background(Color.white.opacity(0.07), in: Capsule())
+            .overlay(Capsule().strokeBorder(focused ? accent.opacity(0.6) : Color.white.opacity(0.10), lineWidth: focused ? 1 : 0.5))
             Button { state.onOpenAll?() } label: { Label(L10n.tr("查看全部"), systemImage: "arrow.up.right") }
                 .buttonStyle(CueButtonStyle())
                 .accessibilityLabel(L10n.tr("查看全部今日任务"))
         }
         .padding(.top, 4)
-        .animation(Theme.interaction, value: focused)
+        .animation(Dial.snap, value: focused)
         .onChange(of: focused) { _, on in
             state.editing = on
             state.onEditingChanged?(on)

@@ -84,14 +84,19 @@ struct TaskFormView: View {
                         }
                     }
                     .padding(16)
+                    .animation(Dial.snap, value: totalAttachmentCount)
+                    .animation(Dial.snap, value: draft.repeatKind)
+                    .animation(Dial.snap, value: attachmentError)
                     .cueSurface(radius: 20)
                     .overlay {
                         if isTargetedForDrop {
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .strokeBorder(accent, lineWidth: 2)
                                 .background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .transition(.opacity)
                         }
                     }
+                    .animation(Dial.snap, value: isTargetedForDrop)
                     .onDrop(of: [.fileURL], isTargeted: $isTargetedForDrop) { providers in
                         handleDrop(providers: providers)
                     }
@@ -506,6 +511,10 @@ struct SchedulePopoverView: View {
         }
         .padding(14)
         .frame(width: 280)
+        // Rows that a switch reveals ease in, and the popover grows with them instead of jumping.
+        .animation(Dial.snap, value: draft.scheduledMode)
+        .animation(Dial.snap, value: draft.dueMode)
+        .animation(Dial.snap, value: draft.reminderOn)
         .todoCueAccent()
     }
 }
@@ -709,6 +718,9 @@ struct RepeatPopoverView: View {
         }
         .padding(14)
         .frame(width: 270)
+        .animation(Dial.snap, value: draft.repeatKind)
+        .animation(Dial.snap, value: draft.repeatTimeOn)
+        .animation(Dial.snap, value: draft.repeatReminderOn)
         .onChange(of: draft.repeatKind) { old, new in
             if old == .none, new != .none, draft.scheduledMode != .none { draft.repeatStart = draft.scheduledDate }
         }

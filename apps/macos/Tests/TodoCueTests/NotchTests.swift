@@ -24,6 +24,23 @@ final class NotchTests: XCTestCase {
         XCTAssertEqual(winged.height, notch.height)
     }
 
+    func testVirtualNotchSitsInTheMenuBarOfAnyScreen() {
+        // A 2560×1440 display to the left of the main one, with a 25pt menu bar.
+        let screen = CGRect(x: -2560, y: 0, width: 2560, height: 1440)
+        let visible = CGRect(x: -2560, y: 0, width: 2560, height: 1415)
+        let notch = NotchLayout.virtualNotch(screen: screen, visible: visible)
+        XCTAssertEqual(notch, CGRect(x: -1280 - 92.5, y: 1415, width: 185, height: 25))
+        XCTAssertEqual(notch.midX, screen.midX)
+        // An auto-hidden menu bar leaves no inset; the drawn notch keeps a usable height.
+        let hidden = NotchLayout.virtualNotch(screen: screen, visible: screen)
+        XCTAssertEqual(hidden.height, NotchLayout.virtualNotchFallbackHeight)
+        XCTAssertEqual(hidden.maxY, screen.maxY)
+        // The expanded card still starts just below the bar.
+        let card = NotchLayout.expandedFrame(notch: notch, screen: screen, contentHeight: 300, width: 560, maxHeight: 560)
+        XCTAssertEqual(card.midX, screen.midX)
+        XCTAssertEqual(card.height, 325)
+    }
+
     func testExpandedFrameHangsFromTopCenteredOnNotch() {
         let screen = CGRect(x: 0, y: 0, width: 1728, height: 1117)
         let notch = CGRect(x: 771, y: 1085, width: 185, height: 32)

@@ -21,12 +21,14 @@ echo "==> swift build -c $CONFIG"
 BIN="$(cd "$PKG" && swift build -c "$CONFIG" --show-bin-path)"
 
 make_bundle() {
-  local name="$1" bundle_id="$2" exe="$3" extra_plist="$4" entitlements="${5:-}"
+  local name="$1" bundle_id="$2" exe="$3" extra_plist="$4" entitlements="${5:-}" resources="${6:-}"
   local app="$OUT/$name.app"
   rm -rf "$app"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
   if [[ ! -x "$BIN/$exe" ]]; then echo "missing build product $BIN/$exe" >&2; exit 1; fi
   cp "$BIN/$exe" "$app/Contents/MacOS/$exe"
+  # Bundled faces (Dial's wide numerals); registered at launch from Contents/Resources/Fonts.
+  if [[ -n "$resources" ]]; then cp -R "$resources/." "$app/Contents/Resources/"; fi
   printf 'APPL????' > "$app/Contents/PkgInfo"
   cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -117,7 +119,7 @@ URL_TYPES='  <key>CFBundleURLTypes</key>
   <key>NSRemindersUsageDescription</key><string>TodoCue 会把待办同步到「TodoCue」提醒事项列表，并读取你在那里的修改。</string>'
 
 echo "==> assembling bundles"
-make_bundle "TodoCue" "com.todocue.app" "TodoCue" "$URL_TYPES" "$ROOT/scripts/app.entitlements.plist" >/dev/null
+make_bundle "TodoCue" "com.todocue.app" "TodoCue" "$URL_TYPES" "$ROOT/scripts/app.entitlements.plist" "$PKG/Resources" >/dev/null
 make_bundle "TodoCueNotifier" "com.todocue.notifier" "TodoCueNotifier" "" >/dev/null
 APP="$OUT/TodoCue.app"
 HELPER="$OUT/TodoCueNotifier.app"

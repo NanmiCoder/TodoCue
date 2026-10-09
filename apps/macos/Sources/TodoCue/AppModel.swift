@@ -100,6 +100,8 @@ final class AppModel: ObservableObject {
     /// Local changes that landed while a fetch was in flight, replayed once it resolves.
     private var completedPendingMerges: [TodoTask] = []
     @Published var pinned = false
+    /// Bumped each time the panel appears from hidden; tiles replay their staggered arrival.
+    @Published var revealTick = 0
     @Published var quickAddFocusRequest = 0
     @Published var quickAddText = ""
     @Published private(set) var isQuickAdding = false
@@ -638,10 +640,17 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// How long a just-checked row stays put before it leaves: long enough for the check to fill and
+    /// draw (DialKit) and be seen, short enough that the list still feels immediate.
+    static let completionBeat: UInt64 = Theme.reduceMotion ? 0 : 420_000_000
+
     func complete(_ task: TodoTask) {
         guard canWrite, completingTaskIDs.insert(task.id).inserted else { return }
         Task {
             defer { completingTaskIDs.remove(task.id) }
+            // The write waits for the beat rather than the result: the runtime answers in
+            // milliseconds and its SSE refresh would otherwise pull the row mid-checkmark.
+            try? await Task.sleep(nanoseconds: Self.completionBeat)
             if let t = await perform(L10n.tr("完成"), { try await self.client!.complete(task.id, expectedVersion: task.version) }) {
                 showToast(Toast(message: L10n.tr("已完成「\(t.title)」"), undoTaskId: t.id))
             }

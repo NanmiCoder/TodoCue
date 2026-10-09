@@ -26,6 +26,7 @@ enum Prefs {
     static let notchEnabled = "notchEnabled"
     static let notchDisableInFullscreen = "notchDisableInFullscreen"
     static let notchSummary = "notchShowsSummary"
+    static let notchVirtual = "notchOnDisplaysWithoutNotch"
 
     static var isNotchEnabled: Bool {
         get { UserDefaults.standard.object(forKey: notchEnabled) as? Bool ?? true }
@@ -48,6 +49,13 @@ enum Prefs {
 
     private static func appleSyncKey(_ kind: AppleSyncKind) -> String {
         kind == .event ? "appleCalendarSyncEnabled" : "appleRemindersSyncEnabled"
+    }
+
+    /// Displays without a camera notch get a drawn one in the menu bar, on whichever screen holds
+    /// the pointer — the clamshell setup, or a Mac without a notch at all.
+    static var notchOnDisplaysWithoutNotch: Bool {
+        get { UserDefaults.standard.object(forKey: notchVirtual) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: notchVirtual) }
     }
 
     /// Collapsed notch shows the cue mark and today's remaining count beside the camera.

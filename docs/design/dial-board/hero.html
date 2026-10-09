@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TodoCue hero</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Michroma&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ground{width:1200px;height:500px;box-sizing:border-box;position:relative;overflow:hidden;background-color:#C4C9CE;background-image:radial-gradient(rgba(28,29,32,0.16) 1px,transparent 1.3px);background-size:18px 18px;font-family:'Geist','PingFang SC',system-ui,sans-serif;color:#1C1D20}
+.mono{font-family:'Michroma',sans-serif}
+</style>
+</head>
+<body>
+<div class="ground">
+
+<svg width="760" height="760" viewBox="0 0 24 24" style="position:absolute;right:-150px;top:-130px" aria-hidden="true">
+<path d="M17.83 17.48A8 8 0 1 1 17.83 6.52" fill="none" stroke="#F26A2E" stroke-width="2.6" stroke-linecap="round" opacity="0.92"></path>
+<circle cx="18.2" cy="12" r="1.9" fill="#F26A2E" opacity="0.92"></circle>
+</svg>
+
+<div style="position:absolute;left:84px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:22px">
+<span class="mono" style="font-size:11px;letter-spacing:0.22em;color:#3A3D42">NATIVE macOS · LOCAL FIRST · AGENT READY</span>
+<div style="display:flex;align-items:center;gap:22px">
+<svg width="78" height="78" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.83 17.48A8 8 0 1 1 17.83 6.52" fill="none" stroke="#1C1D20" stroke-width="2.8" stroke-linecap="round"></path><circle cx="18.2" cy="12" r="2" fill="#1C1D20"></circle></svg>
+<span style="font-size:104px;font-weight:700;letter-spacing:-0.05em;line-height:1">TodoCue</span>
+</div>
+<span style="font-size:26px;font-weight:400;letter-spacing:-0.01em;color:#2A2D31">A little cue. <span style="font-weight:600">A clearer day.</span></span>
+<div style="display:flex;gap:8px;margin-top:6px">
+<span style="font-size:13px;padding:8px 16px;border-radius:18px;border:1px solid rgba(28,29,32,0.3)">Tasks from your Agent</span>
+<span style="font-size:13px;padding:8px 16px;border-radius:18px;border:1px solid rgba(28,29,32,0.3)">Reminders in the notch</span>
+<span style="font-size:13px;padding:8px 16px;border-radius:18px;background:#1C1D20;color:#F1F2F3">Dial design</span>
+</div>
+</div>
+
+<div style="position:absolute;right:120px;top:52px;width:316px;padding:10px;border-radius:38px;background:linear-gradient(150deg,rgba(255,255,255,0.62),rgba(255,255,255,0.22) 45%,rgba(255,255,255,0.4));border:1px solid rgba(255,255,255,0.75);box-shadow:inset 0 1px 0 rgba(255,255,255,0.9),0 40px 80px -30px rgba(40,44,50,0.45);backdrop-filter:blur(18px);display:flex;flex-direction:column;gap:6px">
+
+<div style="border-radius:28px;background:#1C1D20;color:#F1F2F3;padding:16px 14px 20px 20px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:8px">
+<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.83 17.48A8 8 0 1 1 17.83 6.52" fill="none" stroke="#F26A2E" stroke-width="3" stroke-linecap="round"></path><circle cx="18.2" cy="12" r="2" fill="#F26A2E"></circle></svg>
+<span class="mono" style="font-size:13px">TodoCue</span>
+<span style="flex:1"></span>
+<span style="width:28px;height:28px;border-radius:14px;background:#2A2B2F"></span>
+<span style="width:28px;height:28px;border-radius:14px;background:#2A2B2F"></span>
+<span style="width:28px;height:28px;border-radius:14px;background:#2A2B2F"></span>
+</div>
+<div style="display:flex;align-items:center;gap:6px">
+<span style="width:18px;height:18px;border-radius:9px;background:#F26A2E;display:grid;place-items:center"><span style="width:6px;height:6px;border-radius:3px;background:#fff"></span></span>
+<span style="width:18px;height:18px;border-radius:9px;border:1.5px solid rgba(255,255,255,0.7);box-sizing:border-box;display:grid;place-items:center"><span style="width:4px;height:4px;border-radius:2px;background:#fff"></span></span>
+<span style="width:18px;height:18px;border-radius:9px;border:1.5px solid rgba(255,255,255,0.7);box-sizing:border-box;display:grid;place-items:center"><span style="width:4px;height:4px;border-radius:2px;background:#fff"></span></span>
+<span style="font-size:11px;color:#9A9DA3;margin-left:6px"><span style="color:#fff;font-weight:500">Today</span> · Upcoming · All</span>
+</div>
+<div style="display:flex;align-items:center;gap:14px">
+<span class="mono" style="font-size:60px;line-height:0.8">3</span>
+<span style="font-size:14px;font-weight:600;line-height:1.35">to do<br><span style="font-size:12px;font-weight:400;color:#9A9DA3">Fri, Oct 9 · 2 done</span></span>
+</div>
+</div>
+
+<div style="border-radius:28px;background:rgba(238,240,242,0.92);padding:16px 16px 16px 20px;display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:10px">
+<div style="display:flex;flex-direction:column;gap:7px">
+<span class="mono" style="font-size:9px;letter-spacing:0.14em;color:#55595F">NEXT</span>
+<span style="font-size:15px;font-weight:600;line-height:1.3">Write the 0.4 release notes</span>
+<span style="font-size:11px;color:#55595F">14:00 · 45 min · <span style="color:#C2501C;font-weight:500">due 19:00</span></span>
+<span style="align-self:flex-start;margin-top:4px;height:34px;padding:0 14px 0 5px;border-radius:17px;background:#1C1D20;color:#F1F2F3;font-size:12px;font-weight:600;display:flex;align-items:center;gap:9px"><span style="width:24px;height:24px;border-radius:12px;background:#F26A2E;display:grid;place-items:center"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Done</span>
+</div>
+<div style="position:relative;width:84px;height:84px;align-self:center">
+<svg width="84" height="84" viewBox="0 0 100 100" aria-hidden="true">
+<circle cx="50" cy="50" r="44" fill="none" stroke="#7C8087" stroke-width="2.4" stroke-dasharray="0.1 6.9" stroke-linecap="round"></circle>
+<path d="M50 6A44 44 0 0 1 91.8 63.6" fill="none" stroke="#F26A2E" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="0.1 6.9"></path>
+<circle cx="91.8" cy="63.6" r="3.2" fill="#F26A2E"></circle>
+</svg>
+<span class="mono" style="position:absolute;inset:0;display:grid;place-items:center;font-size:14px">2/5</span>
+</div>
+</div>
+
+<div style="height:52px;border-radius:26px;background:rgba(238,240,242,0.92);display:flex;align-items:center;gap:12px;padding:0 8px">
+<span style="width:38px;height:38px;border-radius:19px;background:#1C1D20;display:grid;place-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></span>
+<span style="font-size:13px;color:#6A6E74">Add to today…</span>
+</div>
+</div>
+
+<div style="position:absolute;left:640px;top:0;width:250px;height:46px;background:#141518;border-radius:0 0 22px 22px;display:flex;align-items:center;gap:10px;padding:0 14px;box-sizing:border-box;box-shadow:0 18px 30px -18px rgba(20,21,24,0.6)">
+<span style="width:26px;height:26px;border-radius:13px;background:#F26A2E;display:grid;place-items:center"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.83 17.48A8 8 0 1 1 17.83 6.52" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"></path><circle cx="18.2" cy="12" r="2" fill="#fff"></circle></svg></span>
+<span style="font-size:12px;color:#F1F2F3;font-weight:500">Stand up, let ideas breathe</span>
+</div>
+
+</div>
+</body>
+</html>

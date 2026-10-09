@@ -16,36 +16,28 @@ struct CueMark: View {
     }
 }
 
+/// Compact "done / total" read-out with a small dotted gauge, used where the header numeral is absent.
 struct DayProgressView: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     let completed: Int
     let remaining: Int
-    @Environment(\.accent) private var accent
     private var total: Int { max(0, completed) + max(0, remaining) }
-    private var progress: Double { total == 0 ? 0 : Double(max(0, completed)) / Double(total) }
 
     var body: some View {
         HStack(spacing: 7) {
-            ZStack {
-                Circle().stroke(Color.primary.opacity(0.12), lineWidth: 2)
-                Circle().trim(from: 0, to: progress)
-                    .stroke(accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                if remaining == 0 && completed > 0 {
-                    Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold)).foregroundStyle(accent)
-                }
-            }
-            .frame(width: 22, height: 22)
+            DialGauge(completed: max(0, completed), total: total, diameter: 24, showsLabel: false)
             Text(remaining > 0 ? L10n.tr("还剩 \(remaining) 件") : (completed > 0 ? L10n.tr("已清空") : L10n.tr("暂无待办")))
                 .font(.system(size: 12, weight: .medium)).monospacedDigit()
                 .foregroundStyle(.secondary).contentTransition(.numericText())
         }
-        .animation(Theme.interaction, value: progress)
+        .animation(Theme.interaction, value: remaining)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.tr("今日已完成 \(completed) 项，还剩 \(remaining) 项"))
     }
 }
 
+/// Dial pills. Prominent inverts the surface it sits on (graphite on frost, light on graphite)
+/// and puts its icon in an orange disc; the quiet pill is an outline.
 struct CueButtonStyle: ButtonStyle {
     var prominent = false
     func makeBody(configuration: Configuration) -> some View {
@@ -55,51 +47,33 @@ struct CueButtonStyle: ButtonStyle {
         @ObservedObject private var languagePreferences = LanguagePreferences.shared
         let configuration: Configuration
         let prominent: Bool
-        @Environment(\.accent) private var accent
         @Environment(\.colorScheme) private var scheme
         @Environment(\.isEnabled) private var enabled
         @State private var hovered = false
 
-        private var foregroundColor: Color {
-            if prominent {
-                return scheme == .dark ? Color.black.opacity(0.9) : .white
-            }
-            return Color.primary
+        private var fill: Color {
+            if prominent { return scheme == .dark ? Color(white: 0.95) : Color(red: 0.110, green: 0.114, blue: 0.125) }
+            return Color.primary.opacity(configuration.isPressed ? 0.12 : (hovered ? 0.07 : 0))
         }
-
-        @ViewBuilder
-        private var backgroundView: some View {
-            if prominent {
-                LinearGradient(
-                    colors: [accent, accent.opacity(0.88)],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .clipShape(Capsule())
-            } else {
-                Capsule().fill(Color.primary.opacity(hovered ? 0.08 : 0.04))
-            }
-        }
-
-        private var borderStrokeColor: Color {
-            if scheme == .dark {
-                return Color.white.opacity(prominent ? 0.2 : 0.08)
-            } else {
-                return prominent ? Color.white.opacity(0.25) : Color.black.opacity(0.06)
-            }
+        private var foreground: Color {
+            if prominent { return scheme == .dark ? Color(red: 0.110, green: 0.114, blue: 0.125) : .white }
+            return .primary
         }
 
         var body: some View {
             configuration.label
+                .labelStyle(DialPillLabelStyle(prominent: prominent, hovered: hovered && enabled))
                 .font(.system(size: 12, weight: prominent ? .semibold : .medium))
-                .padding(.horizontal, 14).frame(minHeight: 32)
-                .foregroundStyle(foregroundColor)
-                .background(backgroundView)
-                .overlay(Capsule().strokeBorder(borderStrokeColor, lineWidth: 0.5))
-                .shadow(color: prominent ? accent.opacity(scheme == .dark ? 0.35 : 0.22) : Color.black.opacity(0.02), radius: prominent ? 5 : 2, y: prominent ? 2 : 1)
-                .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.4)
-                .scaleEffect(configuration.isPressed && !Theme.reduceMotion ? 0.96 : (hovered && !Theme.reduceMotion ? 1.01 : 1))
-                .animation(Theme.interaction, value: configuration.isPressed)
-                .animation(Theme.interaction, value: hovered)
+                .lineLimit(1)
+                .padding(.horizontal, 14).frame(minHeight: prominent ? 34 : 32)
+                .foregroundStyle(foreground)
+                .background(Capsule().fill(fill))
+                .overlay(Capsule().strokeBorder(prominent ? Color.clear : Color.primary.opacity(hovered ? 0.3 : 0.2), lineWidth: 1))
+                .contentShape(Capsule())
+                .opacity(enabled ? 1 : 0.4)
+                .scaleEffect(configuration.isPressed && !Theme.reduceMotion ? 0.96 : 1)
+                .animation(Dial.snap, value: configuration.isPressed)
+                .animation(Dial.snap, value: hovered)
                 .onHover { hovered = $0 }
         }
     }
@@ -120,6 +94,9 @@ struct SegmentedCapsule<Item: Identifiable & Equatable>: View {
     private let trackPadding: CGFloat
     private let label: String
     @Namespace private var slider
+    @Environment(\.colorScheme) private var scheme
+    private var selectedFill: Color { scheme == .dark ? Color(white: 0.95) : Color(red: 0.110, green: 0.114, blue: 0.125) }
+    private var selectedText: Color { scheme == .dark ? Color(red: 0.110, green: 0.114, blue: 0.125) : .white }
 
     init(items: [Item], selected: Item, title: @escaping (Item) -> String, select: @escaping (Item) -> Void,
          fills: Bool = true, height: CGFloat = 32, fontSize: CGFloat = 12, trackPadding: CGFloat = 3,
@@ -133,21 +110,21 @@ struct SegmentedCapsule<Item: Identifiable & Equatable>: View {
         HStack(spacing: 2) {
             ForEach(items) { item in
                 let isSelected = item == selected
-                Button { withAnimation(Theme.interaction) { select(item) } } label: {
+                Button { withAnimation(Dial.snap) { select(item) } } label: {
+                    // Same weight selected or not, so the sliding capsule never chases a resizing label.
                     Text(title(item))
-                        .font(.system(size: fontSize, weight: isSelected ? .semibold : .medium))
+                        .font(.system(size: fontSize, weight: .semibold))
                         .frame(maxWidth: fills ? .infinity : nil)
                         .padding(.horizontal, fills ? 0 : 8)
                         .frame(height: height)
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(isSelected ? Color.primary : .secondary)
+                .foregroundStyle(isSelected ? selectedText : Color.secondary)
                 .background {
+                    // The selection is the inverted Dial pill and slides between segments.
                     if isSelected {
-                        Capsule().fill(Theme.surface)
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5))
-                            .shadow(color: .black.opacity(0.06), radius: 4, y: 1.5)
+                        Capsule().fill(selectedFill)
                             .matchedGeometryEffect(id: "selected-segment", in: slider)
                     }
                 }
@@ -156,7 +133,7 @@ struct SegmentedCapsule<Item: Identifiable & Equatable>: View {
             }
         }
         .padding(trackPadding)
-        .background(Color.primary.opacity(0.04), in: Capsule())
+        .background(Color.primary.opacity(0.06), in: Capsule())
         .accessibilityElement(children: .contain).accessibilityLabel(label)
     }
 }
@@ -236,15 +213,16 @@ struct SurfaceModifier: ViewModifier {
     var radius: CGFloat
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
-        content.background(Theme.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+        // An inset well inside a tile: flat, no shadow — depth belongs to the tiles themselves.
+        content.background(scheme == .dark ? Color.white.opacity(0.05) : Color.white.opacity(0.62),
+                           in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(scheme == .dark ? Color.white.opacity(0.09) : Color.black.opacity(0.055), lineWidth: 0.5).allowsHitTesting(false))
-            .shadow(color: Color.black.opacity(scheme == .dark ? 0.2 : 0.035), radius: 6, y: 2)
+                .strokeBorder(scheme == .dark ? Color.white.opacity(0.07) : Color.white.opacity(0.9), lineWidth: 0.5).allowsHitTesting(false))
     }
 }
 
 extension View {
-    func cueSurface(radius: CGFloat = 16) -> some View { modifier(SurfaceModifier(radius: radius)) }
+    func cueSurface(radius: CGFloat = 20) -> some View { modifier(SurfaceModifier(radius: radius)) }
 
     @ViewBuilder func cueScrollEdges() -> some View {
         if #available(macOS 26.0, *) { scrollEdgeEffectStyle(.soft, for: .vertical) }

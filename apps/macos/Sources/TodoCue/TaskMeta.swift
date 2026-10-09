@@ -9,9 +9,10 @@ enum TaskMeta {
         let text: String
     }
 
-    static func items(for t: TodoTask, includeProject: Bool = true, includeDeadline: Bool = true) -> [Item] {
+    static func items(for t: TodoTask, includeProject: Bool = true, includeDeadline: Bool = true,
+                      includeScheduled: Bool = true) -> [Item] {
         var parts: [Item] = []
-        if let value = scheduledLabel(t) { parts.append(Item(id: .scheduled, text: value)) }
+        if includeScheduled, let value = scheduledLabel(t) { parts.append(Item(id: .scheduled, text: value)) }
         if includeDeadline {
             if let value = dueLabel(t) { parts.append(Item(id: .deadline, text: L10n.tr("截止 ") + value)) }
         }
@@ -20,8 +21,10 @@ enum TaskMeta {
         return parts
     }
 
-    static func line(for t: TodoTask, includeProject: Bool = true, includeDeadline: Bool = true) -> String {
-        items(for: t, includeProject: includeProject, includeDeadline: includeDeadline).map(\.text).joined(separator: " · ")
+    static func line(for t: TodoTask, includeProject: Bool = true, includeDeadline: Bool = true,
+                     includeScheduled: Bool = true) -> String {
+        items(for: t, includeProject: includeProject, includeDeadline: includeDeadline,
+              includeScheduled: includeScheduled).map(\.text).joined(separator: " · ")
     }
 
     static func estimateLabel(_ m: Int) -> String {

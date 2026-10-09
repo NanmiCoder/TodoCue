@@ -27,29 +27,26 @@ enum Theme {
     static let notchCollapsedCorner: CGFloat = 10
     static let overdue = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(red: 1, green: 0.57, blue: 0.45, alpha: 1)
-            : NSColor(red: 0.7, green: 0.2, blue: 0.13, alpha: 1)
+            ? NSColor(red: 1, green: 0.42, blue: 0.37, alpha: 1)
+            : NSColor(red: 0.77, green: 0.17, blue: 0.11, alpha: 1)
     })
 
+    /// Dial's signal orange; a touch deeper on light frost so small orange text stays legible.
     static func accent(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color(red: 0.42, green: 0.88, blue: 0.74) : Color(red: 0.02, green: 0.54, blue: 0.43)
+        scheme == .dark ? Dial.orange : Color(red: 0.85, green: 0.33, blue: 0.11)
     }
 
     static let surface = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 1, alpha: 0.075) : NSColor(white: 1, alpha: 0.82)
+            ? NSColor(white: 1, alpha: 0.10) : NSColor(white: 1, alpha: 0.92)
     })
     static let insetSurface = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(white: 1, alpha: 0.05) : NSColor(white: 1, alpha: 0.62)
     })
-    // Keep the dark glass shell quiet without creating an opaque inner well.
-    static let shellTint = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 0, alpha: 0.25) : .clear
-    })
-    static var interaction: Animation { reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.26, dampingFraction: 0.86) }
-    static var bouncy: Animation { reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.32, dampingFraction: 0.65) }
+    // Aliases of the Dial tokens, so every hover, press and pop in the app shares one rhythm.
+    static var interaction: Animation { Dial.snap }
+    static var bouncy: Animation { Dial.pop }
 
     static var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     static var reduceTransparency: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency }
@@ -68,12 +65,13 @@ enum Theme {
         reduceMotion ? .linear(duration: 0.01) : .timingCurve(0.2, 0.8, 0.2, 1, duration: dragSettleDuration)
     }
 
+    /// Rows arriving, leaving and closing ranks. Critically damped so a list never wobbles.
     static var listChange: Animation {
-        reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.3, dampingFraction: 0.9)
+        reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.36, dampingFraction: 1)
     }
 }
 
-struct AccentColorKey: EnvironmentKey { static let defaultValue: Color = Color(nsColor: .systemMint) }
+struct AccentColorKey: EnvironmentKey { static let defaultValue: Color = Dial.orange }
 extension EnvironmentValues {
     var accent: Color {
         get { self[AccentColorKey.self] }
@@ -81,7 +79,7 @@ extension EnvironmentValues {
     }
 }
 
-/// Applies the mint accent based on the current color scheme.
+/// Applies the signal accent based on the current color scheme.
 struct AccentModifier: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
@@ -113,7 +111,8 @@ struct QuietIconButtonStyle: ButtonStyle {
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: width, height: 30)
                 .contentShape(Circle())
-                .background(Color.primary.opacity(configuration.isPressed ? 0.10 : (hovering ? 0.06 : 0)),
+                // Dial controls are filled discs; narrow ones (steppers sharing a line) stay bare.
+                .background(Color.primary.opacity(configuration.isPressed ? 0.16 : (hovering ? 0.12 : (width >= 28 ? 0.07 : 0))),
                             in: Circle())
                 .opacity(enabled ? 1 : 0.4)
                 .scaleEffect(configuration.isPressed && !Theme.reduceMotion ? 0.94 : 1)

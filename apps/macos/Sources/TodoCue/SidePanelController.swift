@@ -18,6 +18,8 @@ final class SidePanelController: NSObject, NSWindowDelegate {
     private var observers: [NSObjectProtocol] = []
     private var languageSubscription: AnyCancellable?
     var onShow: (() -> Void)?
+    /// Only when the panel goes from hidden to visible, not when an open panel is re-shown.
+    var onReveal: (() -> Void)?
 
     var isVisible: Bool { window.isVisible }
 
@@ -40,10 +42,9 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = false
         window.isOpaque = false
         window.backgroundColor = .clear
-        // Tahoe's window shadow adds a rectangular rim even to transparent,
-        // borderless panels. Let the native glass define the visible perimeter.
-        if #available(macOS 26.0, *) { window.hasShadow = false }
-        else { window.hasShadow = true }
+        // The window is only a carrier for separate tiles; a window shadow would outline the
+        // whole rectangle, gaps included, so each tile stands on its own material instead.
+        window.hasShadow = false
         window.isReleasedWhenClosed = false
         window.animationBehavior = .utilityWindow
         window.setAccessibilityLabel(L10n.tr("TodoCue 任务面板"))
@@ -153,20 +154,19 @@ final class SidePanelController: NSObject, NSWindowDelegate {
                 window.alphaValue = 1
                 window.orderFrontRegardless()
             } else {
+                // Only fade: the tiles carry the movement (DialRevealModifier), on one axis.
                 window.alphaValue = 0
-                let f = window.frame
-                window.setFrame(f.offsetBy(dx: 12, dy: 0), display: false)
                 window.orderFrontRegardless()
                 NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.26
+                    ctx.duration = 0.16
                     ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     window.animator().alphaValue = 1
-                    window.animator().setFrame(f, display: true)
                 }
             }
         }
         // Revealing a glanceable utility must not activate TodoCue or take another
         // app's insertion point. Only an explicit editing action requests a key panel.
+        if !wasVisible { onReveal?() }
         if focusInput { window.makeKeyAndOrderFront(nil) }
         else { window.orderFrontRegardless() }
         onShow?()
@@ -217,86 +217,33 @@ struct PanelDragArea: NSViewRepresentable {
     }
 }
 
-/// One native glass plane for the floating utility. Content uses quiet, readable fills.
+/// Transparent carrier for the Dial panel: SwiftUI draws the frosted shell and the tiles on it
+/// (`DialShell`), so this view only clips to the shell's corner and holds the resize edges.
 final class PanelBackgroundView: NSView {
     let resizeHandle = PanelResizeHandle()
     let verticalResizeHandle = PanelResizeHandle(vertical: true)
-    private let foreground = NSView()
-    private var fallbackEffect: NSVisualEffectView?
-    private var accessibilityObserver: NSObjectProtocol?
 
     init(hosting: NSView) {
         super.init(frame: hosting.frame)
         wantsLayer = true
-        // The active glass effect can paint into the window's square corners.
-        // Clip the entire shell, including its material, rather than only the content.
-        layer?.cornerRadius = Theme.panelCorner
+        layer?.backgroundColor = NSColor.clear.cgColor
+        layer?.cornerRadius = Dial.shellRadius
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
-        foreground.frame = bounds
-        foreground.autoresizingMask = [.width, .height]
-
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView(frame: bounds)
-            glass.style = .regular
-            glass.cornerRadius = Theme.panelCorner
-            glass.autoresizingMask = [.width, .height]
-            glass.contentView = foreground
-            addSubview(glass)
-        } else {
-            let effect = NSVisualEffectView(frame: bounds)
-            effect.material = .popover
-            effect.blendingMode = .behindWindow
-            effect.state = .active
-            effect.autoresizingMask = [.width, .height]
-            effect.wantsLayer = true
-            effect.layer?.cornerRadius = Theme.panelCorner
-            effect.layer?.cornerCurve = .continuous
-            effect.layer?.masksToBounds = true
-            fallbackEffect = effect
-            addSubview(effect)
-            addSubview(foreground)
-        }
-
-        hosting.frame = foreground.bounds
+        hosting.frame = bounds
         hosting.autoresizingMask = [.width, .height]
         hosting.wantsLayer = true
-        hosting.layer?.cornerRadius = Theme.panelCorner
-        hosting.layer?.cornerCurve = .continuous
-        hosting.layer?.masksToBounds = true
-        foreground.addSubview(hosting)
-        foreground.addSubview(resizeHandle)
-        foreground.addSubview(verticalResizeHandle)
-        updateMaterial()
-        accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.updateMaterial() }
-        }
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        addSubview(hosting)
+        addSubview(resizeHandle)
+        addSubview(verticalResizeHandle)
     }
 
     override func layout() {
         super.layout()
-        verticalResizeHandle.frame = NSRect(x: Theme.panelCorner, y: 0, width: max(0, bounds.width - 2 * Theme.panelCorner), height: 10)
-        resizeHandle.frame = NSRect(x: 0, y: Theme.panelCorner, width: 10, height: max(0, bounds.height - 2 * Theme.panelCorner))
+        verticalResizeHandle.frame = NSRect(x: Dial.shellRadius, y: 0, width: max(0, bounds.width - 2 * Dial.shellRadius), height: 10)
+        resizeHandle.frame = NSRect(x: 0, y: Dial.shellRadius, width: 10, height: max(0, bounds.height - 2 * Dial.shellRadius))
     }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        updateMaterial()
-    }
-
-    private func updateMaterial() {
-        // NSGlassEffectView handles system accessibility changes itself.
-        guard let effect = fallbackEffect else { return }
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            effect.isHidden = Theme.reduceTransparency
-            layer?.backgroundColor = Theme.reduceTransparency ? NSColor.windowBackgroundColor.cgColor : NSColor.clear.cgColor
-        }
-    }
-
-    deinit {
-        if let accessibilityObserver { NSWorkspace.shared.notificationCenter.removeObserver(accessibilityObserver) }
-    }
     required init?(coder: NSCoder) { nil }
 }
