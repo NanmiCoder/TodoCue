@@ -1,6 +1,6 @@
 export * from "./errors.js";
 export * from "./schemas.js";
-export const RUNTIME_VERSION = "0.2.1";
+export const RUNTIME_VERSION = "0.3.0";
 export const DEFAULT_PORT = 47831;
 export const API_PREFIX = "/v1";
 export * from "./attachments.js";
