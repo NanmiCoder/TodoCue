@@ -63,18 +63,18 @@ Drag the empty area in the top bar to move the panel; dragging in titles and not
 
 ## Download & install
 
-Current version: **[v0.4.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.4.1)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
+Current version: **[v0.4.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.4.2)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
 
 | Your Mac | Installer |
 | --- | --- |
-| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.1/TodoCue-0.4.1-macOS-arm64.dmg) |
-| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.1/TodoCue-0.4.1-macOS-x64.dmg) |
+| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/TodoCue-0.4.2-macOS-arm64.dmg) |
+| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/TodoCue-0.4.2-macOS-x64.dmg) |
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
 The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
-[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.1/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
 
 ## Install the Skill
 
