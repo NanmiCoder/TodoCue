@@ -47,6 +47,7 @@ struct TaskFormView: View {
                             .font(.system(size: 19, weight: .semibold, design: .rounded))
                             .textFieldStyle(.plain)
                             .focused($titleFocused)
+                            .insertsNewline(on: [.shift])
                             .accessibilityLabel(L10n.tr("标题"))
 
                         // Notes Input
@@ -54,6 +55,7 @@ struct TaskFormView: View {
                             .lineLimit(2...6)
                             .font(.system(size: 13))
                             .textFieldStyle(.plain)
+                            .insertsNewline(on: [[], .shift])
                             .accessibilityLabel(L10n.tr("备注"))
 
                         Divider().opacity(0.35).padding(.vertical, 2)
@@ -405,6 +407,21 @@ struct TaskFormView: View {
             } catch { attachmentError = error.localizedDescription }
         }
         return true
+    }
+}
+
+private extension View {
+    /// A vertical `TextField` ends editing on Return and only Option-Return inserts a newline.
+    /// Insert one for the given modifier sets too; ⌘Return still saves, and Return while an
+    /// input method is composing still commits the marked text.
+    func insertsNewline(on modifierSets: [EventModifiers]) -> some View {
+        onKeyPress(.return, phases: .down) { press in
+            guard modifierSets.contains(press.modifiers.intersection([.shift, .option, .control, .command])),
+                  let editor = NSApp.keyWindow?.firstResponder as? NSTextView,
+                  editor.isFieldEditor, !editor.hasMarkedText() else { return .ignored }
+            editor.insertNewlineIgnoringFieldEditor(nil)
+            return .handled
+        }
     }
 }
 

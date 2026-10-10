@@ -11,10 +11,10 @@ enum Dial {
     /// Controls and wells sitting on a graphite tile.
     static let raised = Color.white.opacity(0.08)
     static let mutedOnGraphite = Color(red: 0.604, green: 0.616, blue: 0.639) // #9A9DA3
-    static let gap: CGFloat = 6
+    static let gap: CGFloat = 10
     /// Margin between the shell's edge and the tiles: a little wider than the gaps between tiles,
     /// so the tray reads as a frame around them rather than one more gutter.
-    static let shellInset: CGFloat = 10
+    static let shellInset: CGFloat = 14
     /// The shell's corner is concentric with the tiles it holds, one inset further out.
     static var shellRadius: CGFloat { Theme.panelCorner + shellInset }
     static let face = "Michroma"

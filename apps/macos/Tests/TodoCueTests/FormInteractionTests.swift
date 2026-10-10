@@ -54,6 +54,40 @@ final class FormInteractionTests: XCTestCase {
         XCTAssertTrue(descendants(root).compactMap { $0 as? NSTextField }.contains { $0.stringValue == typed.title })
     }
 
+    @MainActor func testReturnKeysInsertNewlinesWhereExpected() async throws {
+        let model = AppModel(client: APIClient(baseURL: URL(string: "http://127.0.0.1:1")!, token: "fixture"))
+        var draft = TaskDraft(); draft.title = "标题"; draft.notes = "备注"
+        model.presentForm(draft)
+        let panel = panel(model)
+        defer { panel.window.orderOut(nil) }
+        try await settle(panel)
+        let root = try XCTUnwrap(panel.window.contentView)
+        func press(_ flags: NSEvent.ModifierFlags, in text: String, marked: Bool = false) async throws -> TaskDraft {
+            let field = try XCTUnwrap(descendants(root).compactMap { $0 as? NSTextField }.first { $0.stringValue == text })
+            field.selectText(nil)
+            let editor = try XCTUnwrap(panel.window.firstResponder as? NSTextView)
+            editor.setSelectedRange(NSRange(location: 1, length: 0))
+            if marked { editor.setMarkedText("pin", selectedRange: NSRange(location: 3, length: 0), replacementRange: editor.selectedRange()) }
+            panel.window.sendEvent(try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.window.windowNumber, context: nil,
+                characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)))
+            if marked { editor.unmarkText() }
+            try await settle(panel)
+            guard case .form(let typed) = model.routes.last else { throw XCTSkip("missing form") }
+            return typed
+        }
+        var typed = try await press(.shift, in: "备注")
+        XCTAssertEqual(typed.notes, "备\n注", "Shift-Return inserts at the caret")
+        typed = try await press([], in: "备\n注")
+        XCTAssertEqual(typed.notes, "备\n\n注", "plain Return breaks lines in notes")
+        typed = try await press(.shift, in: "标题")
+        XCTAssertEqual(typed.title, "标\n题")
+        typed = try await press([], in: "标\n题")
+        XCTAssertEqual(typed.title, "标\n题", "plain Return keeps ending title editing")
+        typed = try await press([], in: "备\n\n注", marked: true)
+        XCTAssertFalse(typed.notes.contains("\n\n\n"), "Return while an input method composes commits instead of breaking the line")
+    }
+
     @MainActor func testNotesSelectionDragDoesNotMoveWindowAndHeaderHasDragArea() async throws {
         _ = NSApplication.shared
         let model = AppModel(client: APIClient(baseURL: URL(string: "http://127.0.0.1:1")!, token: "fixture"))

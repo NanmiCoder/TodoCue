@@ -40,7 +40,7 @@ struct ListRootView: View {
                                 .id(model.tab)
                                 .transition(tabTransition)
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 12)
+                            .padding(.horizontal, 14).padding(.vertical, 14)
                             // The list tile always reaches the quick-add pill, however short the list.
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                             .dialTile(.graphite)
