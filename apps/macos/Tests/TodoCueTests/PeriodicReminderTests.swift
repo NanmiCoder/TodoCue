@@ -258,6 +258,15 @@ final class PeriodicReminderTests: XCTestCase {
         XCTAssertTrue(descendants(root).compactMap { $0 as? NSTextField }.contains { $0.stringValue == "肩颈活动" })
     }
     @MainActor func testRealNotchClaimsDisplaysAndDoesNotTakeKeyboard() async throws {
+        #if arch(x86_64)
+        // GitHub's Intel VM exposes a screen but has no Metal target architecture.
+        // SwiftUI's animated notch drawing aborts inside MTLLoader on that host.
+        // Run this hardware rendering check on physical Intel Macs and ARM runners;
+        // all model, transport, scheduling and form interaction tests still run here.
+        if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" {
+            throw XCTSkip("Native animated notch requires a usable GPU; unavailable on GitHub's Intel VM")
+        }
+        #endif
         guard Prefs.isNotchEnabled, !NSScreen.screens.isEmpty else { throw XCTSkip("Notch display disabled or unavailable") }
         let model = model()
         let now = TCDate.iso(Date())
