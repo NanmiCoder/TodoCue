@@ -4,6 +4,9 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import {
   AttachmentUpload,
+  CreatePeriodicReminderInput,
+  UpdatePeriodicReminderInput,
+  PeriodicActionInput,
   MAX_ATTACHMENTS,
   CreateSeriesInput,
   CreateTaskInput,
@@ -36,6 +39,28 @@ async function run<T>(fn: () => Promise<T>) {
 export function buildMcpServer(getClient: () => TodoCueClient): McpServer {
   const server = new McpServer({ name: "todocue", version: RUNTIME_VERSION });
   const c = getClient;
+
+  server.registerTool("todocue_create_periodic_reminder", {
+    title: "Create periodic reminder",
+    description: "Create one interval reminder rule, not tasks or calendar events. Only title and intervalMinutes are required. Defaults: every day, 09:00–18:00, fixed slots, runtime timezone, enabled. mode=after_completion waits for confirmation; next active day resets. Returns normalized config, Chinese summary, state and nextFireAt. Preserve idempotencyKey when retrying.",
+    inputSchema: CreatePeriodicReminderInput.extend({ idempotencyKey: z.string().optional() }),
+  }, async ({ idempotencyKey, ...input }) => run(() => c().createPeriodicReminder(input, { idempotencyKey })));
+  server.registerTool("todocue_list_periodic_reminders", {
+    title: "Find periodic reminders", description: "Find rules by optional title query; returns IDs, versions, current occurrence and next reminder time.",
+    inputSchema: z.object({ q: z.string().optional() }), annotations: { readOnlyHint: true },
+  }, async ({ q }) => run(() => c().listPeriodicReminders(q)));
+  server.registerTool("todocue_get_periodic_reminder", {
+    title: "Get periodic reminder", description: "Read a rule and its current occurrence before editing or responding.",
+    inputSchema: z.object({ id: z.string() }), annotations: { readOnlyHint: true },
+  }, async ({ id }) => run(() => c().getPeriodicReminder(id)));
+  server.registerTool("todocue_update_periodic_reminder", {
+    title: "Edit periodic reminder", description: "Patch a rule in one call; omitted fields stay unchanged. Pass expectedVersion. Editing cancels its old current occurrence and recalculates future reminders.",
+    inputSchema: UpdatePeriodicReminderInput.extend({ id: z.string(), idempotencyKey: z.string().optional() }),
+  }, async ({ id, idempotencyKey, ...input }) => run(() => c().updatePeriodicReminder(id, input, { idempotencyKey })));
+  server.registerTool("todocue_periodic_action", {
+    title: "Manage periodic reminder", description: "pause, resume, pause_today, complete current occurrence, snooze (default 10 minutes), or delete. Pass expectedVersion; include occurrenceId and round from the result for completion/snooze to reject stale cards.",
+    inputSchema: PeriodicActionInput.extend({ id: z.string(), idempotencyKey: z.string().optional() }),
+  }, async ({ id, idempotencyKey, ...input }) => run(() => c().periodicAction(id, input, { idempotencyKey })));
 
   server.registerTool(
     "todocue_context",

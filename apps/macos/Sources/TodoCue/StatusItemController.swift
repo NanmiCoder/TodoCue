@@ -79,6 +79,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         add.target = self
         add.isEnabled = model.canWrite
         menu.addItem(add)
+        let periodic = NSMenuItem(title: L10n.tr("新建周期提醒"), action: #selector(newPeriodic), keyEquivalent: "")
+        periodic.target = self; periodic.isEnabled = model.canWrite
+        menu.addItem(periodic)
+        menu.addItem(withTitle: L10n.tr("周期提醒…"), action: #selector(openPeriodic), keyEquivalent: "").target = self
         menu.addItem(withTitle: L10n.tr("重新连接"), action: #selector(reconnect), keyEquivalent: "").target = self
         menu.addItem(withTitle: L10n.tr("设置…"), action: #selector(openSettings), keyEquivalent: ",").target = self
         if #available(macOS 13.0, *) {
@@ -96,6 +100,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         if let id = sender.representedObject as? String { model.reveal(taskId: id) }
     }
     @objc private func newTask() { model.newTask() }
+    @objc private func newPeriodic() { model.newPeriodic() }
+    @objc private func openPeriodic() { model.showPeriodic() }
     @objc private func reconnect() { model.reconnect() }
     @objc private func openSettings() { model.showSettings() }
     @objc private func toggleLogin() {

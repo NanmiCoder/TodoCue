@@ -140,6 +140,24 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 4,
+    name: "periodic_reminders",
+    up(db) {
+      db.exec(`
+        CREATE TABLE periodic_reminders (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+        CREATE TABLE periodic_occurrences (
+          id TEXT PRIMARY KEY,
+          rule_id TEXT NOT NULL REFERENCES periodic_reminders(id) ON DELETE CASCADE,
+          rule_version INTEGER NOT NULL,
+          scheduled_at TEXT NOT NULL,
+          data TEXT NOT NULL,
+          UNIQUE(rule_id, rule_version, scheduled_at)
+        );
+        CREATE INDEX periodic_occurrences_rule_idx ON periodic_occurrences(rule_id);
+      `);
+    },
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = migrations[migrations.length - 1]!.version;

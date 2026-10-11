@@ -61,20 +61,32 @@ Drag the empty area in the top bar to move the panel; dragging in titles and not
 - **Reminders that follow through.** Repeat tasks, set reminders, snooze, and undo completion. Closing the panel leaves the background reminder service running.
 - **Your data stays yours.** Tasks live in `~/.todocue/todocue.sqlite`. Replacing, removing, or reinstalling the app keeps that directory intact.
 
+## Small reminders, on your schedule
+
+Ask your Agent: “Remind me to move every half hour on Monday, Wednesday and Saturday, 9 AM–6 PM.” The Skill creates one periodic rule in one call and reports its schedule and next reminder. To create directly, choose **New periodic reminder** in the panel menu, pick Move / Water / Custom, and click the interval, days or time window. More settings stay folded until needed.
+
+Choose fixed time slots or count from each confirmation. Unanswered completion-based reminders wait until you respond, then reset on the next active day. Pause a rule or just pause today. Periodic rules create no pending tasks and never sync to Apple Calendar or Reminders. They use silent notch cards on your current screen, with system-notification fallback when no card can appear; sleep/offline reminders are skipped.
+
+```bash
+todocue --json periodic add 'Move a little' --every 30m --weekdays mon,wed,sat --between 09:00-18:00 --idempotency-key 'YOUR_UNIQUE_KEY'
+```
+
+[API and timing details](docs/api.md#periodic-reminders) · [Agent Skill guide](skills/todocue/references/periodic-reminders.md)
+
 ## Download & install
 
-Current version: **[v0.4.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.4.2)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
+Current version: **[v0.5.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.5.0)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
 
 | Your Mac | Installer |
 | --- | --- |
-| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/TodoCue-0.4.2-macOS-arm64.dmg) |
-| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/TodoCue-0.4.2-macOS-x64.dmg) |
+| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.0/TodoCue-0.5.0-macOS-arm64.dmg) |
+| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.0/TodoCue-0.5.0-macOS-x64.dmg) |
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
 The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
-[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.0/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
 
 ## Install the Skill
 

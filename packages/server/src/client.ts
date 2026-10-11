@@ -21,6 +21,11 @@ import {
   type TodayResult,
   type UpdateTaskInput,
   type VersionedAction,
+  type CreatePeriodicReminderInput,
+  type UpdatePeriodicReminderInput,
+  type PeriodicActionInput,
+  type PeriodicReminder,
+  type PeriodicOccurrence,
 } from "@todocue/shared";
 import { readJsonFile, resolveHome, runtimePaths } from "./config.js";
 
@@ -90,6 +95,24 @@ export class TodoCueClient {
 
   health() {
     return this.request<{ ok: boolean; runtimeVersion: string; pid: number }>("GET", "/health");
+  }
+  listPeriodicReminders(q?: string) {
+    return this.request<{ reminders: PeriodicReminder[] }>("GET", `/periodic-reminders${toQuery({ q })}`);
+  }
+  getPeriodicReminder(id: string) {
+    return this.request<{ reminder: PeriodicReminder }>("GET", `/periodic-reminders/${encodeURIComponent(id)}`);
+  }
+  createPeriodicReminder(input: CreatePeriodicReminderInput, opts?: RequestOptions) {
+    return this.request<{ reminder: PeriodicReminder }>("POST", "/periodic-reminders", input, opts);
+  }
+  updatePeriodicReminder(id: string, input: UpdatePeriodicReminderInput, opts?: RequestOptions) {
+    return this.request<{ reminder: PeriodicReminder }>("PATCH", `/periodic-reminders/${encodeURIComponent(id)}`, input, opts);
+  }
+  periodicAction(id: string, input: PeriodicActionInput, opts?: RequestOptions) {
+    return this.request<{ reminder?: PeriodicReminder; deleted?: boolean; id?: string }>("POST", `/periodic-reminders/${encodeURIComponent(id)}/action`, input, opts);
+  }
+  periodicOccurrences(id: string) {
+    return this.request<{ occurrences: PeriodicOccurrence[] }>("GET", `/periodic-reminders/${encodeURIComponent(id)}/occurrences`);
   }
   context() {
     return this.request<ContextInfo>("GET", "/context");

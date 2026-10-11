@@ -12,6 +12,7 @@ final class NotchState: ObservableObject {
     var onCueOpen: (() -> Void)?
     var onCueComplete: (() -> Void)?
     var onCueSnooze: (() -> Void)?
+    var onCuePauseToday: (() -> Void)?
     var onCueSize: ((CGSize) -> Void)?
     @Published var expanded = false
     /// Stays open until Esc, a click outside or the pin button; hovering alone never pins.

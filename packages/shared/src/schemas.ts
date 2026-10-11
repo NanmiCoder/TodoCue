@@ -350,6 +350,9 @@ export type ContextInfo = z.infer<typeof ContextInfo>;
 // ---------------------------------------------------------------------------
 
 export const EventType = z.enum([
+  "periodic.created",
+  "periodic.updated",
+  "periodic.fired",
   "reminder.fired",
   "task.created",
   "task.updated",
@@ -413,18 +416,6 @@ export const DoctorReport = z.object({
 });
 export type DoctorReport = z.infer<typeof DoctorReport>;
 
-export const ExportBundle = z.object({
-  format: z.literal("todocue-export"),
-  version: z.literal(1),
-  exportedAt: InstantUtc,
-  timezone: IanaTimezone,
-  tasks: z.array(Task),
-  series: z.array(Series),
-  reminders: z.array(Reminder),
-  attachments: z.array(Attachment.extend({ dataBase64: z.string() })).default([]),
-  ordering: OrderingState.optional(),
-});
-export type ExportBundle = z.infer<typeof ExportBundle>;
 
 /** Connection descriptor written by the runtime for local clients. */
 export const ConnectionInfo = z.object({

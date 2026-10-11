@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { ErrorCodes, RUNTIME_VERSION, TodoCueError } from "@todocue/shared";
 import { TodoCueClient, resolveHome } from "@todocue/server";
 import { registerTaskCommands } from "./commands/tasks.js";
+import { registerPeriodicCommands } from "./commands/periodic.js";
 import { registerOpsCommands } from "./commands/ops.js";
 import { serveMcp } from "./commands/mcp.js";
 import { printError } from "./output.js";
@@ -30,6 +31,7 @@ const client = (): TodoCueClient => {
 };
 
 registerTaskCommands(program, { client, out });
+registerPeriodicCommands(program, { client, out });
 registerOpsCommands(program, { client, out, home });
 program
   .command("mcp")

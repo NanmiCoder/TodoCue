@@ -1,12 +1,28 @@
 import Foundation
 import TodoCueKit
 
+enum CueSubject: Equatable {
+    case task(TodoTask)
+    case periodic(PeriodicReminder)
+}
+
 struct ReminderCue: Identifiable, Equatable {
     let id: String
-    let task: TodoTask
+    let subject: CueSubject
+    var task: TodoTask? { if case .task(let value) = subject { return value }; return nil }
+    var periodic: PeriodicReminder? { if case .periodic(let value) = subject { return value }; return nil }
+    var title: String { task?.title ?? periodic?.title ?? "" }
     let count: Int
     let late: Bool
     let receivedAt: Date
+
+    init(id: String, task: TodoTask, count: Int, late: Bool, receivedAt: Date) {
+        self.id = id; subject = .task(task); self.count = count; self.late = late; self.receivedAt = receivedAt
+    }
+    init(periodic rule: PeriodicReminder, now: Date = Date()) {
+        id = "\(rule.currentOccurrenceId ?? rule.id):\(rule.currentOccurrence?.round ?? 0)"
+        subject = .periodic(rule); count = 1; late = false; receivedAt = now
+    }
 
     static func from(_ event: RuntimeEvent, task: TodoTask, now: Date = Date()) -> ReminderCue? {
         guard event.type == .reminderFired, let id = event.id, event.related?["taskId"] == task.id,

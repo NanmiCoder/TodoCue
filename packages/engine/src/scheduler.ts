@@ -86,6 +86,13 @@ export class Scheduler {
       this.log(`day changed to ${today}; generated ${n} recurring instances`);
     }
 
+    await Promise.all([
+      this.engine.periodic.tick(this.notifier, catchUp || wokeUp),
+      this.deliverTaskReminders(nowMs),
+    ]);
+  }
+
+  private async deliverTaskReminders(nowMs: number): Promise<void> {
     const due = this.engine.dueReminders();
     if (due.length === 0) return;
     const nowIso = this.engine.nowIso();
@@ -102,8 +109,7 @@ export class Scheduler {
         continue;
       }
       const ageMs = nowMs - new Date(r.fireAt).getTime();
-      if ((catchUp || wokeUp) && ageMs > this.missedGraceMs) missed.push(r);
-      else if (ageMs > this.missedGraceMs) missed.push(r);
+      if (ageMs > this.missedGraceMs) missed.push(r);
       else onTime.push(r);
     }
 

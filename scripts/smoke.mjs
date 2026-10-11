@@ -90,6 +90,30 @@ try {
   assert.equal(resultData(await call('todocue_list_attachments', { id: mcpId })).attachments.length, 2);
   console.log('PASS MCP initialize, discover, create, multi-file upload, retry, image read and remove');
 
+  const taskCount = (await client.listTasks()).tasks.length;
+  const periodicCli = (await cli('periodic', 'add', 'CLI 活动提醒', '--every', '30m', '--idempotency-key', 'periodic-cli')).reminder;
+  assert.deepEqual(periodicCli.weekdays, [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(periodicCli.windows, [{ start: '09:00', end: '18:00' }]);
+  assert.equal(periodicCli.timezone, (await client.context()).timezone);
+  assert(periodicCli.nextFireAt);
+  for (const name of ['create_periodic_reminder', 'list_periodic_reminders', 'get_periodic_reminder', 'update_periodic_reminder', 'periodic_action']) {
+    assert(tools.includes(`todocue_${name}`));
+  }
+  const periodicInput = { title: 'MCP 喝水提醒', intervalMinutes: 30, weekdays: [1, 3, 6], mode: 'after_completion', idempotencyKey: 'periodic-mcp' };
+  const periodicMcp = resultData(await call('todocue_create_periodic_reminder', periodicInput)).reminder;
+  assert.equal(resultData(await call('todocue_create_periodic_reminder', periodicInput)).reminder.id, periodicMcp.id);
+  assert.equal((await cli('periodic', 'show', periodicMcp.id)).reminder.summary, periodicMcp.summary);
+  const periodicEdited = resultData(await call('todocue_update_periodic_reminder', {
+    id: periodicMcp.id, intervalMinutes: 60, expectedVersion: periodicMcp.version, idempotencyKey: 'periodic-edit',
+  })).reminder;
+  const periodicPaused = resultData(await call('todocue_periodic_action', {
+    id: periodicMcp.id, action: 'pause_today', expectedVersion: periodicEdited.version, idempotencyKey: 'periodic-pause',
+  })).reminder;
+  assert.equal(periodicPaused.state, 'paused_today');
+  assert.equal((await client.listTasks()).tasks.length, taskCount, 'periodic rules must not create tasks/calendar input');
+  assert.equal((await cli('periodic', 'list')).reminders.length, 2);
+  console.log('PASS periodic CLI/MCP one-call creation, shared defaults, retry, versioned edit and pause without tasks');
+
   await client.updateTask(created.task.id, { reminderAt: new Date(Date.now() - 1000).toISOString() });
   await rt.scheduler.tick();
   await until(() => events.some((event) => event.type === 'reminder.fired' && event.related?.taskId === created.task.id));
@@ -106,6 +130,8 @@ try {
   assert.equal((await cli('show', mcpId)).task.attachments.length, 2);
   assert.equal((await client.getAttachment(created.task.id, created.task.attachments[0].id)).dataBase64, png.toString('base64'));
   assert.deepEqual((await client.export()).attachments, exported.attachments);
+  assert.deepEqual((await cli('periodic', 'show', periodicMcp.id)).reminder, periodicPaused);
+  assert.equal((await client.export()).periodicReminders.length, 2);
   console.log('PASS persistent runtime restart, original-file removal and full export round-trip');
 } finally {
   abort.abort(); if (stream) await stream;
