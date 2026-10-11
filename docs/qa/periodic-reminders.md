@@ -47,3 +47,7 @@
 - 在已授权的实际通知中心中点击周期通知的完成/延后按钮。当前验证为 helper 编译、投递参数、runtime 通道竞争、模拟通知拒绝及 API 行为，不等同于通知中心实机验收。
 
 实现的已知投递边界：App 抢占后、回执前崩溃可能丢失本次提醒，记录失败并安排下一轮，不补发第二通道。周期提醒只在本机运行，不通过 Apple 日历或提醒事项向手机推送。
+
+## Intel 发布 runner 的图形环境
+
+v0.5.0 的 Intel 发布任务在 `testRealNotchClaimsDisplaysAndDoesNotTakeKeyboard` 绘制窗口时，被 Metal 的 `Target device architecture is nil` 系统断言中止，未公开 Release。该 runner 提供虚拟屏幕但无法执行此动画渲染。此项硬件窗口测试在 GitHub Intel 环境显式跳过；真实 Intel Mac、Apple Silicon runner 和本机继续执行。草稿/版本/幂等键、界面输入、CLI/MCP、调度与全部其他原生测试继续运行。主分支/PR 质量门禁新增 Intel 原生测试任务，使两个架构在推送标签前均受验证。修复通过单独 PR 合并后使用 v0.5.1 新标签发布，不改写 v0.5.0 标签。
