@@ -1,6 +1,6 @@
 ---
 name: todocue
-description: 通过 TodoCue CLI 管理本机持久化待办、今日计划、截止日期、提醒、多图片/文件附件和每日/每周重复任务。用户提到 TodoCue，或已经选择用 TodoCue 记录和管理个人任务时使用；Agent 自己的临时执行步骤不自动写入个人待办。
+description: 通过 TodoCue CLI 管理本机持久化待办、今日计划、截止日期、提醒、多图片/文件附件、每日/每周重复任务及喝水、活动等时段内周期提醒。用户提到 TodoCue，或已经选择用 TodoCue 记录和管理个人任务时使用；Agent 自己的临时执行步骤不自动写入个人待办。
 ---
 
 # TodoCue
@@ -72,6 +72,12 @@ Success is JSON on stdout. Business errors are JSON on stderr with a nonzero exi
 - `UNAVAILABLE`: diagnose the runtime as above. Repeated failure or an unresolved write outcome should be reported, not retried indefinitely.
 
 Report the actual returned task, including the relevant local date/time and ID. A saved reminder is not proof that a system notification was delivered. When notification delivery matters, inspect `doctor` and `reminders`; `submitted` means submitted to the notification system. If the notification authorization shows `denied`, macOS has already recorded a decision and will never show the prompt again: ask the user to enable TodoCueNotifier in System Settings › Notifications (`todocue doctor --open-notification-settings` opens that pane) instead of retrying the request.
+
+## Periodic reminders
+
+For “remind me every half hour to move/drink water” within daily time windows, use **periodic reminders**: one rule, no task per trigger and no Apple Calendar/Reminders sync. For work that needs a task each day/week, use recurring tasks below. Natural language is interpreted by the agent; the CLI does not parse arbitrary sentences.
+
+Read [references/periodic-reminders.md](references/periodic-reminders.md) when creating or managing interval reminders. Create the complete rule with one `periodic add` call (or `todocue_create_periodic_reminder`), not a series of task creations. Only title and interval are required; shared defaults are every day, 09:00–18:00, fixed slots, runtime timezone, enabled. Honor the user's specified days, windows and timing mode. Do not ask about unmentioned advanced options; report the returned effective configuration and next time. If “during my work hours” has no concrete hours in context, ask only for the missing days/hours rather than guessing.
 
 ## Recurring tasks
 

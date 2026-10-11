@@ -179,7 +179,7 @@ describe("persistent list ordering", () => {
     const rows = tables.map(table => legacy.prepare(`SELECT * FROM ${table}`).all());
     legacy.close();
     const opened = openDatabase({ path: file }); handles.push(opened.db);
-    expect(opened.appliedMigrations).toEqual([3]);
+    expect(opened.appliedMigrations).toEqual([3, 4]);
     expect(opened.backupPath).toBeTruthy();
     tables.forEach((table, i) => expect(opened.db.prepare(`SELECT * FROM ${table}`).all()).toEqual(rows[i]));
     const backup = new Database(opened.backupPath!, { readonly: true }); handles.push(backup);

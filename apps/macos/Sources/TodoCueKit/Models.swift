@@ -247,6 +247,9 @@ public struct ContextInfo: Codable, Sendable {
 }
 
 public enum RuntimeEventType: String, Codable, Sendable {
+    case periodicCreated = "periodic.created"
+    case periodicUpdated = "periodic.updated"
+    case periodicFired = "periodic.fired"
     case taskCreated = "task.created"
     case taskUpdated = "task.updated"
     case seriesCreated = "series.created"

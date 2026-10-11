@@ -90,3 +90,9 @@ TodoCue.app 通过 EventKit 把任务镜像到 Apple 的「日历」和「提醒
 - 不要在多台 Mac 上同时开启同步，它们会在同一个 iCloud 日历里写出重复条目。
 - 本地 ad-hoc 构建（`scripts/build-macos.sh`）每次重签都会改变代码签名。macOS 可能因此要求重新授权日历和提醒事项。
 - 签名要求：App 用 `scripts/app.entitlements.plist` 签名，其中包含 `com.apple.security.personal-information.calendars`（开启 hardened runtime 后需要它；hardened runtime 没有单独的提醒事项 entitlement）。Info.plist 需要带上 `NSCalendars*UsageDescription` 和 `NSReminders*UsageDescription`。本地 ad-hoc 构建没有开启 hardened runtime，所以 entitlement 是否正确，只能在 `npm run macos:dmg` 打出的产物上验证。
+
+## 周期提醒不参与同步
+
+喝水、活动等“每天某些时段内每隔 N 分钟提醒”的需求使用独立周期规则。规则和每次投递记录保存在独立表中，不生成任务；TodoCue 日历、Apple 日历和提醒事项均不读取这些规则或记录。设置中的 Apple 同步开关只作用于普通任务及每日/每周重复任务。
+
+这样无需按频率猜测是否同步，也不会为每半小时一次的提醒创建未来 30 天的日程。周期提醒目前由本机 runtime 调度；它不会通过 iCloud 在 iPhone 上发出提醒。

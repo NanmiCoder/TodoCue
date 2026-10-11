@@ -42,6 +42,13 @@ struct PanelRootView: View {
 
     @ViewBuilder private var content: some View {
         switch model.routes.last {
+        case .periodic: PeriodicRemindersView().dialPage().transition(pageTransition)
+        case .periodicForm(let draft):
+            PeriodicReminderForm(draft: Binding(get: {
+                if case .periodicForm(let current) = model.routes.last, current.saveKey == draft.saveKey { return current }
+                return draft
+            }, set: { model.updatePeriodicDraft($0) }))
+                .id(draft.saveKey).dialPage().transition(pageTransition)
         case .detail(let id): TaskDetailView(taskId: id).dialPage().transition(pageTransition)
         case .form(let draft): TaskFormView(draft: draft).id(draft.saveIdempotencyKey).dialPage().transition(pageTransition)
         case .settings: SettingsView().dialPage().transition(pageTransition)
@@ -115,6 +122,8 @@ struct HeaderView: View {
                 .accessibilityLabel(model.pinned ? L10n.tr("取消固定面板") : L10n.tr("固定面板"))
                 Menu {
                     Button(L10n.tr("新建任务"), action: model.newTask).disabled(!model.canWrite)
+                    Button(L10n.tr("新建周期提醒"), action: model.newPeriodic).disabled(!model.canWrite)
+                    Button(L10n.tr("周期提醒…"), action: model.showPeriodic)
                     Button(L10n.tr("已完成…"), action: model.showCompleted)
                     Button(L10n.tr("刷新")) { Task { await model.refreshAll() } }
                     Button(L10n.tr("导出 JSON"), action: model.exportJSON).disabled(model.client == nil)
@@ -194,6 +203,8 @@ struct HeaderView: View {
 
     private var title: String {
         switch model.routes.last {
+        case .periodic: return L10n.tr("周期提醒")
+        case .periodicForm(let draft): return draft.editingId == nil ? L10n.tr("新建周期提醒") : L10n.tr("编辑周期提醒")
         case .detail: return L10n.tr("这件事")
         case .form(let draft): return draft.isEditing ? L10n.tr("编辑任务") : L10n.tr("记下一件事")
         case .settings: return L10n.tr("偏好设置")
@@ -265,6 +276,10 @@ struct ToastView: View {
                 Button(L10n.tr("撤销")) { model.undoComplete(id) }
                     .controlSize(.small)
                     .keyboardShortcut("z", modifiers: .command)
+            }
+            if let id = toast.undoPeriodicId {
+                Button(L10n.tr("撤销")) { model.undoPeriodicCreate(id, version: toast.undoPeriodicVersion) }
+                    .controlSize(.small).disabled(!model.canWrite)
             }
             if let undo = toast.undoReschedule {
                 Button(L10n.tr("撤销")) { model.undoReschedule(undo) }

@@ -3,6 +3,11 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { ZodError, type ZodType } from "zod";
 import {
   API_PREFIX,
+  CreatePeriodicReminderInput,
+  UpdatePeriodicReminderInput,
+  PeriodicActionInput,
+  PeriodicClaimInput,
+  PeriodicReceiptInput,
   ATTACHMENT_BODY_LIMIT,
   AddAttachmentsInput,
   MoveTaskInput,
@@ -234,6 +239,22 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.post(`${API_PREFIX}/series/:id/stop`, async (req) => engine.stopSeries(idOf(req), parse(VersionedAction, req.body)));
 
   app.get(`${API_PREFIX}/reminders`, async (req) => ({ reminders: engine.listReminders(parse(ListRemindersQuery, normalizeQuery(req.query))) }));
+
+  app.get(`${API_PREFIX}/periodic-reminders`, async (req) => ({ reminders: engine.periodic.list((req.query as { q?: string }).q) }));
+  app.post(`${API_PREFIX}/periodic-reminders/preview`, async (req) => engine.periodic.preview(parse(CreatePeriodicReminderInput, req.body)));
+  app.post(`${API_PREFIX}/periodic-reminders`, async (req, reply) => {
+    const reminder = engine.periodic.create(parse(CreatePeriodicReminderInput, req.body));
+    reply.code(201); return { reminder };
+  });
+  app.get(`${API_PREFIX}/periodic-reminders/:id`, async (req) => ({ reminder: engine.periodic.get(idOf(req)) }));
+  app.get(`${API_PREFIX}/periodic-reminders/:id/occurrences`, async (req) => ({ occurrences: engine.periodic.history(idOf(req)) }));
+  app.patch(`${API_PREFIX}/periodic-reminders/:id`, async (req) => ({ reminder: engine.periodic.update(idOf(req), parse(UpdatePeriodicReminderInput, req.body)) }));
+  app.post(`${API_PREFIX}/periodic-reminders/:id/action`, async (req) => {
+    const result = engine.periodic.action(idOf(req), parse(PeriodicActionInput, req.body));
+    return "deleted" in result ? result : { reminder: result };
+  });
+  app.post(`${API_PREFIX}/periodic-reminders/:id/claim`, async (req) => ({ reminder: engine.periodic.claim(idOf(req), parse(PeriodicClaimInput, req.body)) }));
+  app.post(`${API_PREFIX}/periodic-reminders/:id/receipt`, async (req) => ({ reminder: engine.periodic.receipt(idOf(req), parse(PeriodicReceiptInput, req.body)) }));
 
   app.get(`${API_PREFIX}/export`, async () => engine.exportBundle());
 

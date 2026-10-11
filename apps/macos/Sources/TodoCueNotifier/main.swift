@@ -22,6 +22,7 @@ import TodoCueKit
 // bridge, which keeps only the `error` field and drops the rest of the payload.
 
 let categoryId = "TODOCUE_REMINDER"
+let periodicCategoryId = "TODOCUE_PERIODIC"
 let actionComplete = "COMPLETE"
 let actionSnooze = "SNOOZE"
 
@@ -84,7 +85,9 @@ func registerCategory(_ center: UNUserNotificationCenter) {
     let complete = UNNotificationAction(identifier: actionComplete, title: L10n.tr("完成"), options: [])
     let snooze = UNNotificationAction(identifier: actionSnooze, title: L10n.tr("10 分钟后提醒"), options: [])
     let cat = UNNotificationCategory(identifier: categoryId, actions: [complete, snooze], intentIdentifiers: [], options: [])
-    center.setNotificationCategories([cat])
+    let periodicComplete = UNNotificationAction(identifier: actionComplete, title: L10n.tr("完成本次"), options: [])
+    let periodic = UNNotificationCategory(identifier: periodicCategoryId, actions: [periodicComplete, snooze], intentIdentifiers: [], options: [])
+    center.setNotificationCategories([cat, periodic])
 }
 
 func requireBundle() {
@@ -148,10 +151,33 @@ final class ResponseDelegate: NSObject, UNUserNotificationCenterDelegate {
         handled = true
         let taskId = response.notification.request.content.userInfo["taskId"] as? String
         let action = response.actionIdentifier
+        let info = response.notification.request.content.userInfo
+        let periodicId = info["periodicId"] as? String
+        let occurrenceId = info["occurrenceId"] as? String
+        let round = info["round"] as? Int
         Task {
-            await handle(action: action, taskId: taskId)
+            if let periodicId {
+                await handlePeriodic(action: action, id: periodicId, occurrenceId: occurrenceId, round: round)
+            } else { await handle(action: action, taskId: taskId) }
             completionHandler()
             exit(0)
+        }
+    }
+
+    func handlePeriodic(action: String, id: String, occurrenceId: String?, round: Int?) async {
+        switch action {
+        case actionComplete, actionSnooze:
+            guard let occurrenceId, let round, let client = APIClient.fromHome() else { return }
+            do {
+                _ = try await client.periodicAction(id, action: action == actionComplete ? "complete" : "snooze",
+                    occurrenceId: occurrenceId, round: round, idempotencyKey: "notification:\(occurrenceId):\(round):\(action)")
+            } catch {
+                // Make a failed or stale action visible rather than silently claiming completion.
+                if let url = URL(string: "todocue://periodic/\(id)") { NSWorkspace.shared.open(url) }
+            }
+        case UNNotificationDismissActionIdentifier: break
+        default:
+            if let url = URL(string: "todocue://periodic/\(id)") { NSWorkspace.shared.open(url) }
         }
     }
 
@@ -232,11 +258,14 @@ case "deliver":
     if let s = args.options["subtitle"] { content.subtitle = s }
     if let t = args.options["thread"] { content.threadIdentifier = t }
     if args.flags.contains("sound") { content.sound = .default }
-    content.categoryIdentifier = categoryId
+    content.categoryIdentifier = args.options["periodic-id"] == nil ? categoryId : periodicCategoryId
     var info: [String: Any] = ["notificationId": id]
     if let taskId = args.options["task-id"] { info["taskId"] = taskId }
+    if let periodicId = args.options["periodic-id"] { info["periodicId"] = periodicId }
+    if let occurrenceId = args.options["occurrence-id"] { info["occurrenceId"] = occurrenceId }
+    if let value = args.options["round"], let round = Int(value) { info["round"] = round }
     content.userInfo = info
-    content.interruptionLevel = .timeSensitive
+    content.interruptionLevel = args.options["periodic-id"] == nil ? .timeSensitive : .active
     let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
     center.getNotificationSettings { settings in
         let denied = settings.authorizationStatus == .denied

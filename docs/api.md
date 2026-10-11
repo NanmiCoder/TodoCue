@@ -204,3 +204,41 @@ current reminder in the group. Notification retries do not emit another Cue. Sno
 reminder and can produce a new Cue. The macOS client ignores stale/replayed events, cancelled/completed
 or rescheduled tasks, disabled notch UI, and full screen when quiet mode is enabled. App must be running
 on a Mac with a notch for a Cue to appear; the background system notification path remains independent.
+
+## Periodic reminders
+
+Interval reminders are independent of tasks/series: no task per trigger, no calendar projection and no Apple Calendar/Reminders synchronization. Create in **one call**:
+
+```json
+{ "title": "起来活动一下", "intervalMinutes": 30 }
+```
+
+Only those two fields are required. Defaults: `weekdays: [1,2,3,4,5,6,7]`, `windows: [{"start":"09:00","end":"18:00"}]`, `mode: "fixed"`, runtime IANA `timezone`, `enabled: true`. The UI uses the same defaults. Windows are shared across all selected weekdays. Intervals are integer minutes, 1–1440; windows cannot overlap or cross midnight; `24:00` is an end-only value. At least one window must be longer than the interval. Days/windows are normalized into ascending order.
+
+| Method | Path | Input | Result |
+|---|---|---|---|
+| POST | `/v1/periodic-reminders/preview` | Create input | `{ config, summary, nextFireAt }`, no writes |
+| POST | `/v1/periodic-reminders` | Create input; `Idempotency-Key` | `201 { reminder }` |
+| GET | `/v1/periodic-reminders` | Optional `q` title filter | `{ reminders }` |
+| GET | `/v1/periodic-reminders/:id` | — | `{ reminder }` |
+| PATCH | `/v1/periodic-reminders/:id` | Provided config fields, `expectedVersion?` | `{ reminder }` |
+| POST | `/v1/periodic-reminders/:id/action` | `{ action, expectedVersion?, occurrenceId?, round?, minutes? }` | `{ reminder }` or `{ deleted: true, id }` |
+| GET | `/v1/periodic-reminders/:id/occurrences` | — | `{ occurrences }`, most recent 200 |
+
+Actions: `pause`, `resume` (also clears today's pause), `pause_today`, `complete`, `snooze` (default 10 minutes), `delete`. Use the current `occurrenceId` and `round` when completing/snoozing. The configuration version changes on edits/pause/resume; scheduled delivery and user completion do not increment it. Mutations accept the existing idempotency header; stale versions return `VERSION_CONFLICT`, stale instances/rounds `INVALID_STATE`. Field validation returns the existing structured error details.
+
+A reminder includes normalized configuration, `id`, configuration `version`, state `revision`, `createdAt`, `updatedAt`, `pausedOn`, `stateDate`, `nextFireAt` (UTC or null), `currentOccurrenceId`, `currentOccurrence`, Chinese `summary` and `state` (`scheduled`, `waiting`, `paused_today`, `paused`). `revision` increases with every persisted rule or occurrence state change, including channel selection and receipts, even when the clock has not advanced. Clients reject older revisions within a configuration version and discard list requests overtaken by an authoritative mutation response. Older saved rules without this additive field read as revision 0. A current occurrence records `ruleVersion`, original `scheduledAt`, effective `fireAt`, delivery `round`, `delivery`, `channel`, `result`, timestamps and `lastError`. Delivery is separate from completion: `displayed` means the App acknowledged its card, `submitted` means submitted to the notification system; neither proves the user completed the action. A claim still in flight can transiently appear as `waiting`; UI completion is available once displayed/submitted.
+
+`fixed` slots are anchored separately to each window: first at start + interval, ending strictly before the end. Completing does not shift the grid. `after_completion` waits for confirmation; completion re-arms from confirmation + interval. Creation/resume inside a window starts from now; a target outside a window moves to the next window's start + a full interval. Waiting survives breaks within the day but resets on the next selected local date. Snooze keeps the same occurrence with a new round; a fixed snooze reaching the next grid slot merges into that slot. Snooze outside active hours or beyond the occurrence's local date is not sent; rolling reminders keep waiting. Pauses and edits invalidate old instances.
+
+Runtime checks every five seconds. Startup/wake skips missed periodic reminders, with no catch-up notifications. A rolling timer that missed an undelivered occurrence starts from recovery time; an already delivered waiting occurrence persists within its active day. Nonexistent DST wall-clock slots are skipped, fixed folded slots fire only at their first occurrence. Rolling intervals use elapsed time within actual active UTC segments; a nonexistent window boundary does not discard its valid portion, and a fold that leaves the window restarts the interval at the next active segment. Rules retain their IANA timezone when the system zone changes.
+
+### Internal notch delivery
+
+`periodic.fired` SSE includes the rule ID plus `related.occurrenceId` and `related.round`; `periodic.created` and `periodic.updated` refresh the management view without triggering task/calendar sync.
+
+- `POST /v1/periodic-reminders/:id/claim`: `{ occurrenceId, round, token }`. Atomically selects notch delivery within three seconds of the offer, and accepts retries with the same token. Claim only when the App can display immediately on the pointer's current screen.
+- `POST /v1/periodic-reminders/:id/receipt`: same fields plus `displayed: boolean`. Records actual display separately from user completion. A claimed card with no receipt after ten seconds is failed, without system fallback.
+- If no App claims within three seconds, the next scheduler pass selects a silent system notification. Selection and replay guards prevent competing channels. Each actual asynchronous system delivery rechecks active hours; an unsent occurrence that has left its window is marked missed and re-armed. A crash after channel selection may lose that occurrence; it never triggers catch-up delivery through a second channel.
+
+Finished instance records are retained for 30 days; the current waiting/diagnostic record is retained. JSON exports include additive `periodicReminders` and `periodicOccurrences` arrays. Deleting a rule removes its instances.

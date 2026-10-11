@@ -61,20 +61,32 @@ Agent 创建的任务会同步出现在面板中。打开后，先看下一步�
 - **安排有后续。** 支持重复任务、提醒、稍后提醒，以及完成后的撤销。关闭面板后，后台服务继续负责提醒。
 - **数据属于你。** 任务保存在 `~/.todocue/todocue.sqlite`。覆盖、删除或重新安装 App 后，这个目录仍然保留。
 
+## 按你的节奏，提醒一点小事
+
+告诉 Agent：「周一、三、六，九点到六点，每半小时提醒我起来活动。」Skill 一次调用就创建完整周期规则，返回实际配置和下一次提醒时间。直接用 App 时，在面板菜单选择**新建周期提醒**，选“活动 / 喝水 / 自定义”，点击间隔、星期和时段即可修改；“更多设置”默认收起。
+
+支持固定时间点，也支持确认完成后重新计时。重新计时模式未响应时等待确认，下一个生效日自动重新开始。规则可随时暂停，或仅今天暂停。周期提醒不生成待办、不进入日历，也不参与 Apple 日历与提醒事项同步。优先在当前屏幕静音弹出刘海卡片，不可展示时降级为系统通知；休眠和离线期间不补发。
+
+```bash
+todocue --json periodic add '起来活动一下' --every 30m --weekdays mon,wed,sat --between 09:00-18:00 --idempotency-key '本次操作的唯一键'
+```
+
+[接口与计时细节](docs/api.md#periodic-reminders) · [Agent Skill 使用说明](skills/todocue/references/periodic-reminders.md)
+
 ## 下载与安装
 
-当前版本 **[v0.4.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.4.2)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
+当前版本 **[v0.5.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.5.0)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
 
 | 你的 Mac | 安装包 |
 | --- | --- |
-| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/TodoCue-0.4.2-macOS-arm64.dmg) |
-| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/TodoCue-0.4.2-macOS-x64.dmg) |
+| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.0/TodoCue-0.5.0-macOS-arm64.dmg) |
+| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.0/TodoCue-0.5.0-macOS-x64.dmg) |
 
 打开 DMG → 将 **TodoCue.app 拖入 Applications** → 从应用程序中启动。
 
 App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无需另装运行时。需要提醒时，在设置中允许通知。更新时下载新 DMG 并替换 App；当前尚无 App 内自动更新。
 
-[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.4.2/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
+[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.0/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
 ## 安装 Skills
 

@@ -30,6 +30,8 @@ enum PanelTab: String, CaseIterable, Identifiable {
 }
 
 enum Route: Equatable {
+    case periodic
+    case periodicForm(PeriodicDraft)
     case detail(String)
     case form(TaskDraft)
     case settings
@@ -41,6 +43,8 @@ struct Toast: Equatable {
     let id = UUID()
     var message: String
     var undoTaskId: String? = nil
+    var undoPeriodicId: String? = nil
+    var undoPeriodicVersion: Int? = nil
     var undoReschedule: UndoReschedule? = nil
     var undoOrderToken: String? = nil
     var undoOrderRevision: Int? = nil
@@ -110,10 +114,21 @@ final class AppModel: ObservableObject {
 
     /// Only the unsaved creation draft is offered by new-task entry points.
     @Published var savedDraft: TaskDraft?
+    @Published var periodicReminders: [PeriodicReminder] = []
+    @Published var periodicLoadError: String?
+    @Published var periodicLoaded = false
+    @Published var periodicSelectedId: String?
+    @Published var savedPeriodicDraft: PeriodicDraft?
+    var periodicDeletedIds: Set<String> = []
+    var periodicCacheEpoch = 0
+    var periodicRefreshRequest: UUID?
+    private var periodicRefreshTask: Task<Void, Never>?
     private var editingDrafts: [String: TaskDraft] = [:]
+    var editingPeriodicDrafts: [String: PeriodicDraft] = [:]
 
     // Wiring to the AppKit shell.
     var onReminderCue: ((ReminderCue) -> Void)?
+    var onPeriodicCue: ((PeriodicReminder) -> Void)?
     var onOpenPanel: ((Bool) -> Void)?
     var onClosePanel: (() -> Void)?
     var onCollapseNotch: (() -> Void)?
@@ -269,6 +284,22 @@ final class AppModel: ObservableObject {
 
     private func handle(_ ev: RuntimeEvent) {
         switch ev.type {
+        case .periodicFired:
+            guard let client, let id = ev.id, let occurrenceId = ev.related?["occurrenceId"],
+                  let roundText = ev.related?["round"], let round = Int(roundText) else { return }
+            Task {
+                guard let rule = try? await client.periodicReminder(id),
+                      rule.currentOccurrence?.id == occurrenceId, rule.currentOccurrence?.round == round,
+                      rule.currentOccurrence?.delivery == "offered" else { return }
+                onPeriodicCue?(rule)
+            }
+        case .periodicCreated, .periodicUpdated:
+            periodicRefreshTask?.cancel()
+            periodicRefreshTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                guard !Task.isCancelled else { return }
+                await self?.refreshPeriodic()
+            }
         case .reminderFired:
             guard let client, let taskId = ev.related?["taskId"] else { return }
             Task {
@@ -315,6 +346,7 @@ final class AppModel: ObservableObject {
         } catch {
             handleLoadError(error)
         }
+        if routes.contains(.periodic) || !periodicReminders.isEmpty { await refreshPeriodic() }
     }
 
     func refreshLive() async {
@@ -659,7 +691,11 @@ final class AppModel: ObservableObject {
 
     func actOnCue(_ cue: ReminderCue, snooze: Bool) async -> Bool {
         guard let client else { return false }
-        let task = self.task(cue.task.id) ?? cue.task
+        if let rule = cue.periodic {
+            return await actOnPeriodic(rule, action: snooze ? "snooze" : "complete", occurrence: rule.currentOccurrence)
+        }
+        guard let original = cue.task else { return false }
+        let task = self.task(original.id) ?? original
         return await perform(snooze ? L10n.tr("稍后提醒") : L10n.tr("完成"), {
             if snooze { return try await client.snooze(task.id, expectedVersion: task.version) }
             return try await client.complete(task.id, expectedVersion: task.version)
@@ -823,7 +859,7 @@ final class AppModel: ObservableObject {
         toast = t
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            let hasUndo = t.undoTaskId != nil || t.undoOrderToken != nil || t.undoReschedule != nil
+            let hasUndo = t.undoTaskId != nil || t.undoOrderToken != nil || t.undoReschedule != nil || t.undoPeriodicId != nil
             try? await Task.sleep(nanoseconds: hasUndo ? 10_000_000_000 : 5_000_000_000)
             guard !Task.isCancelled else { return }
             if self?.toast?.id == t.id { self?.toast = nil }

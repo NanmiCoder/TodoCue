@@ -103,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard url.scheme == "todocue" else { return }
         if url.host == "task", let id = url.pathComponents.dropFirst().first, !id.isEmpty {
             model.reveal(taskId: id)
+        } else if url.host == "periodic", let id = url.pathComponents.dropFirst().first, !id.isEmpty {
+            model.revealPeriodic(id)
         } else {
             sidePanel.show()
         }

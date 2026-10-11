@@ -14,6 +14,10 @@ export interface NotificationPayload {
   body?: string;
   subtitle?: string;
   taskId?: string;
+  periodicId?: string;
+  occurrenceId?: string;
+  round?: number;
+  sound?: boolean;
   thread?: string;
 }
 
@@ -157,8 +161,11 @@ export class HelperNotifier implements NotificationSink {
       if (payload.body) args.push("--body", payload.body);
       if (payload.subtitle) args.push("--subtitle", payload.subtitle);
       if (payload.taskId) args.push("--task-id", payload.taskId);
+      if (payload.periodicId) args.push("--periodic-id", payload.periodicId);
+      if (payload.occurrenceId) args.push("--occurrence-id", payload.occurrenceId);
+      if (payload.round !== undefined) args.push("--round", String(payload.round));
       if (payload.thread) args.push("--thread", payload.thread);
-      args.push("--sound");
+      if (payload.sound !== false) args.push("--sound");
       const res = await this.runHelper(args);
       if (res.ok !== true) throw new Error(String(res.error ?? "helper reported failure"));
       return typeof res.channel === "string" ? res.channel : "helper";

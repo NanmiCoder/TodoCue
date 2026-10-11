@@ -30,6 +30,7 @@ import {
   type EventType,
 } from "@todocue/shared";
 import { AttachmentStore } from "./attachments.js";
+import { PeriodicStore } from "./periodic.js";
 import type { SqliteDatabase } from "./db.js";
 import { newReminderId, newSeriesId, newTaskId } from "./ids.js";
 import {
@@ -84,6 +85,7 @@ export class TaskEngine {
   readonly timezone: string;
   readonly horizonDays: number;
   readonly attachments: AttachmentStore;
+  readonly periodic: PeriodicStore;
 
   private listeners = new Set<EventListener>();
   private seq = 0;
@@ -96,6 +98,7 @@ export class TaskEngine {
     this.clock = opts.clock ?? systemClock;
     this.horizonDays = opts.horizonDays ?? 30;
     this.timezone = this.resolveTimezone(opts.timezone);
+    this.periodic = new PeriodicStore(this.db, this.clock, this.timezone, (type, id, related) => this.emit(type, id, related));
   }
 
   // ---------------------------------------------------------------------
@@ -1187,7 +1190,9 @@ export class TaskEngine {
     const tasks = (this.db.prepare("SELECT * FROM tasks ORDER BY created_at").all() as TaskRow[]).map(this.hydrateTask);
     const series = (this.db.prepare("SELECT * FROM series ORDER BY created_at").all() as SeriesRow[]).map(seriesFromRow);
     const reminders = (this.db.prepare("SELECT * FROM reminders ORDER BY created_at").all() as ReminderRow[]).map(reminderFromRow);
-    return { format: "todocue-export", version: 1, exportedAt: this.nowIso(), timezone: this.timezone, tasks, series, reminders, ordering: this.ordering(), attachments: this.attachments.export() };
+    const periodicOccurrences = (this.db.prepare("SELECT data FROM periodic_occurrences ORDER BY scheduled_at").all() as { data: string }[]).map((row) => JSON.parse(row.data));
+    return { format: "todocue-export", version: 1, exportedAt: this.nowIso(), timezone: this.timezone, tasks, series, reminders,
+      ordering: this.ordering(), attachments: this.attachments.export(), periodicReminders: this.periodic.list(), periodicOccurrences };
   }
 
   projects(): string[] {

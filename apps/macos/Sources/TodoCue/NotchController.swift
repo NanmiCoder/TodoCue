@@ -60,6 +60,7 @@ final class NotchController {
     private var observers: [NSObjectProtocol] = []
     private var cancellables: Set<AnyCancellable> = []
     private var cueQueue = ReminderCueQueue()
+    private var periodicClaimInFlight = false
     private var cueTimer: Timer?
     private var cueDeadline = Date.distantPast
     private var nextCueTask: Task<Void, Never>?
@@ -72,14 +73,17 @@ final class NotchController {
     init(model: AppModel) {
         self.model = model
         model.onReminderCue = { [weak self] cue in self?.receiveCue(cue) }
+        model.onPeriodicCue = { [weak self] rule in self?.receivePeriodic(rule) }
         state.onCueDismiss = { [weak self] in self?.dismissCue() }
         state.onCueOpen = { [weak self] in
             guard let self, let cue = self.state.cue else { return }
             self.dismissCue(showNext: false)
-            self.model.reveal(taskId: cue.task.id)
+            if let rule = cue.periodic { self.model.revealPeriodic(rule.id) }
+            else if let task = cue.task { self.model.reveal(taskId: task.id) }
         }
         state.onCueComplete = { [weak self] in self?.actOnCue(snooze: false) }
         state.onCueSnooze = { [weak self] in self?.actOnCue(snooze: true) }
+        state.onCuePauseToday = { [weak self] in self?.pausePeriodicToday() }
         state.onCueSize = { [weak self] size in
             Task { @MainActor in self?.sizeCue(height: size.height) }
         }
@@ -504,32 +508,99 @@ final class NotchController {
         presentNextCue()
     }
 
+    /// Periodic cards only claim when they can appear immediately on the pointer's screen.
+    /// An accepted claim is never routed through the task queue or shown on another display.
+    private func periodicScreenAvailable() -> Bool {
+        guard Prefs.isNotchEnabled, !state.expanded, state.cue == nil,
+              let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }),
+              Self.geometry(of: screen, allowVirtual: Prefs.notchOnDisplaysWithoutNotch) != nil else { return false }
+        rebuild()
+        return geometry?.screenFrame == screen.frame && shouldAutoExpand(forReminder: true)
+    }
+
+    private func receivePeriodic(_ rule: PeriodicReminder) {
+        guard !periodicClaimInFlight, let occurrence = rule.currentOccurrence,
+              let offeredAt = occurrence.offeredAt.flatMap(TCDate.parse),
+              Date().timeIntervalSince(offeredAt) >= -5, Date().timeIntervalSince(offeredAt) < 3,
+              periodicScreenAvailable(), let client = model.client else { return }
+        periodicClaimInFlight = true
+        let token = UUID().uuidString
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.periodicClaimInFlight = false }
+            do {
+                let claimed = try await client.claimPeriodic(rule.id, occurrenceId: occurrence.id, round: occurrence.round, token: token)
+                guard self.model.mergePeriodic(claimed),
+                      let claimedAt = claimed.currentOccurrence?.claimedAt.flatMap(TCDate.parse),
+                      Date().timeIntervalSince(claimedAt) < 8,
+                      self.periodicScreenAvailable(), let window = self.window else {
+                    try? await client.periodicReceipt(rule.id, occurrenceId: occurrence.id, round: occurrence.round, token: token, displayed: false)
+                    return
+                }
+                self.showCue(ReminderCue(periodic: claimed), in: window)
+                do {
+                    try await client.periodicReceipt(rule.id, occurrenceId: occurrence.id, round: occurrence.round, token: token, displayed: true)
+                } catch {
+                    // A lost acknowledgement is safe to retry with the same claim token.
+                    try? await client.periodicReceipt(rule.id, occurrenceId: occurrence.id, round: occurrence.round, token: token, displayed: true)
+                }
+            } catch {
+                // If the claim response was lost, the runtime expires it without a second channel.
+            }
+        }
+    }
+
+    private func isCueCurrent(_ cue: ReminderCue) -> Bool {
+        if let original = cue.task, let task = model.task(original.id) {
+            return task.status == .todo && task.reminderAt == original.reminderAt
+        }
+        if let original = cue.periodic {
+            guard let current = model.periodicReminders.first(where: { $0.id == original.id }) else { return !model.periodicLoaded }
+            return current.enabled && current.state != "paused_today" && current.version == original.version
+                && current.currentOccurrenceId == original.currentOccurrenceId
+                && current.currentOccurrence?.round == original.currentOccurrence?.round
+                && current.currentOccurrence?.result == "pending"
+        }
+        return true
+    }
+
+    private func showCue(_ cue: ReminderCue, in window: NotchWindow) {
+        stopPolling()
+        state.reduceMotion = Theme.reduceMotion
+        state.cueHovered = false; state.cueError = nil; state.cueBusy = false; state.cue = cue
+        window.allowsKey = false; window.hasShadow = false; window.orderFrontRegardless()
+        sizeCue(height: 160)
+        cueDeadline = Date().addingTimeInterval(9)
+        cueTimer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tickCue() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        cueTimer = timer
+        NSAccessibility.post(element: window, notification: .announcementRequested,
+            userInfo: [.announcement: L10n.tr("TodoCue 提醒：\(cue.title)"), .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+    }
+
+    private func pausePeriodicToday() {
+        guard let cue = state.cue, let rule = cue.periodic, !state.cueBusy else { return }
+        state.cueBusy = true
+        Task {
+            let success = await model.actOnPeriodic(rule, action: "pause_today")
+            guard state.cue?.id == cue.id else { return }
+            state.cueBusy = false
+            if success { dismissCue() }
+            else { state.cueError = model.toast?.message; cueDeadline = Date().addingTimeInterval(12) }
+        }
+    }
+
     private func presentNextCue() {
         // A reminder lands on the screen you are looking at.
         followPointer()
         guard state.cue == nil, !state.expanded, let window, Prefs.isNotchEnabled,
               geometry != nil, shouldAutoExpand(forReminder: true) else { return }
         while let cue = cueQueue.next() {
-            if let task = model.task(cue.task.id), task.status != .todo || task.reminderAt != cue.task.reminderAt { continue }
-            stopPolling()
-            state.reduceMotion = Theme.reduceMotion
-            state.cueHovered = false
-            state.cueError = nil
-            state.cueBusy = false
-            state.cue = cue
-            window.allowsKey = false
-            window.hasShadow = false
-            window.orderFrontRegardless()
-            sizeCue(height: 160)
-            cueDeadline = Date().addingTimeInterval(9)
-            cueTimer?.invalidate()
-            let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.tickCue() }
-            }
-            RunLoop.main.add(timer, forMode: .common)
-            cueTimer = timer
-            NSAccessibility.post(element: window, notification: .announcementRequested,
-                                 userInfo: [.announcement: L10n.tr("TodoCue 提醒：\(cue.task.title)"), .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+            if !isCueCurrent(cue) { continue }
+            showCue(cue, in: window)
             return
         }
     }
@@ -544,7 +615,7 @@ final class NotchController {
 
     private func tickCue() {
         guard let cue = state.cue else { return }
-        if let task = model.task(cue.task.id), task.status != .todo || task.reminderAt != cue.task.reminderAt {
+        if !isCueCurrent(cue) {
             if !state.cueBusy { dismissCue() }
             return
         }

@@ -35,13 +35,13 @@ struct NotchReminderView: View {
                         if cue.late { Text(L10n.tr("· 刚才错过了")).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)) }
                     }
                     Button { state.onCueOpen?() } label: {
-                        Text(cue.task.title).font(.system(size: 18, weight: .semibold)).tracking(-0.3)
+                        Text(cue.title).font(.system(size: 18, weight: .semibold)).tracking(-0.3)
                             .foregroundStyle(.white).lineLimit(2).multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityLabel(L10n.tr("打开提醒任务 \(cue.task.title)"))
+                    }.buttonStyle(.plain).accessibilityLabel(L10n.tr("打开提醒任务 \(cue.title)"))
                     if cue.count > 1 {
                         Text(L10n.tr("还有 \(cue.count - 1) 件事等你，点开看看。")) .font(.system(size: 11)).foregroundStyle(.white.opacity(0.6))
-                    } else if let project = cue.task.project, !project.isEmpty {
+                    } else if let project = cue.task?.project, !project.isEmpty {
                         Text(project).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
                     }
                 }
@@ -50,10 +50,17 @@ struct NotchReminderView: View {
                     .accessibilityLabel(L10n.tr("收起这条 Cue 提醒"))
             }
             HStack(spacing: 8) {
-                Button { state.onCueComplete?() } label: { Label(L10n.tr("完成啦"), systemImage: "checkmark") }
+                Button { state.onCueComplete?() } label: { Label(cue.periodic == nil ? L10n.tr("完成啦") : L10n.tr("完成本次"), systemImage: "checkmark") }
                     .buttonStyle(CueButtonStyle(prominent: true)).accessibilityLabel(L10n.tr("完成提醒任务"))
                 Button { state.onCueSnooze?() } label: { Label(L10n.tr("10 分钟后"), systemImage: "zzz") }
                     .buttonStyle(CueButtonStyle()).accessibilityLabel(L10n.tr("Cue 提醒延后 10 分钟"))
+                if cue.periodic != nil {
+                    Menu {
+                        Button(L10n.tr("今天暂停")) { state.onCuePauseToday?() }
+                    } label: { Image(systemName: "ellipsis") }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
+                    .accessibilityLabel(L10n.tr("更多提醒操作"))
+                }
                 Spacer(minLength: 0)
                 if state.cueBusy { ProgressView().controlSize(.small) }
                 else { Text("TodoCue").font(Dial.numeral(9.5)).foregroundStyle(.white.opacity(0.35)) }
@@ -64,6 +71,6 @@ struct NotchReminderView: View {
         .onHover { state.cueHovered = $0 }
         .onAppear { arrivedAt = Date() }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(L10n.tr("TodoCue 提醒：\(cue.task.title)"))
+        .accessibilityLabel(L10n.tr("TodoCue 提醒：\(cue.title)"))
     }
 }
