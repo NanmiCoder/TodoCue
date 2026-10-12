@@ -102,6 +102,21 @@ final class DecodingTests: XCTestCase {
         let d = try JSONDecoder().decode(RuntimeEvent.self, from: Data(dayChanged.utf8))
         XCTAssertEqual(d.type, .dayChanged)
         XCTAssertNil(d.id)
+
+        let deleted = """
+        {"seq":44,"type":"task.deleted","at":"2026-09-07T16:00:01.000Z","id":"t_1","related":{"seriesId":"s_1"}}
+        """
+        let x = try JSONDecoder().decode(RuntimeEvent.self, from: Data(deleted.utf8))
+        XCTAssertEqual(x.type, .taskDeleted)
+        XCTAssertEqual(x.id, "t_1")
+        XCTAssertEqual(x.related?["seriesId"], "s_1")
+    }
+
+    func testDeleteTaskEnvelopeDecodes() throws {
+        let json = "{\"deleted\":true,\"task\":\(taskJSON)}"
+        let env = try JSONDecoder().decode(APIClient.DeleteTaskEnvelope.self, from: Data(json.utf8))
+        XCTAssertTrue(env.deleted)
+        XCTAssertEqual(env.task.id, "t_1")
     }
 
     func testContextAndDoctorDecode() throws {

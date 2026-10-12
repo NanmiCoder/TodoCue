@@ -463,6 +463,24 @@ export class TaskEngine {
     });
   }
 
+  /**
+   * Permanently remove a task of any status, with its reminders; attachments go with it by cascade.
+   * Returns the task as it was. A series instance is simply gone: `generatedThrough` only moves
+   * forward, so the generator never re-creates an occurrence it already covered.
+   */
+  deleteTask(id: string, opts: { expectedVersion?: number } = {}): Task {
+    return this.tx(() => {
+      const task = this.requireTask(id);
+      this.checkVersion(task, opts.expectedVersion);
+      // Reminder rows reference the task without a cascade; drop them first.
+      const reminders = this.db.prepare("DELETE FROM reminders WHERE task_id = ?").run(id).changes;
+      this.db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+      if (reminders > 0) this.queueEvent({ type: "reminder.updated", id: null, related: { taskId: id } });
+      this.queueEvent({ type: "task.deleted", id, ...(task.seriesId ? { related: { seriesId: task.seriesId } } : {}) });
+      return task;
+    });
+  }
+
   skipTask(id: string, opts: { expectedVersion?: number } = {}): Task {
     return this.tx(() => {
       const task = this.requireTask(id);

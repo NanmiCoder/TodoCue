@@ -138,6 +138,10 @@ export class TodoCueClient {
   cancelTask(id: string, body: VersionedAction = {}, opts?: RequestOptions) {
     return this.request<{ task: Task }>("POST", `/tasks/${encodeURIComponent(id)}/cancel`, body, opts);
   }
+  /** Permanently removes the task, its reminders and its attachments. Returns the task as it was. */
+  deleteTask(id: string, body: VersionedAction = {}) {
+    return this.request<{ deleted: true; task: Task }>("DELETE", `/tasks/${encodeURIComponent(id)}`, body);
+  }
   skipTask(id: string, body: VersionedAction = {}, opts?: RequestOptions) {
     return this.request<{ task: Task }>("POST", `/tasks/${encodeURIComponent(id)}/skip`, body, opts);
   }

@@ -33,6 +33,13 @@ struct PanelRootView: View {
         .padding(Dial.shellInset)
         .background(DialShell())
         .animation(Dial.settle, value: model.toast)
+        .alert(L10n.tr("删除这个任务？"), isPresented: Binding(get: { model.pendingDelete != nil }, set: { if !$0 { model.pendingDelete = nil } }),
+               presenting: model.pendingDelete) { task in
+            Button(L10n.tr("删除"), role: .destructive) { model.delete(task) }.disabled(!model.canWrite)
+            Button(L10n.tr("取消"), role: .cancel) { model.pendingDelete = nil }
+        } message: { task in
+            Text(L10n.tr("「\(task.title)」及其提醒、附件会被永久删除，无法撤销。"))
+        }
         // Short and decelerating: a replaced page must be gone before the next keystroke lands.
         .animation(Theme.reduceMotion ? nil : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.2), value: model.routes.count)
         .todoCueAccent()

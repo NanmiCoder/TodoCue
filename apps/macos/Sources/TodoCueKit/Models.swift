@@ -252,6 +252,7 @@ public enum RuntimeEventType: String, Codable, Sendable {
     case periodicFired = "periodic.fired"
     case taskCreated = "task.created"
     case taskUpdated = "task.updated"
+    case taskDeleted = "task.deleted"
     case seriesCreated = "series.created"
     case seriesUpdated = "series.updated"
     case reminderUpdated = "reminder.updated"

@@ -10,13 +10,17 @@ protocol AppleSyncBackend: Sendable {
     func updateTask(_ id: String, _ payload: TaskPayload, expectedVersion: Int?) async throws -> TodoTask
     func complete(_ id: String, expectedVersion: Int?) async throws -> TodoTask
     func reopen(_ id: String, expectedVersion: Int?) async throws -> TodoTask
-    func cancel(_ id: String, expectedVersion: Int?) async throws -> TodoTask
+    /// Permanently removes the task; a task that is already gone is not an error.
+    func delete(_ id: String, expectedVersion: Int?) async throws
 }
 
 extension APIClient: AppleSyncBackend {
     func fetchTask(_ id: String) async throws -> TodoTask { try await task(id).task }
     func createTask(from payload: TaskPayload, idempotencyKey: String) async throws -> TodoTask {
         try await createTask(payload, idempotencyKey: idempotencyKey).task
+    }
+    func delete(_ id: String, expectedVersion: Int?) async throws {
+        try await deleteTask(id, expectedVersion: expectedVersion)
     }
 }
 
@@ -234,7 +238,7 @@ final class AppleSyncController: ObservableObject {
                                             title: Self.containerTitle)
         if container.identifier != stored {
             // A different (new or re-adopted) container: old links point nowhere. Dropping them is
-            // what keeps a deleted calendar from reading as "every item deleted → cancel everything".
+            // what keeps a deleted calendar from reading as "every item deleted → delete every task".
             state.links.removeAll { $0.kind == kind }
             state.setContainer(container.identifier, source: container.sourceIdentifier, for: kind)
             persist()
@@ -285,18 +289,19 @@ final class AppleSyncController: ObservableObject {
         if resuming.contains(kind) {
             actions = actions.map {
                 switch $0 {
-                case .markMissing(let id), .cancelTask(let id): return .unlink(taskId: id)
+                case .markMissing(let id), .deleteTask(let id): return .unlink(taskId: id)
                 default: return $0
                 }
             }
         }
         // Circuit breaker: many items vanishing at once is an account or sync hiccup far more often
-        // than a deliberate clean-up. Hold the cancellations; the links stay and recover on their own.
-        let isCancel: (AppleSyncAction) -> Bool = { if case .cancelTask = $0 { return true } else { return false } }
-        let cancels = actions.filter(isCancel).count
-        if cancels > max(3, links.count / 5) {
-            actions.removeAll(where: isCancel)
-            issues.append(L10n.tr("有 \(cancels) 个已同步条目同时从 Apple 侧消失，为防误删，暂未取消对应任务。如确是你删除的，请在 TodoCue 中处理这些任务。"))
+        // than a deliberate clean-up. Deleting a task is permanent, so hold every deletion back;
+        // the links stay and recover on their own.
+        let isDelete: (AppleSyncAction) -> Bool = { if case .deleteTask = $0 { return true } else { return false } }
+        let deletions = actions.filter(isDelete).count
+        if deletions > max(3, links.count / 5) {
+            actions.removeAll(where: isDelete)
+            issues.append(L10n.tr("有 \(deletions) 个已同步条目同时从 Apple 侧消失，为防误删，暂未删除对应任务。如确是你删除的，请在 TodoCue 中处理这些任务。"))
         }
 
         for action in actions {
@@ -333,9 +338,10 @@ final class AppleSyncController: ObservableObject {
             state.removeLink(kind, taskId: taskId)
             persist()
             try store.delete(kind, identifier: identifier)
-        case .cancelTask(let taskId):
+        case .deleteTask(let taskId):
             if let task = tasks[taskId], task.status == .todo {
-                _ = try await backend.cancel(taskId, expectedVersion: task.version)
+                // A task that is already gone is not an error; `delete` treats it as done.
+                try await backend.delete(taskId, expectedVersion: task.version)
             }
             state.removeLink(kind, taskId: taskId)
         case .unlink(let taskId):

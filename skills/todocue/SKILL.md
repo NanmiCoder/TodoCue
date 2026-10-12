@@ -32,6 +32,7 @@ Honor a user-selected `--home <directory>` or `TODOCUE_HOME` consistently. A dif
 | Create | `add 'title' ...` | `task`, optional `series` |
 | Edit | `edit TASK_ID ... --expect VERSION` | updated `task` |
 | Complete / undo / cancel | `done TASK_ID --expect VERSION`, `reopen ...`, `cancel ...` | updated `task` |
+| Delete permanently (cannot be undone) | `delete TASK_ID --expect VERSION` | `deleted`, last `task` |
 | Postpone just the reminder | `snooze TASK_ID --minutes 15` or `--until 'ISO'` | updated `task` |
 | Skip one recurring occurrence | `skip TASK_ID --expect VERSION` | updated `task` |
 | Inspect recurring series | `series list`, `series show SERIES_ID` | `series`, and instances for `show` |
@@ -63,6 +64,8 @@ The date and operation key above are illustrative. Resolve the date and generate
 For each new task or series created with `add`, generate one unique `--idempotency-key` and preserve it for that operation. If the outcome is uncertain, retry once with the same key and the identical resolved payload. Do not recompute relative times or generate a new key on retry. The CLI's automatically generated key is different on each invocation, so omitting the flag does not protect cross-invocation retries. A new user request needs a new key.
 
 Before editing or changing task/series status, obtain the current entity and its `version` from a query; pass it as `--expect`. On `VERSION_CONFLICT`, fetch again, compare the changed fields and apply only if the user's intended change is still clear. Do not remove the version guard to force an overwrite. The current CLI `snooze` has no `--expect`; after an uncertain snooze response, inspect the task before deciding whether another change is needed.
+
+`delete` erases a task together with its reminders and attachments and cannot be undone. Use it only when the user explicitly asks to delete or remove a task; when they just want it off their list, `cancel` keeps it in history and can be reopened. Never delete a task to "fix" something you created by mistake without telling the user which task it is first.
 
 Success is JSON on stdout. Business errors are JSON on stderr with a nonzero exit status: `{ "error": { "code", "message", "details" } }`. CLI option/parser errors may be plain text; inspect the exit status and both streams. Use `<command> --help` for unsupported flags.
 

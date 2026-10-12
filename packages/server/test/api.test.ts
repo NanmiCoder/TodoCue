@@ -70,6 +70,28 @@ describe("local api", () => {
     expect(events.find((e) => e.type === "reminder.updated" && e.related?.taskId === task.id)).toBeTruthy();
   });
 
+  it("deletes a task over DELETE /v1/tasks/:id with version checks and an SSE event", async () => {
+    const events: RuntimeEvent[] = [];
+    const ac = new AbortController();
+    const stream = client.events((e) => events.push(e), { signal: ac.signal }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 100));
+
+    const { task } = await client.createTask({ title: "要删除", scheduledDate: "2026-09-07" });
+    await expect(client.deleteTask(task.id, { expectedVersion: task.version + 1 })).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+    expect((await client.getTask(task.id)).task.id).toBe(task.id);
+
+    const res = await client.deleteTask(task.id, { expectedVersion: task.version });
+    expect(res).toMatchObject({ deleted: true, task: { id: task.id, title: "要删除" } });
+    await expect(client.getTask(task.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(client.deleteTask(task.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await client.today()).items.map((i) => i.task.id)).not.toContain(task.id);
+
+    await new Promise((r) => setTimeout(r, 150));
+    ac.abort();
+    await stream;
+    expect(events.find((e) => e.type === "task.deleted" && e.id === task.id)).toBeTruthy();
+  });
+
   it("delivers reminders via the scheduler and reports in doctor", async () => {
     const { task } = await client.createTask({ title: "提醒我", reminderAt: "2026-09-07T09:10" });
     clock.set("2026-09-07T01:10:01.000Z");

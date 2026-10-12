@@ -173,6 +173,8 @@ struct TaskContextMenu: View {
                 Button(L10n.tr("重新打开")) { model.reopen(task) }
                 Button(L10n.tr("编辑…")) { model.edit(task) }
             }
+            Divider()
+            Button(L10n.tr("删除…"), role: .destructive) { model.requestDelete(task) }
         }
         .disabled(!model.canWrite)
     }

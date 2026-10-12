@@ -52,8 +52,8 @@ export class Scheduler {
     if (this.running) return;
     this.running = true;
     this.engine.ensureSeriesInstances();
-    void this.tick(true);
-    this.timer = setInterval(() => void this.tick(false), this.tickMs);
+    void this.safeTick(true);
+    this.timer = setInterval(() => void this.safeTick(false), this.tickMs);
     this.timer.unref?.();
   }
 
@@ -61,6 +61,15 @@ export class Scheduler {
     this.running = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /** Timer-driven pass: a failure is logged, never an unhandled rejection that takes the runtime down. */
+  private async safeTick(catchUp: boolean): Promise<void> {
+    try {
+      await this.tick(catchUp);
+    } catch (e) {
+      this.log(`scheduler tick failed: ${(e as Error).stack ?? String(e)}`);
+    }
   }
 
   /** Run one scheduler pass. `catchUp` forces missed-reminder handling (startup / wake). */
@@ -127,9 +136,10 @@ export class Scheduler {
   }
 
   private async deliverOne(r: Reminder, task: Task, late = false): Promise<void> {
-    // Recheck after previous async deliveries: edits/cancellation can invalidate a queued reminder.
-    const current = this.engine.getTask(task.id);
-    if (current.status !== "todo" || current.reminderAt !== r.fireAt) return;
+    // Recheck after previous async deliveries: edits, cancellation or deletion can invalidate a
+    // queued reminder. A deleted task takes its reminder rows with it, so there is nothing to mark.
+    const current = this.engine.tasksById([task.id]).get(task.id);
+    if (!current || current.status !== "todo" || current.reminderAt !== r.fireAt) return;
     task = current;
     this.engine.emitReminderCue([r.id], late);
     const when = formatLocal(r.fireAt, task.timezone, "HH:mm");

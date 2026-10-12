@@ -356,6 +356,7 @@ export const EventType = z.enum([
   "reminder.fired",
   "task.created",
   "task.updated",
+  "task.deleted",
   "series.created",
   "series.updated",
   "reminder.updated",

@@ -94,6 +94,7 @@ public struct APIClient: Sendable {
     public struct TasksEnvelope: Codable, Sendable { public var tasks: [TodoTask] }
     public struct SeriesEnvelope: Codable, Sendable { public var series: Series; public var tasks: [TodoTask]? }
     public struct SeriesListEnvelope: Codable, Sendable { public var series: [Series] }
+    public struct DeleteTaskEnvelope: Codable, Sendable { public var deleted: Bool; public var task: TodoTask }
     public struct StopSeriesEnvelope: Codable, Sendable { public var series: Series; public var cancelledTaskIds: [String] }
     public struct RemindersEnvelope: Codable, Sendable { public var reminders: [Reminder] }
     public struct AuthorizationEnvelope: Codable, Sendable { public var authorization: String }
@@ -175,6 +176,30 @@ public struct APIClient: Sendable {
     public func reopen(_ id: String, expectedVersion: Int? = nil) async throws -> TodoTask { try await action(id, "reopen", expectedVersion: expectedVersion) }
     public func cancel(_ id: String, expectedVersion: Int? = nil) async throws -> TodoTask { try await action(id, "cancel", expectedVersion: expectedVersion) }
     public func skip(_ id: String, expectedVersion: Int? = nil) async throws -> TodoTask { try await action(id, "skip", expectedVersion: expectedVersion) }
+
+    /// Permanently removes the task with its reminders and attachments; returns it as it was, or nil
+    /// when it was already gone — which is the outcome that was asked for.
+    ///
+    /// A 404 is ambiguous: the runtime answers `NOT_FOUND` both for an unknown task and for a route it
+    /// does not have (a runtime older than this app). Only the first means "already gone", so the
+    /// task is asked for before believing it; if it is still there, the original error stands.
+    @discardableResult
+    public func deleteTask(_ id: String, expectedVersion: Int? = nil) async throws -> TodoTask? {
+        var body: [String: JSONValue] = [:]
+        if let v = expectedVersion { body["expectedVersion"] = .int(v) }
+        do {
+            let env: DeleteTaskEnvelope = try await send("DELETE", "/v1/tasks/\(id)", json: body)
+            return env.task
+        } catch let error as APIError {
+            guard case .http(404, _, _) = error else { throw error }
+            do {
+                _ = try await task(id)
+            } catch APIError.http(404, _, _) {
+                return nil
+            }
+            throw error
+        }
+    }
     public func snooze(_ id: String, minutes: Int = 10, expectedVersion: Int? = nil) async throws -> TodoTask {
         try await action(id, "snooze", expectedVersion: expectedVersion, extra: ["minutes": .int(minutes)])
     }

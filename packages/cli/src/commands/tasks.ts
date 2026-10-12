@@ -196,6 +196,16 @@ export function registerTaskCommands(program: Command, ctx: Ctx): void {
   simple("skip", "skip a recurring instance", (c, id, v) => c.skipTask(id, v ? { expectedVersion: v } : {}));
 
   program
+    .command("delete <id>")
+    .alias("rm")
+    .description("permanently delete a task with its reminders and attachments (cannot be undone; use cancel to keep history)")
+    .option("--expect <version>", "expected version")
+    .action(async (id: string, opts) => {
+      const res = await ctx.client().deleteTask(id, opts.expect ? { expectedVersion: Number.parseInt(opts.expect, 10) } : {});
+      print(ctx.out(), res, () => `deleted\n${formatTaskLine(res.task)}`);
+    });
+
+  program
     .command("snooze <id>")
     .description("move the reminder later (default 10 minutes)")
     .option("-m, --minutes <n>")

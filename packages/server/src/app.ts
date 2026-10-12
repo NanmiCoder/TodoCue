@@ -192,6 +192,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
   app.post(`${API_PREFIX}/ordering/undo`, async req => engine.undoOrder(parse(UndoOrderInput, req.body)));
   app.get(`${API_PREFIX}/tasks/:id`, async (req) => engine.getTaskDetail(idOf(req)));
   app.patch(`${API_PREFIX}/tasks/:id`, { bodyLimit: ATTACHMENT_BODY_LIMIT }, async (req) => ({ task: engine.updateTask(idOf(req), parse(UpdateTaskInput, req.body)) }));
+  app.delete(`${API_PREFIX}/tasks/:id`, async (req) => ({ deleted: true, task: engine.deleteTask(idOf(req), parse(VersionedAction, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/complete`, async (req) => ({ task: engine.completeTask(idOf(req), parse(VersionedAction, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/reopen`, async (req) => ({ task: engine.reopenTask(idOf(req), parse(VersionedAction, req.body)) }));
   app.post(`${API_PREFIX}/tasks/:id/cancel`, async (req) => ({ task: engine.cancelTask(idOf(req), parse(VersionedAction, req.body)) }));

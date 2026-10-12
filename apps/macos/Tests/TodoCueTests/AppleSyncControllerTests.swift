@@ -148,9 +148,21 @@ private final class FakeBackend: AppleSyncBackend, @unchecked Sendable {
     func reopen(_ id: String, expectedVersion: Int?) async throws -> TodoTask {
         try await mutate(id, "reopen", expectedVersion: expectedVersion) { $0.status = .todo; $0.completedAt = nil }
     }
-    func cancel(_ id: String, expectedVersion: Int?) async throws -> TodoTask {
-        try await mutate(id, "cancel", expectedVersion: expectedVersion) { $0.status = .cancelled }
+    func delete(_ id: String, expectedVersion: Int?) async throws {
+        await onWrite?()
+        if Task.isCancelled { throw APIError.transport("cancelled") }
+        try lock.withLock {
+            calls.append("delete \(id)")
+            guard let t = store[id] else { return } // like the real client: already gone is done
+            if let v = expectedVersion, v != t.version {
+                throw APIError.http(status: 409, code: "VERSION_CONFLICT", message: "")
+            }
+            store[id] = nil
+        }
     }
+
+    /// A deletion made elsewhere (the panel, the CLI, an agent) — no call recorded, it is not sync's.
+    func removeTask(_ id: String) { lock.withLock { store[id] = nil } }
 
     private static func apply(_ payload: TaskPayload, to t: inout TodoTask) {
         func string(_ key: String) -> String?? {
@@ -291,7 +303,7 @@ final class AppleSyncControllerTests: XCTestCase {
 
     // MARK: - Deletions are believed only when they are deletions
 
-    func testDeletionCancelsOnlyAfterTheGracePeriod() async throws {
+    func testDeletionDeletesTheTaskOnlyAfterTheGracePeriod() async throws {
         let store = FakeItemStore()
         let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
         let sync = make(store, backend)
@@ -304,8 +316,44 @@ final class AppleSyncControllerTests: XCTestCase {
 
         advance(minutes: 11)
         await sync.syncNow()
-        XCTAssertEqual(backend["a"]?.status, .cancelled)
+        XCTAssertNil(backend["a"], "an item deleted in Apple's apps deletes the task, it does not just cancel it")
+        XCTAssertEqual(backend.calls, ["delete a"])
         XCTAssertTrue(sync.links.isEmpty)
+    }
+
+    func testTaskDeletedInTodoCueRemovesItsAppleItems() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09"), Self.task("b", scheduledDate: "2026-10-10")])
+        let sync = make(store, backend, kinds: [.event, .reminder])
+        await sync.syncNow()
+        XCTAssertEqual(store.items[.event]!.count, 2)
+        XCTAssertEqual(store.items[.reminder]!.count, 2)
+
+        backend.removeTask("a")
+        await sync.syncNow()
+
+        XCTAssertEqual(store.items[.event]!.values.map(\.snapshot.title), ["任务 b"])
+        XCTAssertEqual(store.items[.reminder]!.values.map(\.snapshot.title), ["任务 b"])
+        XCTAssertEqual(Set(sync.links.map(\.taskId)), ["b"])
+        XCTAssertEqual(backend.calls, [], "removing the Apple items is not a write to the runtime")
+        XCTAssertNil(sync.lastError)
+    }
+
+    func testTaskDeletedWhileItsItemIsAlsoMissingIsNotDeletedTwice() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
+        let sync = make(store, backend)
+        await sync.syncNow()
+        store.items[.event] = [:]
+        await sync.syncNow() // markMissing
+
+        backend.removeTask("a")
+        advance(minutes: 11)
+        await sync.syncNow()
+
+        XCTAssertTrue(sync.links.isEmpty)
+        XCTAssertEqual(backend.calls, [])
+        XCTAssertNil(sync.lastError)
     }
 
     func testItemBackUnderANewIdentifierIsRelinkedNotCancelled() async throws {
@@ -346,7 +394,7 @@ final class AppleSyncControllerTests: XCTestCase {
         XCTAssertTrue(store.items[.event]!.isEmpty, "a detached task must not be re-created as a twin")
     }
 
-    func testManyItemsVanishingAtOnceAreNotCancelled() async throws {
+    func testManyItemsVanishingAtOnceAreNotDeleted() async throws {
         let store = FakeItemStore()
         let backend = FakeBackend((1...6).map { Self.task("t\($0)", scheduledDate: "2026-10-09") })
         let sync = make(store, backend)
@@ -358,6 +406,7 @@ final class AppleSyncControllerTests: XCTestCase {
         await sync.syncNow()
         XCTAssertEqual(backend.todo.count, 6)
         XCTAssertEqual(sync.links.count, 6)
+        XCTAssertEqual(backend.calls, [])
         XCTAssertNotNil(sync.lastError)
     }
 

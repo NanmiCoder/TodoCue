@@ -59,9 +59,10 @@ CLI, MCP and the macOS client are all thin clients of this API.
 | GET | `/v1/tasks/:id/attachments/:attachmentId` | – | `{ attachment, dataBase64 }` |
 | GET | `/v1/tasks/:id/attachments/:attachmentId/content` | – | Binary file, authenticated, `no-store`, download disposition |
 | DELETE | `/v1/tasks/:id/attachments/:attachmentId` | `{ expectedVersion? }` | `{ task }` |
+| DELETE | `/v1/tasks/:id` | `{ expectedVersion? }` | `{ deleted: true, task }` — permanent: the task (any status), its reminders and attachments are removed; `task` is its last state. A series instance is just gone and is never re-generated. A repeat call is `NOT_FOUND` |
 | POST | `/v1/tasks/:id/complete` | `{ expectedVersion? }` | `{ task }` |
 | POST | `/v1/tasks/:id/reopen` | `{ expectedVersion? }` | `{ task }` (undo; past reminders are not re-sent) |
-| POST | `/v1/tasks/:id/cancel` | `{ expectedVersion? }` | `{ task }` |
+| POST | `/v1/tasks/:id/cancel` | `{ expectedVersion? }` | `{ task }` (keeps the task in history and reopenable; use `DELETE` to erase it) |
 | POST | `/v1/tasks/:id/skip` | `{ expectedVersion? }` | `{ task }` (series instances only) |
 | POST | `/v1/tasks/:id/snooze` | `{ expectedVersion?, minutes?: 10, until?: instant }` | `{ task }` (only moves the reminder) |
 | GET | `/v1/today` | – | TodayResult |
@@ -144,7 +145,8 @@ id: 42
 event: task.updated
 data: {"seq":42,"type":"task.updated","at":"…Z","id":"t_…"}
 ```
-Event types: `reminder.fired`, `task.created`, `task.updated`, `series.created`, `series.updated`, `reminder.updated`
+Event types: `reminder.fired`, `task.created`, `task.updated`, `task.deleted` (`id` is the removed task;
+`related.seriesId` when it was a series instance), `series.created`, `series.updated`, `reminder.updated`
 (`related.taskId`), `day.changed`, `runtime.started`. A `: ping` comment is sent every 15s.
 Clients subscribe first, then load snapshots; on reconnect they must re-sync (`/v1/today`, `/v1/tasks`).
 

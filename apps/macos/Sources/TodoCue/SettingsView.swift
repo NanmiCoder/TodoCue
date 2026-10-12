@@ -205,7 +205,7 @@ private struct AppleSyncSection: View {
             channel(.event, title: L10n.tr("同步到日历"))
             Divider().opacity(0.3)
             channel(.reminder, title: L10n.tr("同步到提醒事项"))
-            Text(L10n.tr("有日期的待办会出现在 Apple 日历和提醒事项的「TodoCue」中，经 iCloud 同步到 iPhone。在那边修改、完成或删除，会写回 TodoCue（删除即取消任务）。仅在 TodoCue 运行时同步，不设闹钟。"))
+            Text(L10n.tr("有日期的待办会出现在 Apple 日历和提醒事项的「TodoCue」中，经 iCloud 同步到 iPhone。在那边修改、完成或删除，会写回 TodoCue（在那边删除条目，约 10 分钟后会同步删除对应任务）。仅在 TodoCue 运行时同步，不设闹钟。"))
                 .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             // Both on shows every dated task twice in Calendar: once as an event, once as a reminder.
             Text(sync.isEnabled(.event) && sync.isEnabled(.reminder)

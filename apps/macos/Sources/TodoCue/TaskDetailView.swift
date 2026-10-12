@@ -173,18 +173,22 @@ struct TaskDetailView: View {
                     }
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                     .accessibilityLabel(L10n.tr("稍后提醒"))
-                    Spacer(minLength: 0)
-                    Menu {
+                }
+                Spacer(minLength: 0)
+                // Every status can be deleted; only an open task can be rescheduled, skipped or cancelled.
+                Menu {
+                    if task.status == .todo {
                         Button(L10n.tr("改期到明天")) { model.moveToTomorrow(task) }
                         if task.isSeriesInstance {
                             Button(L10n.tr("跳过本次")) { model.skip(task); model.pop() }
                         }
                         Divider()
                         Button(L10n.tr("取消任务"), role: .destructive) { model.cancel(task); model.pop() }
-                    } label: { Image(systemName: "ellipsis").frame(width: 30, height: 32) }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30)
-                    .accessibilityLabel(L10n.tr("更多任务操作"))
-                } else { Spacer() }
+                    }
+                    Button(L10n.tr("删除任务…"), role: .destructive) { model.requestDelete(task) }
+                } label: { Image(systemName: "ellipsis").frame(width: 30, height: 32) }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30)
+                .accessibilityLabel(L10n.tr("更多任务操作"))
             }
             Button {
                 if task.status == .todo { model.complete(task); model.pop() }
