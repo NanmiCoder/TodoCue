@@ -241,6 +241,7 @@ Runtime checks every five seconds. Startup/wake skips missed periodic reminders,
 
 - `POST /v1/periodic-reminders/:id/claim`: `{ occurrenceId, round, token }`. Atomically selects notch delivery within three seconds of the offer, and accepts retries with the same token. Claim only when the App can display immediately on the pointer's current screen.
 - `POST /v1/periodic-reminders/:id/receipt`: same fields plus `displayed: boolean`. Records actual display separately from user completion. A claimed card with no receipt after ten seconds is failed, without system fallback.
+- Displaying is not answering. The App keeps a `displayed` occurrence whose `result` is still `pending` on the notch until it is completed, snoozed, paused, replaced by the rule's next occurrence or invalidated; there is no display timeout and no API action for "dismissed". Folding the cards into the notch's count changes nothing here.
 - If no App claims within three seconds, the next scheduler pass selects a silent system notification. Selection and replay guards prevent competing channels. Each actual asynchronous system delivery rechecks active hours; an unsent occurrence that has left its window is marked missed and re-armed. A crash after channel selection may lose that occurrence; it never triggers catch-up delivery through a second channel.
 
 Finished instance records are retained for 30 days; the current waiting/diagnostic record is retained. JSON exports include additive `periodicReminders` and `periodicOccurrences` arrays. Deleting a rule removes its instances.

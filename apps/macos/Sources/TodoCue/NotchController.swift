@@ -48,7 +48,7 @@ struct NotchGeometry: Equatable {
 final class NotchController {
     private let model: AppModel
     private var window: NotchWindow?
-    private let state = NotchState()
+    let state = NotchState()
     private var geometry: NotchGeometry?
     private var eventMonitors: [Any] = []
     private var pollTimer: Timer?
@@ -59,12 +59,25 @@ final class NotchController {
     private var targetFrame: NSRect?
     private var observers: [NSObjectProtocol] = []
     private var cancellables: Set<AnyCancellable> = []
-    private var cueQueue = ReminderCueQueue()
+    private var stack = CueStack()
+    /// The user folded the stack into the wings. A new arrival, or a rule coming back into its window, unfolds it.
+    private var collapsedByUser = false
+    private var featuredUntil = Date.distantPast
+    /// How long a new arrival is drawn as a full card before it rests as a row.
+    var featureDuration: TimeInterval = 6
+    private var deferred: [ReminderCue] = []
     private var periodicClaimInFlight = false
-    private var cueTimer: Timer?
-    private var cueDeadline = Date.distantPast
-    private var nextCueTask: Task<Void, Never>?
-    var activeCue: ReminderCue? { state.cue }
+    private var stackTimer: Timer?
+    private var stackLayoutTask: Task<Void, Never>?
+    private var lastPulse = Date()
+    private var otherScreenSince: Date?
+    private var stackHeight: CGFloat = 120
+    private var tickCount = 0
+    /// The reminder in front: the newest arrival while it is featured, otherwise the first row.
+    var activeCue: ReminderCue? {
+        if let key = state.featuredKey, let entry = stack.entry(key) { return entry.cue }
+        return stack.shown.first?.cue
+    }
     var isPanelVisible: (() -> Bool)?
 
     private let hoverDelay: TimeInterval = 0.2
@@ -74,18 +87,14 @@ final class NotchController {
         self.model = model
         model.onReminderCue = { [weak self] cue in self?.receiveCue(cue) }
         model.onPeriodicCue = { [weak self] rule in self?.receivePeriodic(rule) }
-        state.onCueDismiss = { [weak self] in self?.dismissCue() }
-        state.onCueOpen = { [weak self] in
-            guard let self, let cue = self.state.cue else { return }
-            self.dismissCue(showNext: false)
-            if let rule = cue.periodic { self.model.revealPeriodic(rule.id) }
-            else if let task = cue.task { self.model.reveal(taskId: task.id) }
-        }
-        state.onCueComplete = { [weak self] in self?.actOnCue(snooze: false) }
-        state.onCueSnooze = { [weak self] in self?.actOnCue(snooze: true) }
-        state.onCuePauseToday = { [weak self] in self?.pausePeriodicToday() }
+        state.onCueOpen = { [weak self] key in self?.openCue(key) }
+        state.onCueComplete = { [weak self] key in self?.answer(key, snooze: false) }
+        state.onCueSnooze = { [weak self] key in self?.answer(key, snooze: true) }
+        state.onCuePauseToday = { [weak self] key in self?.answer(key, pauseToday: true) }
+        state.onStackCollapse = { [weak self] in self?.collapseStack() }
+        state.onOpenQuickLook = { [weak self] in self?.openQuickLookFromStack() }
         state.onCueSize = { [weak self] size in
-            Task { @MainActor in self?.sizeCue(height: size.height) }
+            Task { @MainActor in self?.sizeStack(height: size.height) }
         }
         state.onOpenTask = { [weak self] id in self?.model.reveal(taskId: id) }
         state.onOpenAll = { [weak self] in self?.model.openToday() }
@@ -113,13 +122,20 @@ final class NotchController {
             .removeDuplicates { $0 == $1 }
             .sink { [weak self] remaining, online in self?.updateWings(remaining: remaining, online: online, animated: true) }
             .store(in: &cancellables)
+        // Rows follow the rules: handled elsewhere they leave, and a rule that is still waiting after a
+        // restart or reconnect comes back without a new event.
+        model.$periodicReminders
+            .sink { [weak self] rules in self?.syncPeriodic(rules) }
+            .store(in: &cancellables)
         rebuild()
     }
 
     func stop() {
-        nextCueTask?.cancel()
-        cueTimer?.invalidate()
-        cueQueue.clear()
+        stackLayoutTask?.cancel()
+        stackTimer?.invalidate()
+        stackTimer = nil
+        stack.clear()
+        deferred.removeAll()
         stopPolling()
         removeMonitors()
         window?.orderOut(nil)
@@ -158,10 +174,10 @@ final class NotchController {
         return NotchGeometry(screenFrame: f, notchRect: notch)
     }
 
-    /// Moves the collapsed bar to the screen the pointer has crossed onto. An open card or a Cue stays
-    /// where it is, so it never jumps away from what you are reading.
+    /// Moves the collapsed bar to the screen the pointer has crossed onto. An open card or the stack stays
+    /// where it is, so it never jumps away from what you are reading; the stack moves after a dwell.
     private func followPointer() {
-        guard let geo = geometry, !state.expanded, state.cue == nil,
+        guard let geo = geometry, !state.expanded, !state.stackShown,
               !NSMouseInRect(NSEvent.mouseLocation, geo.screenFrame, false) else { return }
         rebuild()
     }
@@ -172,6 +188,7 @@ final class NotchController {
             return
         }
         let changed = geometry != geo
+        let becameAvailable = geometry == nil
         geometry = geo
         state.notchWidth = geo.notchRect.width
         state.notchHeight = geo.notchHeight
@@ -179,19 +196,30 @@ final class NotchController {
         updateWings(remaining: model.remaining, online: model.connectionState.isOnline, animated: false)
         if window == nil {
             ensureWindow()
-        } else if changed && (state.expanded || state.cue != nil) {
+        } else if changed && state.expanded {
             collapse(immediately: true)
+        } else if state.stackShown {
+            // The stack goes with the pointer or the new display layout; it is never dismissed for it.
+            if changed {
+                targetFrame = nil
+                sizeStack(height: stackHeight)
+            }
         } else {
             placeCollapsed(animated: false)
         }
         ensureMonitors()
+        // Rules that were waiting before the notch had anywhere to show them come back now.
+        if becameAvailable { syncPeriodic(model.periodicReminders) }
+        layoutStack()
     }
 
     private func teardownWindow() {
-        nextCueTask?.cancel()
-        cueTimer?.invalidate()
-        cueQueue.clear()
-        state.cue = nil
+        stackLayoutTask?.cancel()
+        stackTimer?.invalidate()
+        stackTimer = nil
+        state.stackShown = false
+        state.featuredKey = nil
+        state.cueHovered = false
         window?.orderOut(nil)
         window = nil
         geometry = nil
@@ -244,7 +272,7 @@ final class NotchController {
     }
 
     private func placeCollapsed(animated: Bool) {
-        guard let window, !state.expanded, state.cue == nil else { return }
+        guard let window, !state.expanded, !state.stackShown else { return }
         let target = collapsedFrame()
         guard window.frame != target || targetFrame != target else { return }
         place(window, at: target, duration: animated ? 0.2 : 0)
@@ -279,7 +307,9 @@ final class NotchController {
 
     /// Wings show today's remaining count beside the notch; they fold away when the day is clear.
     private func updateWings(remaining: Int, online: Bool, animated: Bool) {
-        let wing: CGFloat = Prefs.notchShowsSummary && (remaining > 0 || !online) ? Theme.notchWingWidth : 0
+        // Wings also carry the count of reminders still waiting, even with the daily summary turned off.
+        let summary = Prefs.notchShowsSummary && (remaining > 0 || !online)
+        let wing: CGFloat = summary || !stack.isEmpty ? Theme.notchWingWidth : 0
         guard wing != state.wingWidth else { return }
         state.wingWidth = wing
         placeCollapsed(animated: animated)
@@ -335,8 +365,13 @@ final class NotchController {
     /// survives the pointer leaving. A click in another TodoCue window closes it.
     private func localMouseDown(_ event: NSEvent) -> NSEvent? {
         guard let window else { return event }
-        if state.cue != nil {
-            if event.window !== window { dismissCue() }
+        if state.stackShown {
+            // Reminders stay until answered: a click elsewhere never dismisses them. A click on the notch
+            // band itself, which holds no control, opens the quick look.
+            if event.window === window, event.locationInWindow.y >= window.frame.height - (geometry?.notchHeight ?? 0) {
+                openQuickLookFromStack()
+                return nil
+            }
             return event
         }
         if event.window === window {
@@ -356,7 +391,6 @@ final class NotchController {
     }
 
     private func outsideMouseDown() {
-        if state.cue != nil { dismissCue(); return }
         if state.expanded { collapse(immediately: false) }
     }
 
@@ -390,7 +424,7 @@ final class NotchController {
     }
 
     private func poll() {
-        guard state.cue == nil else { stopPolling(); return }
+        guard !state.stackShown else { stopPolling(); return }
         guard let window else { stopPolling(); return }
         let loc = NSEvent.mouseLocation
         let inHot = collapsedFrame().contains(loc)
@@ -439,7 +473,7 @@ final class NotchController {
     // MARK: - Expand / collapse
 
     private func expand(pinned: Bool) {
-        guard state.cue == nil else { return }
+        guard !state.stackShown else { return }
         guard let window, geometry != nil else { return }
         if state.expanded {
             if pinned { pin(focusInput: true) }
@@ -474,7 +508,6 @@ final class NotchController {
     }
 
     func collapse(immediately: Bool) {
-        if state.cue != nil { dismissCue(showNext: false); return }
         guard let window, state.expanded else { return }
         let wasKey = window.isKeyWindow
         state.expanded = false
@@ -497,25 +530,68 @@ final class NotchController {
             place(window, at: target, duration: immediately ? 0 : 0.2, timing: CAMediaTimingFunction(name: .easeIn))
         }
         if pollTimer == nil, isNearTop(NSEvent.mouseLocation) { startPolling() }
-        scheduleNextCue()
+        scheduleStackLayout()
     }
 
-    // MARK: - Reminder Cue: transient, actionable, and never takes the keyboard.
+    // MARK: - Reminders: a stack that stays until each one is answered.
+    //
+    // Nothing here completes, snoozes or pauses by itself. A row leaves when the user answers it, when
+    // the runtime says it is no longer current, or (a rule) while it is outside its active windows.
+    // Collapsing only folds the stack into the wings; the count stays visible there.
 
     func receiveCue(_ cue: ReminderCue) {
-        guard Prefs.isNotchEnabled, geometry != nil, shouldAutoExpand(forReminder: true) else { return }
-        cueQueue.append(cue)
-        presentNextCue()
+        guard Prefs.isNotchEnabled, geometry != nil else { return }
+        admit(cue)
     }
 
-    /// Periodic cards only claim when they can appear immediately on the pointer's screen.
-    /// An accepted claim is never routed through the task queue or shown on another display.
+    /// A new row does not take a place under a pointer that is on the stack: a click aimed at one row
+    /// must not land on another. It waits, counted in the header, until the pointer leaves.
+    private func admit(_ cue: ReminderCue) {
+        if state.stackShown, state.cueHovered, stack.entry(cue.key) == nil {
+            guard !deferred.contains(where: { $0.key == cue.key }) else { return }
+            deferred.append(cue)
+            state.deferredCount = deferred.count
+            return
+        }
+        apply(cue)
+    }
+
+    private func apply(_ cue: ReminderCue) {
+        guard stack.receive(cue) != .ignored else { return }
+        collapsedByUser = false
+        feature(cue.key)
+        publishStack()
+        // A reminder lands on the screen you are looking at, even if the stack is still on another one.
+        if !state.expanded { rebuild() }
+        layoutStack()
+        if let window {
+            NSAccessibility.post(element: window, notification: .announcementRequested,
+                userInfo: [.announcement: L10n.tr("TodoCue 提醒：\(cue.title)"), .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+        }
+    }
+
+    private func feature(_ key: String) {
+        state.featuredKey = key
+        featuredUntil = Date().addingTimeInterval(featureDuration)
+    }
+
+    private func publishStack() {
+        let shown = stack.shown
+        if state.entries != shown { state.entries = shown }
+        if let key = state.featuredKey, !shown.contains(where: { $0.key == key }) { state.featuredKey = nil }
+        updateWings(remaining: model.remaining, online: model.connectionState.isOnline, animated: true)
+        ensureStackTimer()
+    }
+
+    /// Periodic cards only claim when they can appear immediately on the pointer's screen: in the stack
+    /// under the notch, or in the quick look if that is open there. They never wait in a queue.
     private func periodicScreenAvailable() -> Bool {
-        guard Prefs.isNotchEnabled, !state.expanded, state.cue == nil,
+        guard Prefs.isNotchEnabled,
               let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }),
               Self.geometry(of: screen, allowVirtual: Prefs.notchOnDisplaysWithoutNotch) != nil else { return false }
-        rebuild()
-        return geometry?.screenFrame == screen.frame && shouldAutoExpand(forReminder: true)
+        if !state.expanded { rebuild() }
+        guard geometry?.screenFrame == screen.frame else { return false }
+        return shouldAutoExpand(forReminder: true)
     }
 
     private func receivePeriodic(_ rule: PeriodicReminder) {
@@ -533,11 +609,11 @@ final class NotchController {
                 guard self.model.mergePeriodic(claimed),
                       let claimedAt = claimed.currentOccurrence?.claimedAt.flatMap(TCDate.parse),
                       Date().timeIntervalSince(claimedAt) < 8,
-                      self.periodicScreenAvailable(), let window = self.window else {
+                      self.periodicScreenAvailable(), self.window != nil else {
                     try? await client.periodicReceipt(rule.id, occurrenceId: occurrence.id, round: occurrence.round, token: token, displayed: false)
                     return
                 }
-                self.showCue(ReminderCue(periodic: claimed), in: window)
+                self.apply(ReminderCue(periodic: claimed))
                 do {
                     try await client.periodicReceipt(rule.id, occurrenceId: occurrence.id, round: occurrence.round, token: token, displayed: true)
                 } catch {
@@ -550,109 +626,230 @@ final class NotchController {
         }
     }
 
-    private func isCueCurrent(_ cue: ReminderCue) -> Bool {
-        if let original = cue.task, let task = model.task(original.id) {
+    // MARK: Currency
+
+    /// A rule keeps its row while one of its occurrences is open, whichever channel is delivering it.
+    /// A snooze that has not come round yet is not open: it comes back as a new arrival.
+    static func holdsPending(_ rule: PeriodicReminder) -> Bool {
+        guard rule.enabled, rule.state != "paused_today", rule.state != "paused",
+              let occurrence = rule.currentOccurrence, occurrence.result == "pending" else { return false }
+        return ["offered", "claimed", "displayed", "submitted"].contains(occurrence.delivery)
+    }
+
+    private func isCurrent(_ entry: CueEntry) -> Bool {
+        if let original = entry.cue.task {
+            guard let task = model.task(original.id) else { return true }
             return task.status == .todo && task.reminderAt == original.reminderAt
         }
-        if let original = cue.periodic {
-            guard let current = model.periodicReminders.first(where: { $0.id == original.id }) else { return !model.periodicLoaded }
-            return current.enabled && current.state != "paused_today" && current.version == original.version
-                && current.currentOccurrenceId == original.currentOccurrenceId
-                && current.currentOccurrence?.round == original.currentOccurrence?.round
-                && current.currentOccurrence?.result == "pending"
+        if let original = entry.cue.periodic {
+            guard let rule = model.periodicReminders.first(where: { $0.id == original.id }) else { return !model.periodicLoaded }
+            return Self.holdsPending(rule)
         }
         return true
     }
 
-    private func showCue(_ cue: ReminderCue, in window: NotchWindow) {
-        stopPolling()
-        state.reduceMotion = Theme.reduceMotion
-        state.cueHovered = false; state.cueError = nil; state.cueBusy = false; state.cue = cue
-        window.allowsKey = false; window.hasShadow = false; window.orderFrontRegardless()
-        sizeCue(height: 160)
-        cueDeadline = Date().addingTimeInterval(9)
-        cueTimer?.invalidate()
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tickCue() }
+    private func syncPeriodic(_ rules: [PeriodicReminder]) {
+        let now = Date()
+        var changed = false
+        for entry in stack.entries {
+            guard let original = entry.cue.periodic, let rule = rules.first(where: { $0.id == original.id }) else { continue }
+            guard Self.holdsPending(rule) else {
+                stack.remove(entry.key)
+                changed = true
+                continue
+            }
+            let fresh = ReminderCue(periodic: rule, now: now)
+            if fresh.id == entry.cue.id {
+                stack.refresh(entry.key, with: fresh)
+            } else if ["claimed", "displayed", "submitted"].contains(rule.currentOccurrence?.delivery ?? ""),
+                      stack.receive(fresh, now: now) == .merged {
+                // Came round again before it was answered: same row, one more.
+                collapsedByUser = false
+                feature(entry.key)
+                changed = true
+            }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        cueTimer = timer
-        NSAccessibility.post(element: window, notification: .announcementRequested,
-            userInfo: [.announcement: L10n.tr("TodoCue 提醒：\(cue.title)"), .priority: NSAccessibilityPriorityLevel.medium.rawValue])
-    }
-
-    private func pausePeriodicToday() {
-        guard let cue = state.cue, let rule = cue.periodic, !state.cueBusy else { return }
-        state.cueBusy = true
-        Task {
-            let success = await model.actOnPeriodic(rule, action: "pause_today")
-            guard state.cue?.id == cue.id else { return }
-            state.cueBusy = false
-            if success { dismissCue() }
-            else { state.cueError = model.toast?.message; cueDeadline = Date().addingTimeInterval(12) }
+        // A rule that is still waiting after a restart or a reconnect: it was shown, so it comes back.
+        for rule in rules where stack.entry("periodic:\(rule.id)") == nil {
+            guard Self.holdsPending(rule), rule.currentOccurrence?.delivery == "displayed", rule.isActive(at: now) else { continue }
+            guard Prefs.isNotchEnabled, geometry != nil else { break }
+            apply(ReminderCue(periodic: rule, now: now))
         }
-    }
-
-    private func presentNextCue() {
-        // A reminder lands on the screen you are looking at.
-        followPointer()
-        guard state.cue == nil, !state.expanded, let window, Prefs.isNotchEnabled,
-              geometry != nil, shouldAutoExpand(forReminder: true) else { return }
-        while let cue = cueQueue.next() {
-            if !isCueCurrent(cue) { continue }
-            showCue(cue, in: window)
-            return
+        if changed || state.entries != stack.shown {
+            publishStack()
+            layoutStack()
         }
     }
 
-    private func sizeCue(height: CGFloat) {
-        guard state.cue != nil, let window, let geo = geometry else { return }
+    // MARK: Layout
+
+    private func stackWanted() -> Bool {
+        guard Prefs.isNotchEnabled, geometry != nil, window != nil, !state.expanded, !collapsedByUser, !stack.isEmpty else { return false }
+        return shouldAutoExpand(forReminder: true)
+    }
+
+    private func layoutStack() {
+        let wanted = stackWanted()
+        if wanted, !state.stackShown, let window {
+            stopPolling()
+            state.reduceMotion = Theme.reduceMotion
+            state.cueHovered = false
+            state.stackShown = true
+            window.allowsKey = false; window.hasShadow = false; window.orderFrontRegardless()
+            sizeStack(height: stackHeight)
+        } else if !wanted, state.stackShown {
+            state.stackShown = false
+            state.cueHovered = false
+            rearmAfterLeave = true
+            placeCollapsed(animated: true)
+            if pollTimer == nil, isNearTop(NSEvent.mouseLocation) { startPolling() }
+        }
+        ensureStackTimer()
+    }
+
+    private func scheduleStackLayout() {
+        stackLayoutTask?.cancel()
+        stackLayoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            self?.layoutStack()
+        }
+    }
+
+    private func sizeStack(height: CGFloat) {
+        guard height > 0 else { return }
+        stackHeight = height
+        guard state.stackShown, let window, let geo = geometry else { return }
         let frame = NotchLayout.expandedFrame(notch: geo.notchRect, screen: geo.screenFrame,
-                                              contentHeight: height, width: 460, maxHeight: 320)
+                                              contentHeight: height, width: 460, maxHeight: 360)
         guard targetFrame != frame else { return }
         place(window, at: frame, duration: 0.28, timing: CAMediaTimingFunction(controlPoints: 0.18, 0.85, 0.25, 1))
     }
 
-    private func tickCue() {
-        guard let cue = state.cue else { return }
-        if !isCueCurrent(cue) {
-            if !state.cueBusy { dismissCue() }
+    // MARK: Upkeep
+
+    private func ensureStackTimer() {
+        if stack.entries.isEmpty {
+            stackTimer?.invalidate()
+            stackTimer = nil
             return
         }
-        if state.cueHovered || state.cueBusy { cueDeadline = Date().addingTimeInterval(9) }
-        if Date() >= cueDeadline { dismissCue() }
+        guard stackTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tickStack() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        stackTimer = timer
     }
 
-    private func dismissCue(showNext: Bool = true) {
-        cueTimer?.invalidate()
-        cueTimer = nil
-        state.cue = nil
-        state.cueHovered = false
-        state.cueBusy = false
-        state.cueError = nil
-        rearmAfterLeave = true
-        placeCollapsed(animated: true)
-        if showNext { scheduleNextCue() } else { cueQueue.clear(); nextCueTask?.cancel() }
+    private func tickStack() {
+        let now = Date()
+        tickCount += 1
+        var changed = false
+
+        for entry in stack.entries where !state.busyKeys.contains(entry.key) && !isCurrent(entry) {
+            stack.remove(entry.key)
+            changed = true
+        }
+        // A rule outside its windows steps back; on returning it lands again with one more.
+        for entry in stack.entries {
+            guard let original = entry.cue.periodic else { continue }
+            let rule = model.periodicReminders.first { $0.id == original.id } ?? original
+            if stack.setDormant(entry.key, !rule.isActive(at: now), now: now), stack.entry(entry.key)?.dormant == false {
+                collapsedByUser = false
+                feature(entry.key)
+                changed = true
+            } else if stack.entry(entry.key)?.dormant != entry.dormant {
+                changed = true
+            }
+        }
+        if !state.cueHovered, !deferred.isEmpty {
+            let waiting = deferred
+            deferred.removeAll()
+            state.deferredCount = 0
+            for cue in waiting { apply(cue) }
+        }
+        if state.featuredKey != nil, now >= featuredUntil {
+            if state.cueHovered || !state.busyKeys.isEmpty { featuredUntil = now.addingTimeInterval(featureDuration) }
+            else { state.featuredKey = nil }
+        }
+        // A folded stack breathes once in a while so it does not become wallpaper.
+        if !state.stackShown, !state.expanded, !stack.isEmpty, now.timeIntervalSince(lastPulse) >= 300 {
+            lastPulse = now
+            state.pulse += 1
+        }
+        if changed { publishStack() }
+        layoutStack()
+        followPointerWithDwell(now: now)
     }
 
-    private func scheduleNextCue() {
-        nextCueTask?.cancel()
-        nextCueTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            guard !Task.isCancelled else { return }
-            self?.presentNextCue()
+    /// The stack goes to the screen the pointer is on once it has stayed there for a moment, so crossing
+    /// a display on the way somewhere else does not make it jump back and forth.
+    private func followPointerWithDwell(now: Date) {
+        guard state.stackShown, let geo = geometry else { otherScreenSince = nil; return }
+        let pointer = NSEvent.mouseLocation
+        guard !NSMouseInRect(pointer, geo.screenFrame, false),
+              NSScreen.screens.contains(where: { NSMouseInRect(pointer, $0.frame, false) }) else {
+            otherScreenSince = nil
+            return
+        }
+        guard let since = otherScreenSince else { otherScreenSince = now; return }
+        if now.timeIntervalSince(since) >= 1.5 {
+            otherScreenSince = nil
+            rebuild()
         }
     }
 
-    private func actOnCue(snooze: Bool) {
-        guard let cue = state.cue, !state.cueBusy else { return }
-        state.cueBusy = true
-        Task {
-            let success = await model.actOnCue(cue, snooze: snooze)
-            guard state.cue?.id == cue.id else { return }
-            state.cueBusy = false
-            if success { dismissCue() }
-            else { state.cueError = model.toast?.message ?? L10n.tr("暂时没能保存，请重试"); cueDeadline = Date().addingTimeInterval(12) }
+    // MARK: Answers
+
+    private func collapseStack() {
+        collapsedByUser = true
+        state.featuredKey = nil
+        lastPulse = Date()
+        layoutStack()
+    }
+
+    private func openQuickLookFromStack() {
+        guard state.stackShown else { return }
+        state.stackShown = false
+        state.cueHovered = false
+        expand(pinned: false)
+        // Opened on purpose, so it stays until Esc or a click outside; the keyboard is left alone.
+        state.pinned = true
+        stopPolling()
+    }
+
+    private func openCue(_ key: String) {
+        guard let entry = stack.entry(key) else { return }
+        if let rule = entry.cue.periodic { model.revealPeriodic(rule.id) }
+        else if let task = entry.cue.task { model.reveal(taskId: task.id) }
+    }
+
+    /// Complete, snooze or pause one row. The row stays, busy, until the runtime has answered.
+    private func answer(_ key: String, snooze: Bool = false, pauseToday: Bool = false) {
+        guard let entry = stack.entry(key), !state.busyKeys.contains(key) else { return }
+        state.busyKeys.insert(key)
+        state.errors[key] = nil
+        var cue = entry.cue
+        if let original = cue.periodic, let latest = model.periodicReminders.first(where: { $0.id == original.id }) {
+            cue = ReminderCue(periodic: latest)
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            let success: Bool
+            if pauseToday, let rule = cue.periodic { success = await self.model.actOnPeriodic(rule, action: "pause_today") }
+            else { success = await self.model.actOnCue(cue, snooze: snooze) }
+            self.state.busyKeys.remove(key)
+            if success {
+                self.stack.remove(key)
+                self.publishStack()
+                self.layoutStack()
+            } else {
+                self.state.errors[key] = self.model.toast?.message ?? L10n.tr("暂时没能保存，请重试")
+                self.featuredUntil = Date().addingTimeInterval(12)
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
+                self.state.errors[key] = nil
+            }
         }
     }
 

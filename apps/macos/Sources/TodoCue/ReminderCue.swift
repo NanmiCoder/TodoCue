@@ -12,6 +12,12 @@ struct ReminderCue: Identifiable, Equatable {
     var task: TodoTask? { if case .task(let value) = subject { return value }; return nil }
     var periodic: PeriodicReminder? { if case .periodic(let value) = subject { return value }; return nil }
     var title: String { task?.title ?? periodic?.title ?? "" }
+    /// One stack row per task and per periodic rule.
+    var key: String {
+        if let task { return "task:\(task.id)" }
+        if let periodic { return "periodic:\(periodic.id)" }
+        return id
+    }
     let count: Int
     let late: Bool
     let receivedAt: Date
@@ -34,22 +40,92 @@ struct ReminderCue: Identifiable, Equatable {
     }
 }
 
-/// Bounded FIFO plus replay protection. Dismissing a card never changes its task or reminder.
-struct ReminderCueQueue {
-    private(set) var pending: [ReminderCue] = []
+/// One row of the stack: a task, or a periodic rule. A rule that fires again while it is still
+/// unanswered updates its row (`repeats`) instead of adding another.
+struct CueEntry: Identifiable, Equatable {
+    let key: String
+    var cue: ReminderCue
+    /// Arrival order inside its kind. A row never moves because another one arrived or left.
+    let order: Int
+    var repeats = 1
+    var arrivedAt: Date
+    /// A periodic rule outside its active windows keeps its row but is not shown.
+    var dormant = false
+    var id: String { key }
+    var isTask: Bool { cue.task != nil }
+}
+
+/// What the notch holds for the user to answer. Dismissing, collapsing or hiding it never changes a
+/// task or a rule; a row leaves only when its reminder is handled or no longer current.
+struct CueStack: Equatable {
+    /// Rows shown at rest; further ones fold into a "N more" row.
+    static let visibleRows = 3
+    static let capacity = 20
+    private static let replayWindow: TimeInterval = 300
+    private static let freshness: TimeInterval = 120
+
+    private(set) var entries: [CueEntry] = []
+    private var nextOrder = 0
     private var seen: [String: Date] = [:]
-    mutating func append(_ cue: ReminderCue, now: Date = Date()) {
-        seen = seen.filter { now.timeIntervalSince($0.value) < 300 }
-        guard seen[cue.id] == nil, now.timeIntervalSince(cue.receivedAt) < 120 else { return }
+
+    enum Outcome: Equatable { case added, merged, ignored }
+
+    /// Time-bound task reminders above periodic ones; arrival order inside each; dormant rows left out.
+    var shown: [CueEntry] {
+        entries.filter { !$0.dormant }.sorted { a, b in a.isTask != b.isTask ? a.isTask : a.order < b.order }
+    }
+    var isEmpty: Bool { shown.isEmpty }
+    func entry(_ key: String) -> CueEntry? { entries.first { $0.key == key } }
+
+    @discardableResult
+    mutating func receive(_ cue: ReminderCue, now: Date = Date()) -> Outcome {
+        seen = seen.filter { now.timeIntervalSince($0.value) < Self.replayWindow }
+        if let index = entries.firstIndex(where: { $0.key == cue.key }) {
+            if entries[index].cue.id == cue.id {
+                // The same occurrence again: take the newer snapshot, nothing else changes.
+                entries[index].cue = cue
+                return .ignored
+            }
+            guard seen[cue.id] == nil else { return .ignored }
+            seen[cue.id] = now
+            entries[index].cue = cue
+            entries[index].repeats += 1
+            entries[index].arrivedAt = now
+            entries[index].dormant = false
+            return .merged
+        }
+        guard now.timeIntervalSince(cue.receivedAt) < Self.freshness, seen[cue.id] == nil else { return .ignored }
         seen[cue.id] = now
-        pending.append(cue)
-        if pending.count > 20 { pending.removeFirst(pending.count - 20) }
+        entries.append(CueEntry(key: cue.key, cue: cue, order: nextOrder, arrivedAt: now))
+        nextOrder += 1
+        if entries.count > Self.capacity {
+            let drop = entries.firstIndex { !$0.isTask } ?? 0
+            entries.remove(at: drop)
+        }
+        return .added
     }
-    mutating func next(now: Date = Date()) -> ReminderCue? {
-        pending.removeAll { now.timeIntervalSince($0.receivedAt) >= 120 }
-        return pending.isEmpty ? nil : pending.removeFirst()
+
+    /// Updates a row's snapshot (a newer rule version, a delivery state) without counting a new arrival.
+    mutating func refresh(_ key: String, with cue: ReminderCue) {
+        guard let index = entries.firstIndex(where: { $0.key == key }) else { return }
+        entries[index].cue = cue
     }
-    mutating func clear() { pending.removeAll() }
+
+    mutating func remove(_ key: String) { entries.removeAll { $0.key == key } }
+
+    /// Leaving a window hides the row; coming back counts as one more arrival so it lands again.
+    @discardableResult
+    mutating func setDormant(_ key: String, _ dormant: Bool, now: Date = Date()) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.key == key }), entries[index].dormant != dormant else { return false }
+        entries[index].dormant = dormant
+        if !dormant {
+            entries[index].repeats += 1
+            entries[index].arrivedAt = now
+        }
+        return true
+    }
+
+    mutating func clear() { entries.removeAll(); seen.removeAll() }
 }
 
 enum CueMotion {

@@ -150,9 +150,15 @@ same authenticated runtime API as CLI/MCP. Images use downsampled thumbnails (1 
 3 for three, 2×2 for four); originals use Quick Look and a Save As context action. Import/save limits
 and atomic add/remove patches are shared with the runtime. Recurring tasks attach only to their first instance.
 
-`reminder.fired` drives a separate non-key notch card with complete, snooze and open actions. The card
-queues reminders, suppresses stale/replayed events, dismisses after 9 seconds without hover and respects
-notch/fullscreen settings and Reduce Motion. A notched display and a running App are required.
+`reminder.fired` and periodic deliveries drive a separate non-key notch stack with complete, snooze and
+open actions. A reminder lands as a full card, rests after about six seconds as a one-line row, and stays
+until it is completed, snoozed, paused or no longer current; nothing times out. Up to three rows show,
+task reminders above periodic ones, arrival order inside each; more fold into "N more" and the quick look,
+where they head the list as "Waiting for you". A periodic rule that comes round again before it is answered
+keeps its row and counts (×N). × folds the stack into the left wing as a count; the count stays and a new
+arrival unfolds it. Outside a rule's active windows its row steps back and lands again when the window opens.
+Stale/replayed events are ignored, and notch/fullscreen settings and Reduce Motion are respected. A notched
+display and a running App are required.
 
 Run `npm run check:macos` at the repository root for all gates. Computer Use evidence and the tested
 platform boundary are recorded in [0.1.1 QA](../../docs/qa/v0.1.1.md).

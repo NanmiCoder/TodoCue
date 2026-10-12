@@ -65,7 +65,7 @@ Drag the empty area in the top bar to move the panel; dragging in titles and not
 
 Ask your Agent: “Remind me to move every half hour on Monday, Wednesday and Saturday, 9 AM–6 PM.” The Skill creates one periodic rule in one call and reports its schedule and next reminder. To create directly, choose **New periodic reminder** in the panel menu, pick Move / Water / Custom, and click the interval, days or time window. More settings stay folded until needed.
 
-Choose fixed time slots or count from each confirmation. Unanswered completion-based reminders wait until you respond, then reset on the next active day. Pause a rule or just pause today. Periodic rules create no pending tasks and never sync to Apple Calendar or Reminders. They use silent notch cards on your current screen, with system-notification fallback when no card can appear; sleep/offline reminders are skipped.
+Choose fixed time slots or count from each confirmation. Unanswered completion-based reminders wait until you respond, then reset on the next active day. Pause a rule or just pause today. Periodic rules create no pending tasks and never sync to Apple Calendar or Reminders. They use silent notch cards on your current screen, with system-notification fallback when no card can appear; sleep/offline reminders are skipped. A card stays on the notch until you complete, snooze or pause it; several wait in one stack, and a rule that comes round again before you answer adds a ×N instead of another row.
 
 ```bash
 todocue --json periodic add 'Move a little' --every 30m --weekdays mon,wed,sat --between 09:00-18:00 --idempotency-key 'YOUR_UNIQUE_KEY'
