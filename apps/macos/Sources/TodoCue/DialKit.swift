@@ -59,28 +59,57 @@ enum Dial {
 
 /// The tray the tiles sit on, so the panel reads as one object on any wallpaper. On macOS 26 it is
 /// the system's Liquid Glass, refracting and tinting with what is behind it; earlier systems get a
-/// frosted blur with a light grey wash, the ground of the design board.
+/// frosted blur. Both carry the design board's white sweep (bright at the top-left, dipping through
+/// the middle) and a double rim: a graphite hairline outside a white lip, so the edge reads over a
+/// white page and a dark one alike.
 struct DialShell: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Dial.shellRadius, style: .continuous)
+        let opaque = Theme.reduceTransparency
         Group {
-            if #available(macOS 26.0, *), !Theme.reduceTransparency {
-                LiquidGlass(radius: Dial.shellRadius)
+            if #available(macOS 26.0, *), !opaque {
+                ZStack {
+                    LiquidGlass(radius: Dial.shellRadius)
+                    shape.fill(sweep(opaque: false))
+                }
             } else {
                 ZStack {
-                    if !Theme.reduceTransparency { BehindWindowBlur(radius: Dial.shellRadius) }
-                    shape.fill(tint.opacity(Theme.reduceTransparency ? 1 : (scheme == .dark ? 0.6 : 0.55)))
+                    if !opaque { BehindWindowBlur(radius: Dial.shellRadius) }
+                    shape.fill(sweep(opaque: opaque))
                 }
-                .overlay(shape.strokeBorder(scheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.55), lineWidth: 0.5))
             }
         }
+        // Outer hairline in the graphite hue (white on a dark page), then the white lip inside it,
+        // brightest along the top edge where the light falls.
+        .overlay(shape.strokeBorder(scheme == .dark ? Color.white.opacity(0.22) : Dial.graphite(.light).opacity(0.24), lineWidth: 1))
+        .overlay(shape.inset(by: 1).strokeBorder(
+            LinearGradient(colors: [Color.white.opacity(scheme == .dark ? 0.2 : 0.95), Color.white.opacity(scheme == .dark ? 0.05 : 0.75)],
+                           startPoint: .top, endPoint: .bottom),
+            lineWidth: 1.5))
         .allowsHitTesting(false)
     }
 
-    private var tint: Color {
-        scheme == .dark ? Color(red: 0.055, green: 0.059, blue: 0.067) : Color(red: 0.769, green: 0.788, blue: 0.808) // #C4C9CE
+    /// Top-left to bottom-right, a little steeper than the diagonal, as on the design board.
+    private func sweep(opaque: Bool) -> LinearGradient {
+        let stops: [Gradient.Stop]
+        if scheme == .dark {
+            stops = opaque
+                ? [.init(color: Color(red: 0.16, green: 0.17, blue: 0.19), location: 0),
+                   .init(color: Color(red: 0.07, green: 0.075, blue: 0.085), location: 1)]
+                : [.init(color: Color(red: 0.47, green: 0.50, blue: 0.55).opacity(0.18), location: 0),
+                   .init(color: Color(red: 0.03, green: 0.035, blue: 0.045).opacity(0.4), location: 1)]
+        } else if opaque {
+            stops = [.init(color: .white, location: 0),
+                     .init(color: Color(red: 0.937, green: 0.945, blue: 0.953), location: 0.45), // #EFF1F3
+                     .init(color: Color(red: 0.969, green: 0.973, blue: 0.976), location: 1)]
+        } else {
+            stops = [.init(color: Color.white.opacity(0.72), location: 0),
+                     .init(color: Color.white.opacity(0.36), location: 0.45),
+                     .init(color: Color.white.opacity(0.56), location: 1)]
+        }
+        return LinearGradient(stops: stops, startPoint: UnitPoint(x: 0.25, y: 0), endPoint: UnitPoint(x: 0.75, y: 1))
     }
 }
 
