@@ -355,7 +355,8 @@ final class AppModel: ObservableObject {
         } catch {
             handleLoadError(error)
         }
-        if routes.contains(.periodic) || !periodicReminders.isEmpty { await refreshPeriodic() }
+        // Always: a rule still waiting for an answer comes back to the notch after a restart or reconnect.
+        await refreshPeriodic()
     }
 
     func refreshLive() async {

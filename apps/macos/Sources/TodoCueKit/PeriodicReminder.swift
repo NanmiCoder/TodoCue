@@ -113,6 +113,38 @@ public struct PeriodicReminder: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+extension PeriodicReminder {
+    /// Same rule the runtime uses: a selected ISO weekday and `start <= minute < end` in one window,
+    /// read in the rule's own timezone. Disabled rules are never active.
+    public func isActive(at date: Date = Date()) -> Bool {
+        guard enabled, let zone = TimeZone(identifier: timezone) else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let parts = calendar.dateComponents([.weekday, .hour, .minute], from: date)
+        guard let weekday = parts.weekday, let hour = parts.hour, let minute = parts.minute else { return false }
+        // Calendar counts Sunday as 1; the runtime counts Monday as 1 and Sunday as 7.
+        guard weekdays.contains((weekday + 5) % 7 + 1) else { return false }
+        let now = hour * 60 + minute
+        return windows.contains { window in
+            guard let start = Self.minuteOfDay(window.start), let end = Self.minuteOfDay(window.end) else { return false }
+            return now >= start && now < end
+        }
+    }
+
+    static func minuteOfDay(_ text: String) -> Int? {
+        let parts = text.split(separator: ":")
+        guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]) else { return nil }
+        return hour * 60 + minute
+    }
+
+    /// Whole minutes since the current occurrence was due, or nil while nothing is pending.
+    public func waitingMinutes(now: Date = Date()) -> Int? {
+        guard let occurrence = currentOccurrence, occurrence.result == "pending",
+              let due = TCDate.parse(occurrence.fireAt) else { return nil }
+        return max(0, Int(now.timeIntervalSince(due) / 60))
+    }
+}
+
 extension APIClient {
     public struct PeriodicEnvelope: Codable, Sendable { public var reminder: PeriodicReminder }
     public struct PeriodicListEnvelope: Codable, Sendable { public var reminders: [PeriodicReminder] }

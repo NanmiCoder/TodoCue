@@ -268,6 +268,10 @@ final class PeriodicReminderTests: XCTestCase {
         }
         #endif
         guard Prefs.isNotchEnabled, !NSScreen.screens.isEmpty else { throw XCTSkip("Notch display disabled or unavailable") }
+        // A full-screen frontmost app makes the notch decline reminders; that is the machine's state, not the subject here.
+        let savedFullscreenPreference = Prefs.disableNotchInFullscreen
+        Prefs.disableNotchInFullscreen = false
+        defer { Prefs.disableNotchInFullscreen = savedFullscreenPreference }
         let model = model()
         let now = TCDate.iso(Date())
         var object = ruleObject()

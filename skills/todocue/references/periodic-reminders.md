@@ -20,9 +20,9 @@ todocue --json periodic add '喝水' --every 1h --between 09:00-12:00 --between 
 - `--weekdays` accepts day names or numbers 1=Monday through 7=Sunday; weekends can be selected freely.
 - Repeat `--between HH:mm-HH:mm` for multiple non-overlapping windows. No overnight windows; `24:00` is allowed only as an end. At least one window must be longer than the interval. The first fixed slot is start + interval; the end is excluded.
 - `--mode fixed` is the default for “every half hour”. Fixed slots are unaffected by completion.
-- `--mode after_completion` maps “after I finish / after I confirm, count again”. Without confirmation the card closes but the rule waits, including over lunch. It resets on the next active day. Completion re-arms from the actual confirmation time; if the target is outside a window, the next window starts a full interval later.
+- `--mode after_completion` maps “after I finish / after I confirm, count again”. Without confirmation the card stays on the notch (or folds into its count) and the rule waits, including over lunch. It resets on the next active day. Completion re-arms from the actual confirmation time; if the target is outside a window, the next window starts a full interval later.
 - `--tz` explicitly overrides the runtime IANA timezone. Do not invent a timezone from a location guess.
-- Sleep/offline reminders are not replayed. The Mac runtime must run; notch cards additionally require the App. System notifications are used when the App cannot claim a notch delivery.
+- Sleep/offline reminders are not replayed. The Mac runtime must run; notch cards additionally require the App. System notifications are used when the App cannot claim a notch delivery. A displayed card never times out: it stays until completed, snoozed or paused, and a fixed rule that fires again before that merges into the same row.
 
 ## Subsequent actions
 

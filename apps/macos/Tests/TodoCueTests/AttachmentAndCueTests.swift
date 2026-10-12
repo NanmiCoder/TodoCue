@@ -101,27 +101,6 @@ final class AttachmentAndCueTests: XCTestCase {
         XCTAssertEqual(cue.count, 2)
     }
 
-    func testCueQueueIsFIFOAndDoesNotReplayAfterDismissal() throws {
-        var queue = ReminderCueQueue()
-        let first = ReminderCue.from(try event(), task: task(), now: now)!
-        let second = ReminderCue.from(try event(id: "r_2"), task: task(), now: now)!
-        queue.append(first, now: now); queue.append(first, now: now); queue.append(second, now: now)
-        XCTAssertEqual(queue.next(now: now)?.id, first.id)
-        queue.append(first, now: now)
-        XCTAssertEqual(queue.next(now: now)?.id, second.id)
-        XCTAssertNil(queue.next(now: now))
-        queue.append(ReminderCue.from(try event(id: "r_3"), task: task(), now: now)!, now: now)
-        XCTAssertNil(queue.next(now: now.addingTimeInterval(121)))
-    }
-
-    func testCueQueueStaysBoundedAndClearsOnDisable() throws {
-        var queue = ReminderCueQueue()
-        for i in 0..<30 { queue.append(ReminderCue.from(try event(id: "r_\(i)"), task: task(), now: now)!, now: now) }
-        XCTAssertEqual(queue.pending.count, 20)
-        queue.clear()
-        XCTAssertNil(queue.next(now: now))
-    }
-
     func testMotionIsDeterministicBoundedAndStillWhenReduceMotionIsOn() {
         let rest = CueMotion.Pose(scaleX: 1, scaleY: 1, offsetY: 0, rotation: 0)
         for time in stride(from: 0.0, through: 2, by: 0.01) {

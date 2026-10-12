@@ -4,15 +4,25 @@ import TodoCueKit
 /// Shared state between the notch controller and its SwiftUI content.
 @MainActor
 final class NotchState: ObservableObject {
-    @Published var cue: ReminderCue?
+    /// What is waiting for an answer, in display order. Kept while the stack is collapsed to the wings.
+    @Published var entries: [CueEntry] = []
+    /// True while the stack hangs under the notch; false when collapsed, in the quick look, or hidden.
+    @Published var stackShown = false
+    /// The row currently drawn as a full card: the one that just arrived.
+    @Published var featuredKey: String?
     @Published var cueHovered = false
-    @Published var cueBusy = false
-    @Published var cueError: String?
-    var onCueDismiss: (() -> Void)?
-    var onCueOpen: (() -> Void)?
-    var onCueComplete: (() -> Void)?
-    var onCueSnooze: (() -> Void)?
-    var onCuePauseToday: (() -> Void)?
+    @Published var busyKeys: Set<String> = []
+    @Published var errors: [String: String] = [:]
+    /// Reminders that arrived under the pointer and wait for it to leave before they take a place.
+    @Published var deferredCount = 0
+    /// Bumped to make the collapsed badge breathe once.
+    @Published var pulse = 0
+    var onCueOpen: ((String) -> Void)?
+    var onCueComplete: ((String) -> Void)?
+    var onCueSnooze: ((String) -> Void)?
+    var onCuePauseToday: ((String) -> Void)?
+    var onStackCollapse: (() -> Void)?
+    var onOpenQuickLook: (() -> Void)?
     var onCueSize: ((CGSize) -> Void)?
     @Published var expanded = false
     /// Stays open until Esc, a click outside or the pin button; hovering alone never pins.
@@ -50,19 +60,18 @@ struct NotchRootView: View {
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
 
-    private var corner: CGFloat { (state.expanded || state.cue != nil) ? Theme.notchCorner : Theme.notchCollapsedCorner }
-    private var cardShown: Bool { state.expanded && state.cue == nil }
+    private var corner: CGFloat { (state.expanded || state.stackShown) ? Theme.notchCorner : Theme.notchCollapsedCorner }
+    private var cardShown: Bool { state.expanded && !state.stackShown }
 
     var body: some View {
         ZStack(alignment: .top) {
             NotchShape(corner: corner).fill(Color.black)
-            NotchShape(corner: corner).stroke(Color.white.opacity((state.expanded || state.cue != nil) ? 0.12 : 0), lineWidth: 1)
-            if !state.expanded && state.cue == nil && state.wingWidth > 0 {
+            NotchShape(corner: corner).stroke(Color.white.opacity((state.expanded || state.stackShown) ? 0.12 : 0), lineWidth: 1)
+            if !state.expanded && !state.stackShown && state.wingWidth > 0 {
                 NotchSummaryView(state: state, model: model).transition(.opacity)
             }
-            if let cue = state.cue {
-                NotchReminderView(cue: cue, state: state, model: model)
-                    .id(cue.id)
+            if state.stackShown {
+                NotchStackView(state: state, model: model)
                     .frame(width: 460).fixedSize(horizontal: false, vertical: true)
                     .onGeometryChange(for: CGSize.self, of: { $0.size }, action: { state.onCueSize?($0) })
                     .padding(.top, state.notchHeight)
@@ -78,14 +87,14 @@ struct NotchRootView: View {
                 .scaleEffect(cardShown || state.reduceMotion ? 1 : 0.97, anchor: .top)
                 .offset(y: cardShown || state.reduceMotion ? 0 : -8)
                 .animation(cardShown ? Dial.settle.delay(0.06) : .easeOut(duration: 0.12), value: cardShown)
-                .allowsHitTesting(state.expanded && state.cue == nil)
-                .accessibilityHidden(!state.expanded || state.cue != nil)
+                .allowsHitTesting(state.expanded && !state.stackShown)
+                .accessibilityHidden(!state.expanded || state.stackShown)
         }
         // Explicit minimums keep the shell at the window size; the card overflows downward until the window grows.
         .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         .clipShape(NotchShape(corner: corner))
         .animation(state.reduceMotion ? .easeInOut(duration: 0.15) : Theme.expand, value: state.expanded)
-        .animation(state.reduceMotion ? .easeOut(duration: 0.12) : Theme.expand, value: state.cue?.id)
+        .animation(state.reduceMotion ? .easeOut(duration: 0.12) : Theme.expand, value: state.stackShown)
         .environmentObject(model)
         .preferredColorScheme(.dark)
         .environment(\.accent, Theme.accent(.dark))
@@ -95,32 +104,63 @@ struct NotchRootView: View {
     }
 }
 
-/// Collapsed wings: the cue mark on the left, today's remaining count (or the offline mark) on the right.
+/// Collapsed wings: on the left the cue mark, or the number of reminders still waiting for an answer;
+/// on the right today's remaining count (or the offline mark).
 private struct NotchSummaryView: View {
     @ObservedObject private var languagePreferences = LanguagePreferences.shared
     @ObservedObject var state: NotchState
     @ObservedObject var model: AppModel
+    @State private var breathing = false
+
+    private var pending: Int { state.entries.count }
 
     var body: some View {
         HStack(spacing: 0) {
-            CueMark().scaleEffect(0.72).frame(width: state.wingWidth)
+            Group {
+                if pending > 0 {
+                    ZStack {
+                        Circle().stroke(Dial.orange.opacity(0.55), lineWidth: 1.5)
+                            .frame(width: 20, height: 20)
+                            .scaleEffect(breathing ? 1.7 : 1).opacity(breathing ? 0 : 0.8)
+                        Circle().fill(Dial.orange).frame(width: 20, height: 20)
+                        Text("\(pending)").font(Dial.numeral(10)).monospacedDigit().foregroundStyle(.white)
+                            .contentTransition(.numericText())
+                    }
+                } else {
+                    CueMark().scaleEffect(0.72)
+                }
+            }
+            .frame(width: state.wingWidth)
             Color.clear.frame(width: state.notchWidth + 2 * state.slack)
             Group {
-                if model.connectionState.isOnline {
+                if !model.connectionState.isOnline {
+                    Image(systemName: "wifi.slash").font(.system(size: 11, weight: .semibold)).foregroundStyle(.orange)
+                } else if Prefs.notchShowsSummary, model.remaining > 0 || pending == 0 {
                     Text("\(model.remaining)")
                         .font(Dial.numeral(12)).monospacedDigit()
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
-                } else {
-                    Image(systemName: "wifi.slash").font(.system(size: 11, weight: .semibold)).foregroundStyle(.orange)
                 }
             }
             .frame(width: state.wingWidth)
         }
         .frame(height: state.notchHeight)
         .animation(Theme.interaction, value: model.remaining)
+        .animation(Theme.interaction, value: pending)
+        .onChange(of: state.pulse) { _, _ in
+            guard !state.reduceMotion else { return }
+            breathing = false
+            withAnimation(.easeOut(duration: 0.9)) { breathing = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { breathing = false }
+        }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(model.connectionState.isOnline ? L10n.tr("今日剩余 \(model.remaining) 项，悬停或点击展开") : L10n.tr("TodoCue 离线"))
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        guard model.connectionState.isOnline else { return L10n.tr("TodoCue 离线") }
+        if pending > 0 { return L10n.tr("\(pending) 项提醒等你处理，今日剩余 \(model.remaining) 项，悬停或点击展开") }
+        return L10n.tr("今日剩余 \(model.remaining) 项，悬停或点击展开")
     }
 }
 
@@ -144,6 +184,9 @@ private struct NotchCardView: View {
                 NotchNotice(icon: "bolt.slash", text: L10n.tr("未找到 TodoCue 运行时"), action: L10n.tr("重试")) { model.reconnect() }
             } else if !model.connectionState.isOnline {
                 NotchNotice(icon: "wifi.slash", text: model.connectionState.label + L10n.tr("，显示上次数据"), action: L10n.tr("重连")) { model.reconnect() }
+            }
+            if !state.entries.isEmpty {
+                NotchPendingSection(state: state, model: model)
             }
             if let next = model.next?.next {
                 NotchNextCard(candidate: next, state: state)
