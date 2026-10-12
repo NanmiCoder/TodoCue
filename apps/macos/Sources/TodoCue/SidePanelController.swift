@@ -42,9 +42,9 @@ final class SidePanelController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = false
         window.isOpaque = false
         window.backgroundColor = .clear
-        // The window is only a carrier for separate tiles; a window shadow would outline the
-        // whole rectangle, gaps included, so each tile stands on its own material instead.
-        window.hasShadow = false
+        // The tray (DialShell) fills the window as one rounded shape, so the system shadow follows
+        // its outline and lifts the panel off a pale page; the corners outside the tray are clear.
+        window.hasShadow = true
         window.isReleasedWhenClosed = false
         window.animationBehavior = .utilityWindow
         window.setAccessibilityLabel(L10n.tr("TodoCue 任务面板"))
