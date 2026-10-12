@@ -70,6 +70,13 @@ final class NotchStackControllerTests: XCTestCase {
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 
+    /// Waits for a state instead of a duration: CI runners answer in their own time, and a fixed sleep
+    /// that is long enough on a developer machine is not long enough there.
+    private func eventually(_ timeout: Double = 8, _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline { try await Task.sleep(nanoseconds: 25_000_000) }
+    }
+
     func testAWaitingRuleComesBackAndStaysAfterTheFeaturedCardRests() async throws {
         try requireNotch()
         let model = model()
@@ -79,7 +86,8 @@ final class NotchStackControllerTests: XCTestCase {
         XCTAssertTrue(controller.state.stackShown)
         XCTAssertEqual(controller.state.featuredKey, "periodic:p_a")
         // The card rests as a row after the featured time. Nothing retires it.
-        try await settle(1.6)
+        try await eventually { controller.state.featuredKey == nil }
+        try await settle(0.6)
         XCTAssertNil(controller.state.featuredKey)
         XCTAssertEqual(controller.state.entries.count, 1)
         XCTAssertTrue(controller.state.stackShown)
@@ -103,7 +111,7 @@ final class NotchStackControllerTests: XCTestCase {
         defer { StackAPIProtocol.respond = nil }
         model.periodicReminders.append(offered)
         model.onPeriodicCue?(offered)
-        try await settle(0.6)
+        try await eventually { controller.state.entries.count == 2 }
         XCTAssertEqual(Set(controller.state.entries.map(\.key)), ["periodic:p_a", "periodic:p_b"])
         XCTAssertEqual(controller.state.entries.first?.key, "periodic:p_a", "arrival order holds")
         let window = try XCTUnwrap(NSApp.windows.compactMap { $0 as? NotchWindow }.first { $0.isVisible && $0.frame.width > 300 })
@@ -118,11 +126,11 @@ final class NotchStackControllerTests: XCTestCase {
         let controller = started(model); defer { controller.stop() }
         XCTAssertEqual(controller.state.entries.first?.repeats, 1)
         model.mergePeriodic(try rule("p_a", occurrence: "po_2", revision: 2))
-        try await settle()
+        try await eventually { controller.state.entries.first?.repeats == 2 }
         XCTAssertEqual(controller.state.entries.count, 1, "one row per rule")
         XCTAssertEqual(controller.state.entries.first?.repeats, 2)
         model.mergePeriodic(try rule("p_a", occurrence: "po_2", revision: 3, result: "completed"))
-        try await settle(0.8)
+        try await eventually { controller.state.entries.isEmpty && !controller.state.stackShown }
         XCTAssertTrue(controller.state.entries.isEmpty)
         XCTAssertFalse(controller.state.stackShown)
     }
@@ -133,12 +141,12 @@ final class NotchStackControllerTests: XCTestCase {
         model.periodicReminders = [try rule("p_a", occurrence: "po_1", revision: 1)]; model.periodicLoaded = true
         let controller = started(model); defer { controller.stop() }
         controller.state.onStackCollapse?()
-        try await settle()
+        try await eventually { !controller.state.stackShown }
         XCTAssertFalse(controller.state.stackShown)
         XCTAssertEqual(controller.state.entries.count, 1, "folded, not dismissed")
         XCTAssertGreaterThan(controller.state.wingWidth, 0, "the wings carry the count even with no daily summary")
         model.mergePeriodic(try rule("p_a", occurrence: "po_2", revision: 2))
-        try await settle()
+        try await eventually { controller.state.stackShown }
         XCTAssertTrue(controller.state.stackShown)
         XCTAssertEqual(controller.state.entries.first?.repeats, 2)
     }
@@ -157,12 +165,13 @@ final class NotchStackControllerTests: XCTestCase {
         }
         defer { StackAPIProtocol.respond = nil }
         controller.state.onCueComplete?("periodic:p_a")
-        try await settle()
+        try await eventually { pending != nil }
+        XCTAssertNotNil(pending, "the answer reached the runtime")
         XCTAssertTrue(controller.state.busyKeys.contains("periodic:p_a"))
         XCTAssertEqual(controller.state.entries.count, 1, "still there while the answer is in flight")
         // The runtime refuses: the row stays and says so.
         pending?.reply(["error": ["code": "INVALID_STATE", "message": "这条提醒已经失效"]], status: 409)
-        try await settle()
+        try await eventually { !controller.state.busyKeys.contains("periodic:p_a") && controller.state.errors["periodic:p_a"] != nil }
         XCTAssertFalse(controller.state.busyKeys.contains("periodic:p_a"))
         XCTAssertEqual(controller.state.entries.count, 1)
         XCTAssertNotNil(controller.state.errors["periodic:p_a"])
@@ -170,9 +179,8 @@ final class NotchStackControllerTests: XCTestCase {
         var completed = try JSONSerialization.jsonObject(with: JSONEncoder().encode(try rule("p_a", revision: 5, result: "completed"))) as! [String: Any]
         completed["state"] = "scheduled"
         StackAPIProtocol.respond = { request in request.reply(["reminder": completed]) }
-        try await settle(0.2)
         controller.state.onCueComplete?("periodic:p_a")
-        try await settle(0.8)
+        try await eventually { controller.state.entries.isEmpty }
         XCTAssertTrue(controller.state.entries.isEmpty)
     }
 
