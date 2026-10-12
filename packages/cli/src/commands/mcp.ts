@@ -173,6 +173,16 @@ export function buildMcpServer(getClient: () => TodoCueClient): McpServer {
     async ({ id, ...body }) => run(() => c().cancelTask(id, body)),
   );
   server.registerTool(
+    "todocue_delete_task",
+    {
+      title: "Delete task",
+      description: "Permanently delete a task with its reminders and attachments. Cannot be undone; prefer todocue_cancel_task when the history should stay.",
+      inputSchema: IdVersioned,
+      annotations: { destructiveHint: true },
+    },
+    async ({ id, ...body }) => run(() => c().deleteTask(id, body)),
+  );
+  server.registerTool(
     "todocue_skip_task",
     { title: "Skip occurrence", description: "Skip one instance of a recurring series (series instances only).", inputSchema: IdVersioned },
     async ({ id, ...body }) => run(() => c().skipTask(id, body)),

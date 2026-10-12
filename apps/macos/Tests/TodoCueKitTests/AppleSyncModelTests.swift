@@ -195,7 +195,7 @@ final class AppleSyncModelTests: XCTestCase {
         XCTAssertEqual(AppleSyncPlanner.plan(kind: .event, tasks: [t.id: t], links: [l], items: [item]), [])
     }
 
-    func testDeletedItemCancelsTodoTaskOnlyAfterGrace() {
+    func testDeletedItemDeletesTodoTaskOnlyAfterGrace() {
         let t = task(scheduledDate: "2026-10-09")
         var (l, _) = link(t, .event)
         let now = TCDate.parse("2026-10-09T12:00:00Z")!
@@ -205,12 +205,28 @@ final class AppleSyncModelTests: XCTestCase {
         XCTAssertEqual(AppleSyncPlanner.plan(kind: .event, tasks: [t.id: t], links: [l], items: [], now: now), [])
         l.missingSince = TCDate.iso(now.addingTimeInterval(-AppleSyncPlanner.missingGrace))
         XCTAssertEqual(AppleSyncPlanner.plan(kind: .event, tasks: [t.id: t], links: [l], items: [], now: now),
-                       [.cancelTask(taskId: "t1")])
+                       [.deleteTask(taskId: "t1")])
         XCTAssertEqual(AppleSyncPlanner.plan(kind: .event, tasks: [t.id: t], links: [l], items: [], departed: ["i1"], now: now),
                        [.detach(taskId: "t1")])
         let done = task(status: .done, scheduledDate: "2026-10-09")
         XCTAssertEqual(AppleSyncPlanner.plan(kind: .reminder, tasks: [t.id: done], links: [link(done, .reminder).0], items: []),
                        [.unlink(taskId: "t1")])
+    }
+
+    func testReturningItemClearsTheMissingMarkEvenOnAStaleBoard() {
+        let t = task(scheduledDate: "2026-10-09", version: 2)
+        var (l, item) = link(t, .event)
+        l.taskVersion = 3 // this app already wrote version 3; the board still carries 2
+        // Nothing marked: a stale board is simply left alone.
+        XCTAssertEqual(AppleSyncPlanner.plan(kind: .event, tasks: [t.id: t], links: [l], items: [item]), [])
+        // Marked missing earlier and now found again: the mark must go, or the grace is already spent.
+        l.missingSince = "2026-10-09T11:00:00.000Z"
+        XCTAssertEqual(AppleSyncPlanner.plan(kind: .event, tasks: [t.id: t], links: [l], items: [item]),
+                       [.relink(taskId: "t1", identifier: item.identifier)])
+        l.missingSince = nil
+        l.detachedAt = "2026-10-09T11:00:00.000Z"
+        XCTAssertEqual(AppleSyncPlanner.plan(kind: .event, tasks: [t.id: t], links: [l], items: [item]),
+                       [.relink(taskId: "t1", identifier: item.identifier)])
     }
 
     func testCompletionDeletesEventButChecksReminder() {

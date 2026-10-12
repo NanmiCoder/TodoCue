@@ -72,6 +72,8 @@ final class AppModel: ObservableObject {
     @Published var dropTarget: TaskDropTarget?
     @Published private(set) var dragPresentation: TaskDragPresentation?
     @Published var pendingMove: PendingTaskMove?
+    /// A task the user asked to delete, waiting for the confirmation alert.
+    @Published var pendingDelete: TodoTask?
     /// A calendar drop whose new plan date lands after the task's own deadline.
     @Published var pendingReschedule: PendingReschedule?
     @Published private(set) var isMovingTask = false
@@ -179,7 +181,10 @@ final class AppModel: ObservableObject {
         if let t = today.items.first(where: { $0.task.id == id })?.task { return t }
         if let t = today.completed.first(where: { $0.id == id }) { return t }
         if let t = upcoming.first(where: { $0.id == id }) { return t }
-        return nil
+        // Finished tasks older than today live only in the history lists. Without them a row opened
+        // from "已完成" or the calendar would land on 未找到该任务, with nothing to act on.
+        if let t = completedTasks.first(where: { $0.id == id }) { return t }
+        return historyTasks[id]
     }
 
     // MARK: - Lifecycle
@@ -313,6 +318,10 @@ final class AppModel: ObservableObject {
             // rewrite or a runtime restart, and yanking someone out of March 2027 for that is rude.
             if ev.type == .dayChanged, isShowingCalendar, calendarShowsToday { calendarGoToToday() }
             Task { await refreshAll() }
+        case .taskDeleted:
+            // From anywhere — another client, the CLI, or an Apple-side delete picked up by sync.
+            if let id = ev.id { forget(id) }
+            scheduleLiveRefresh()
         case .taskCreated, .taskUpdated, .seriesCreated, .seriesUpdated, .reminderUpdated:
             scheduleLiveRefresh()
         }
@@ -710,6 +719,77 @@ final class AppModel: ObservableObject {
     func reopen(_ task: TodoTask) { Task { _ = await perform(L10n.tr("重新打开"), { try await self.client!.reopen(task.id, expectedVersion: task.version) }) } }
     func cancel(_ task: TodoTask) { Task { _ = await perform(L10n.tr("取消"), { try await self.client!.cancel(task.id, expectedVersion: task.version) }) } }
     func skip(_ task: TodoTask) { Task { _ = await perform(L10n.tr("跳过"), { try await self.client!.skip(task.id, expectedVersion: task.version) }) } }
+
+    /// Deleting is permanent — the task, its reminders and its attachments go, and there is no undo —
+    /// so every entry point asks first. The panel hosts the alert, so a request that comes from the
+    /// notch quick look opens the panel (without taking keyboard focus) before it is shown.
+    func requestDelete(_ task: TodoTask) {
+        guard canWrite else {
+            let label = L10n.tr("删除")
+            showToast(Toast(message: L10n.tr("离线状态下无法\(label)"), isError: true))
+            return
+        }
+        pendingDelete = task
+        onOpenPanel?(false)
+    }
+
+    func delete(_ task: TodoTask) { Task { await deleteTask(task) } }
+
+    /// Returns true once the task is gone — including when it already was.
+    @discardableResult
+    func deleteTask(_ task: TodoTask) async -> Bool {
+        pendingDelete = nil
+        let label = L10n.tr("删除")
+        guard canWrite, let client else {
+            showToast(Toast(message: L10n.tr("离线状态下无法\(label)"), isError: true))
+            return false
+        }
+        // The alert may have been up for a while: judge against what is known now, not the snapshot
+        // it was opened with, or a sync edit in between turns a confirmed delete into a conflict.
+        let version = self.task(task.id)?.version ?? task.version
+        do {
+            // Already gone elsewhere counts as done: `deleteTask` returns nil for it.
+            try await client.deleteTask(task.id, expectedVersion: version)
+        } catch let e as APIError where e.isVersionConflict {
+            await refreshLive()
+            showToast(Toast(message: L10n.tr("任务已在别处修改，已刷新"), isError: true))
+            return false
+        } catch {
+            showToast(Toast(message: L10n.tr("\(label)失败：\(error.localizedDescription)"), isError: true))
+            return false
+        }
+        forget(task.id)
+        showToast(Toast(message: L10n.tr("已删除「\(task.title)」")))
+        scheduleLiveRefresh()
+        return true
+    }
+
+    /// Drops a task that no longer exists from every local snapshot, closes its detail page and
+    /// discards its form draft. Unlike `merge`, there is no task left to put back.
+    private func forget(_ id: String) {
+        withAnimation(Theme.listChange) {
+            allTasks.removeAll { $0.id == id }
+            today.items.removeAll { $0.task.id == id }
+            today.completed.removeAll { $0.id == id }
+            today.remaining = today.items.filter { $0.task.status == .todo }.count
+            upcoming.removeAll { $0.id == id }
+            completedTasks.removeAll { $0.id == id }
+            historyTasks.removeValue(forKey: id)
+        }
+        if isShowingCalendar {
+            let bounds = CalendarRange.bounds(span: calendarSpan, anchor: calendarAnchor, firstWeekday: calendarFirstWeekday)
+            rebuildCalendarBuckets(from: bounds.from, to: bounds.to)
+        }
+        editingDrafts[id] = nil
+        routes.removeAll { route in
+            switch route {
+            case .detail(let routeId): return routeId == id
+            case .form(let draft): return draft.editingTaskId == id
+            default: return false
+            }
+        }
+        if pendingDelete?.id == id { pendingDelete = nil }
+    }
 
     func snooze(_ task: TodoTask, minutes: Int = 10) {
         Task {

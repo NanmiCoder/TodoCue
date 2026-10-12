@@ -121,6 +121,18 @@ try {
   assert.equal(events.filter((event) => event.type === 'reminder.fired' && event.related?.taskId === created.task.id).length, 1);
   console.log('PASS scheduler → system notification sink + SSE Cue event');
 
+  const viaCli = (await cli('add', 'CLI 删除冒烟', '--date', 'today', '--remind', '+1h')).task;
+  const deletedByCli = await cli('delete', viaCli.id, '--expect', String(viaCli.version));
+  assert.equal(deletedByCli.deleted, true); assert.equal(deletedByCli.task.id, viaCli.id);
+  await assert.rejects(cli('show', viaCli.id));
+  const viaMcp = resultData(await call('todocue_create_task', { title: 'MCP 删除冒烟' })).task;
+  assert(tools.includes('todocue_delete_task'));
+  assert.equal(resultData(await call('todocue_delete_task', { id: viaMcp.id })).deleted, true);
+  await assert.rejects(client.getTask(viaMcp.id));
+  await until(() => [viaCli.id, viaMcp.id].every((taskId) => events.some((event) => event.type === 'task.deleted' && event.id === taskId)));
+  assert.equal((await client.listReminders({ taskId: viaCli.id })).reminders.length, 0);
+  console.log('PASS CLI and MCP delete, reminder cleanup and SSE task.deleted');
+
   abort.abort(); await stream; mcp.stdin.end(); mcp.kill(); mcp = undefined;
   const exported = await client.export();
   assert.equal(exported.attachments.length, 4);

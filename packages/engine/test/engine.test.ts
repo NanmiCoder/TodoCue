@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TodoCueError } from "@todocue/shared";
+import { MemoryNotifier, Scheduler } from "../src/index.js";
 import { makeEngine } from "./helpers.js";
 
 describe("tasks", () => {
@@ -80,6 +81,61 @@ describe("tasks", () => {
     engine.onEvent((e) => events.push(e.type));
     engine.createTask({ title: "a", reminderAt: "2026-09-07T12:00" });
     expect(events).toEqual(["task.created", "reminder.updated"]);
+  });
+
+  it("delete removes the task with its reminders and attachments, in any status", () => {
+    const { engine, db } = makeEngine();
+    const file = { name: "a.txt", mediaType: "text/plain", dataBase64: Buffer.from("x").toString("base64") };
+    const open = engine.createTask({ title: "open", reminderAt: "2026-09-07T12:00", attachments: [file] }).task;
+    const done = engine.completeTask(engine.createTask({ title: "done", reminderAt: "2026-09-07T12:00" }).task.id);
+    const cancelled = engine.cancelTask(engine.createTask({ title: "cancelled" }).task.id);
+    const count = (table: string) => (db.prepare(`SELECT COUNT(*) n FROM ${table}`).get() as { n: number }).n;
+    expect(count("reminders")).toBe(2);
+
+    const removed = engine.deleteTask(open.id);
+    expect(removed).toMatchObject({ id: open.id, title: "open", status: "todo" });
+    engine.deleteTask(done.id);
+    engine.deleteTask(cancelled.id);
+
+    expect(engine.counts().tasks).toBe(0);
+    expect(count("reminders")).toBe(0);
+    expect(count("attachments")).toBe(0);
+    expect(() => engine.getTask(open.id)).toThrowError(TodoCueError);
+    expect(engine.listTasks({ status: ["todo", "done", "cancelled", "skipped"] })).toHaveLength(0);
+    expect(engine.exportBundle().tasks).toHaveLength(0);
+  });
+
+  it("delete checks the version and reports unknown tasks", () => {
+    const { engine } = makeEngine();
+    const { task } = engine.createTask({ title: "a" });
+    expect(() => engine.deleteTask(task.id, { expectedVersion: 99 })).toThrowError(TodoCueError);
+    expect(engine.getTask(task.id).id).toBe(task.id);
+    engine.deleteTask(task.id, { expectedVersion: task.version });
+    expect(() => engine.deleteTask(task.id)).toThrowError(/not found/i);
+  });
+
+  it("delete emits task.deleted (and reminder.updated when a reminder went with it) after commit", () => {
+    const { engine } = makeEngine();
+    const { task } = engine.createTask({ title: "a", reminderAt: "2026-09-07T12:00" });
+    const { task: plain } = engine.createTask({ title: "b" });
+    const events: { type: string; id: string | null }[] = [];
+    engine.onEvent((e) => events.push({ type: e.type, id: e.id }));
+    engine.deleteTask(task.id);
+    engine.deleteTask(plain.id);
+    expect(events).toEqual([
+      { type: "reminder.updated", id: null },
+      { type: "task.deleted", id: task.id },
+      { type: "task.deleted", id: plain.id },
+    ]);
+  });
+
+  it("a deleted task's reminder is never delivered", async () => {
+    const { engine, clock, notifier, scheduler } = makeEngine();
+    const { task } = engine.createTask({ title: "a", reminderAt: "2026-09-07T09:30" });
+    engine.deleteTask(task.id);
+    clock.set("2026-09-07T01:31:00.000Z");
+    await scheduler.tick();
+    expect(notifier.delivered).toHaveLength(0);
   });
 });
 
@@ -178,6 +234,22 @@ describe("series", () => {
     expect(engine.ensureSeriesInstances()).toBe(0);
   });
 
+  it("deleting an instance removes only that occurrence and the generator does not bring it back", () => {
+    const { engine, clock } = makeEngine({ now: "2026-09-06T01:00:00.000Z" });
+    const { series, tasks } = engine.createSeries({ title: "读书", rule: { kind: "daily" } });
+    const before = engine.getSeriesTasks(series.id).length;
+    const victim = tasks[2]!;
+    engine.deleteTask(victim.id);
+    expect(engine.getSeriesTasks(series.id)).toHaveLength(before - 1);
+    expect(engine.getSeriesTasks(series.id).some((t) => t.occurrenceDate === victim.occurrenceDate)).toBe(false);
+    // Same day, then a later top-up: the removed date stays removed.
+    expect(engine.ensureSeriesInstances()).toBe(0);
+    clock.set("2026-09-07T01:00:00.000Z");
+    engine.ensureSeriesInstances();
+    expect(engine.getSeriesTasks(series.id).some((t) => t.occurrenceDate === victim.occurrenceDate)).toBe(false);
+    expect(engine.getSeries(series.id).status).toBe("active");
+  });
+
   it("createTask with repeat creates a series and returns the first instance", () => {
     const { engine } = makeEngine();
     const res = engine.createTask({ title: "晨跑", repeat: { kind: "daily" }, scheduledAt: "2026-09-08T06:30", reminderAt: "2026-09-08T06:00" });
@@ -220,6 +292,38 @@ describe("scheduler", () => {
     expect(notifier.delivered).toHaveLength(2);
     expect(notifier.delivered[1]!.title).toContain("2");
     expect(engine.listReminders({ status: "missed" })).toHaveLength(2);
+  });
+
+  it("a task deleted while an earlier reminder is being delivered is skipped, not a crash", async () => {
+    const { engine, clock, notifier, scheduler } = makeEngine();
+    const first = engine.createTask({ title: "first", reminderAt: "2026-09-07T09:10" }).task;
+    const second = engine.createTask({ title: "second", reminderAt: "2026-09-07T09:10" }).task;
+    const third = engine.createTask({ title: "third", reminderAt: "2026-09-07T09:10" }).task;
+    clock.set("2026-09-07T01:10:05.000Z");
+    const deliver = notifier.deliver.bind(notifier);
+    let deleted = false;
+    notifier.deliver = async (payload) => {
+      // The user (or an Apple-side delete picked up by sync) removes the next task mid-delivery.
+      if (!deleted) { deleted = true; engine.deleteTask(second.id); }
+      return deliver(payload);
+    };
+    await expect(scheduler.tick()).resolves.toBeUndefined();
+    const ids = notifier.delivered.map((d) => d.id);
+    expect(ids).toHaveLength(2);
+    expect(ids).not.toContain(second.id);
+    expect(new Set(ids)).toEqual(new Set([first.id, third.id]));
+    expect(engine.listReminders({ taskId: second.id })).toHaveLength(0);
+  });
+
+  it("a failing timer tick is logged instead of becoming an unhandled rejection", async () => {
+    const { engine } = makeEngine();
+    const logs: string[] = [];
+    const scheduler = new Scheduler({ engine, notifier: new MemoryNotifier(), tickMs: 20, log: (m) => logs.push(m) });
+    engine.dueReminders = () => { throw new Error("boom"); };
+    scheduler.start();
+    await new Promise((r) => setTimeout(r, 80));
+    scheduler.stop();
+    expect(logs.some((m) => m.includes("scheduler tick failed") && m.includes("boom"))).toBe(true);
   });
 
   it("retries failed deliveries and gives up after max attempts", async () => {

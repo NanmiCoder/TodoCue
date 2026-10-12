@@ -81,7 +81,7 @@ public struct AppleSyncLink: Codable, Hashable, Sendable {
     /// When the item was first found missing. Deletion is only believed after a grace period.
     public var missingSince: String?
     /// Set when the item still exists but left sync (moved to another calendar, made recurring).
-    /// A detached task is left alone instead of being cancelled or re-created.
+    /// A detached task is left alone instead of being deleted or re-created.
     public var detachedAt: String?
 
     public init(kind: AppleSyncKind, taskId: String, identifier: String, externalIdentifier: String? = nil,
@@ -290,8 +290,8 @@ public enum AppleSyncAction: Hashable, Sendable {
     case pull(taskId: String, identifier: String)
     /// The task left the kind's scope: remove the item and the link.
     case deleteItem(taskId: String, identifier: String)
-    /// The item was deleted in Apple's apps: cancel the task and drop the link.
-    case cancelTask(taskId: String)
+    /// The item was deleted in Apple's apps: delete the task for good and drop the link.
+    case deleteTask(taskId: String)
     /// Forget the link without touching either side.
     case unlink(taskId: String)
     /// The link's item changed identity (iCloud resync); point the link at it.
@@ -311,7 +311,7 @@ public enum AppleSyncAction: Hashable, Sendable {
 public enum AppleSyncPlanner {
     /// How long a completed reminder stays linked to its done task.
     public static let completedRetention: TimeInterval = 30 * 86_400
-    /// How long an item must stay missing before its task is cancelled. An iCloud resync can make
+    /// How long an item must stay missing before its task is deleted. An iCloud resync can make
     /// items vanish briefly; a deletion on the phone is still a deletion ten minutes later.
     public static let missingGrace: TimeInterval = 10 * 60
 
@@ -361,7 +361,7 @@ public enum AppleSyncPlanner {
                 } else if departed.contains(link.identifier) {
                     actions.append(.detach(taskId: task.id))
                 } else if let since = link.missingSince.flatMap(TCDate.parse) {
-                    if now.timeIntervalSince(since) >= missingGrace { actions.append(.cancelTask(taskId: task.id)) }
+                    if now.timeIntervalSince(since) >= missingGrace { actions.append(.deleteTask(taskId: task.id)) }
                 } else {
                     actions.append(.markMissing(taskId: task.id))
                 }
@@ -370,7 +370,15 @@ public enum AppleSyncPlanner {
 
             // Versions only grow: an older one is a board that predates this app's own last write.
             // Acting on it would push stale fields back over the edit that was just pulled in.
-            if task.version < link.taskVersion { continue }
+            if task.version < link.taskVersion {
+                // The item is here, so a pending "missing" or "detached" mark is stale. Clear it now:
+                // left alone, the next brief disappearance would find the grace period already spent,
+                // and the task is deleted for good.
+                let isSettled = link.missingSince == nil && link.detachedAt == nil
+                let cleared = AppleSyncAction.relink(taskId: task.id, identifier: item.identifier)
+                if !isSettled, !actions.contains(cleared) { actions.append(cleared) }
+                continue
+            }
 
             switch (kind, task.status) {
             case (_, .cancelled), (_, .skipped), (.event, .done):
