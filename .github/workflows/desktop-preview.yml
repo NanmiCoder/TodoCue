@@ -127,7 +127,7 @@ jobs:
           EXPECTED_ARCH: ${{ matrix.arch }}
         run: |
           app="apps/desktop/src-tauri/target/release/bundle/macos/TodoCue Preview.app"
-          /usr/bin/lipo -verify_arch "$EXPECTED_MACHO" "$app/Contents/MacOS/todocue-desktop"
+          /usr/bin/lipo "$app/Contents/MacOS/todocue-desktop" -verify_arch "$EXPECTED_MACHO"
           /usr/bin/codesign --verify --deep --strict --verbose=2 "$app"
           version="$(node -p 'require("./package.json").version')"
           out="apps/desktop/build/TodoCue-${version}-macOS-${EXPECTED_ARCH}-preview.zip"

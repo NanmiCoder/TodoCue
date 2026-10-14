@@ -4,6 +4,7 @@ dist/
 .DS_Store
 apps/macos/.build/
 apps/macos/build/
+apps/desktop/build/
 apps/macos/*.xcodeproj
 *.log
 coverage/
