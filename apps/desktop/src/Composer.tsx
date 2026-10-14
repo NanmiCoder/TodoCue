@@ -1,5 +1,6 @@
+import { useReducedMotion } from "./useReducedMotion.js";
 import { useEffect, useRef, useState, useLayoutEffect, type CSSProperties } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS,

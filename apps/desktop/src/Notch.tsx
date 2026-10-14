@@ -1,5 +1,6 @@
+import { useReducedMotion } from "./useReducedMotion.js";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import type { PeriodicReminder, RuntimeEvent } from "@todocue/shared";
 import { listen } from "@tauri-apps/api/event";
 import {

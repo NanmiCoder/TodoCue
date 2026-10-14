@@ -1,3 +1,4 @@
+import { useReducedMotion } from "./useReducedMotion.js";
 import {
   useEffect,
   useState,
@@ -8,7 +9,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import type {
   Task,
   Series,

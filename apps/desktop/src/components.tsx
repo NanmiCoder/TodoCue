@@ -1,5 +1,6 @@
+import { useReducedMotion } from "./useReducedMotion.js";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent } from "motion/react";
 import type { Task } from "@todocue/shared";
 import { motionTokens } from "./tokens.js";
 import { Icon } from "./icons.js";

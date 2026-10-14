@@ -1,8 +1,8 @@
+import { useReducedMotion } from "./useReducedMotion.js";
 import { useEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
-  useReducedMotion,
   useIsPresent,
 } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
@@ -1184,10 +1184,10 @@ export function Panel() {
                     {(quickFocused || quick.trim()) && (
                       <motion.div
                         className="quick-details"
-                        initial={{ opacity: 0, height: 0 }}
+                        initial={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={motionTokens.snap}
+                        exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                        transition={reduced ? { duration: 0.12 } : motionTokens.snap}
                       >
                         <span>
                           <Icon name="calendar" size={12} />
