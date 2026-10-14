@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { stageRuntime } from "./stage-runtime.mjs";
+import { materializeWorkspaceLinks, stageRuntime } from "./stage-runtime.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 if (process.platform !== "win32" || !["x64", "arm64"].includes(process.arch)) throw new Error("Build on a Windows x64 or ARM64 runner");
@@ -31,6 +31,8 @@ const runtime = path.join(staging, "runtime"); stageRuntime(root, runtime);
 fs.mkdirSync(path.join(runtime, "bin")); fs.copyFileSync(path.join(distribution, "node.exe"), path.join(runtime, "bin/node.exe"));
 fs.copyFileSync(path.join(distribution, "LICENSE"), path.join(runtime, "NODE-LICENSE"));
 run(path.join(distribution, "node.exe"), [path.join(distribution, "node_modules/npm/bin/npm-cli.js"), "ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: runtime });
+materializeWorkspaceLinks(runtime);
+run(path.join(distribution, "node.exe"), [path.join(runtime, "packages/cli/dist/index.js"), "--version"]);
 const prebuilds = path.join(runtime, "node_modules/better-sqlite3/prebuilds");
 for (const file of fs.readdirSync(prebuilds)) if (file !== `win32-${arch}.node`) fs.rmSync(path.join(prebuilds, file), { force: true, recursive: true });
 run(path.join(runtime, "bin/node.exe"), ["--input-type=module", "-e", "import Database from 'better-sqlite3'; const db=new Database(':memory:'); if(db.prepare('select 1 as n').get().n!==1)process.exit(1); db.close();"], { cwd: runtime });

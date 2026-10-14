@@ -82,7 +82,11 @@ try {
   assert(!result.isError, result.content?.[0]?.text);
   assert.equal((result.structuredContent ?? JSON.parse(result.content[0].text)).task.id, created.task.id);
   mcp.stdin.end();
-  await new Promise((resolve, reject) => { mcp.once("exit", resolve); mcp.once("error", reject); });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Installed MCP did not close after stdin EOF")), 10000);
+    mcp.once("exit", code => { clearTimeout(timer); code === 0 ? resolve() : reject(new Error(`Installed MCP exited ${code}`)); });
+    mcp.once("error", error => { clearTimeout(timer); reject(error); });
+  });
   mcp = undefined;
   pass("installed MCP stdio initialize, discovery and task read");
 
