@@ -40,9 +40,9 @@ npm run windows:preview
 
 脚本对 Tauri 打包下载阶段的 `Peer disconnected` 限次重试（三次总尝试）；编译、校验和或 NSIS 错误不会被重试或忽略。脚本构建前端与三个原生辅助程序，下载并校验官方 Node 26.7.0，安装锁定的生产依赖，实际用该架构的 Node 和 SQLite执行 SQL，再生成当前用户级 NSIS 安装包和 SHA-256 文件。携带 WebView2 离线安装程序和 TodoCue Skill。Rust Windows 目标静态链接 CRT，SQLite 分发保留对应架构的原生模块。
 
-`.github/workflows/desktop-preview.yml` 提供 Windows x64、Windows ARM64 和 macOS 检查；可手动或由相关 PR 触发。代码 `fdb8ce3` 的 [本轮 CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723) 三个 job 全通过，Windows 两种架构实际执行了包内 Node/SQLite、当前用户后台计划任务、CLI/MCP、重装恢复及卸载保留数据库的七组冒烟。
+`.github/workflows/desktop-preview.yml` 提供 Windows x64、Windows ARM64 和 macOS 检查；可手动或由相关 PR 触发。代码 `7ad1b95` 的 [本轮 CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 三个 job 全通过，Windows 两种架构实际执行了包内 Node/SQLite、当前用户后台计划任务、CLI/MCP、重装恢复及卸载保留数据库的七组冒烟。
 
-预览下载：[x64](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723/artifacts/11891571662)、[ARM64](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723/artifacts/11891556896)，包括 NSIS 和 SHA-256；需要仓库访问权限，按 CI artifact 保留策略过期，不是正式 Release。x64 runner 为 Windows Server 2025，ARM64 为 Windows 11，尚不代表 Windows 10/11 GUI 验收。
+预览下载：[x64](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11898134377)、[ARM64](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11899180283)，包括 NSIS 和 SHA-256；需要仓库访问权限，按 CI artifact 保留策略过期，不是正式 Release。x64 runner 为 Windows Server 2025，ARM64 为 Windows 11，尚不代表 Windows 10/11 GUI 验收。
 
 安装包冒烟仅在可弃用的 Windows 测试用户/runner 执行：
 
@@ -69,6 +69,6 @@ swift test --package-path apps/macos
 
 本轮修正原生窗口/WebView 焦点、粘贴/回车和箭头提交期间继续输入，校准表单/附件、详情、日历及 Dial。见 [P0 输入证据](../../docs/qa/desktop-native-ui-fixes/README.md) 和 [P1 对照截图、632 条布局测量与安装验证](../../docs/qa/desktop-p1-ui/README.md)。实际系统偏好切换、版本冲突和延迟响应保留草稿均通过。
 
-本地 `check` 175 个 Vitest / 24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端/Rust 11+5 通过。[Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649) 的完整 Xcode Swift Apple Silicon 275（4 跳过）、Intel 275（11 跳过）均 0 失败。本地 CLT 缺 XCTest，不冒充本地通过。
+本地 `check` 175 个 Vitest / 24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端/Rust 11+5 通过。[Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 的完整 Xcode Swift Apple Silicon 275（4 跳过）、Intel 275（11 跳过）均 0 失败。本地 CLT 缺 XCTest，不冒充本地通过。
 
 真实鼠标外部点击、候选窗口、透明命中、Windows GUI/通知点击/多屏/DPI/休眠、全原生视觉/逐帧验收，以及 Mac Intel Tauri 包、EventKit 和正式客户端切换仍待完成。

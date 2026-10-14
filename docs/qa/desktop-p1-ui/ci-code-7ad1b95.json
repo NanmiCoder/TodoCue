@@ -1,0 +1,47 @@
+{
+  "codeCommit": "7ad1b9537c482575da7c4a62e4be12e2e8e38383",
+  "qualityRun": 38571147359,
+  "desktopRun": 38571147367,
+  "windows": {
+    "x64": {
+      "jobId": 115876356249,
+      "previewArtifact": 11898134377,
+      "smokeArtifact": 11898009362,
+      "installedChecks": [
+        "silent NSIS install, packaged Node architecture and native SQLite SQL",
+        "custom home bootstrap, current-user scheduled runtime and installed CLI shim",
+        "packaged CLI and shim create/read attachment and idempotent retry",
+        "installed MCP stdio initialize, discovery and task read",
+        "background stop/start preserves SQLite task and attachment",
+        "silent reinstall stops and resumes the registered custom-home runtime",
+        "uninstall removes service, CLI and PATH while preserving the database"
+      ],
+      "scriptTests": {
+        "total": 24,
+        "passed": 19,
+        "skipped": 5,
+        "failed": 0
+      }
+    },
+    "arm64": {
+      "jobId": 115876356622,
+      "previewArtifact": 11899180283,
+      "smokeArtifact": 11898418361,
+      "installedChecks": [
+        "silent NSIS install, packaged Node architecture and native SQLite SQL",
+        "custom home bootstrap, current-user scheduled runtime and installed CLI shim",
+        "packaged CLI and shim create/read attachment and idempotent retry",
+        "installed MCP stdio initialize, discovery and task read",
+        "background stop/start preserves SQLite task and attachment",
+        "silent reinstall stops and resumes the registered custom-home runtime",
+        "uninstall removes service, CLI and PATH while preserving the database"
+      ],
+      "scriptTests": {
+        "total": 24,
+        "passed": 19,
+        "skipped": 5,
+        "failed": 0
+      }
+    }
+  }
+}

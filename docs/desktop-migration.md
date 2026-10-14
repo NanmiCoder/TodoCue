@@ -2,7 +2,7 @@
 
 2026-10-14。当前为可运行的迁移预览，目标是保留 Dial 设计与交互。Windows 双架构构建与安装/后台冒烟已在 CI 完成，GUI 实机验收仍未完成；完成验收前不切换正式 macOS 客户端，也不宣称四个阶段已经全部交付。后续工作按 [交接任务与继续开发说明](desktop-handoff.md)执行。
 
-本轮 `codex/desktop-native-ui-fixes` 已推送到 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为原交接分支。代码 `fdb8ce3` 的 Windows x64/ARM64 与 macOS CI 全通过。见 [P0 输入证据](qa/desktop-native-ui-fixes/README.md) 和 [P1 原版对照、632 条布局测量、安装包及质量记录](qa/desktop-p1-ui/README.md)。真实外部鼠标/候选窗口、完整原生主题矩阵和逐帧对照仍未完成。
+本轮 `codex/desktop-native-ui-fixes` 已推送到 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为原交接分支。代码 `7ad1b95` 的 Windows x64/ARM64 与 macOS CI 全通过。见 [P0 输入证据](qa/desktop-native-ui-fixes/README.md) 和 [P1 原版对照、632 条布局测量、安装包及质量记录](qa/desktop-p1-ui/README.md)。真实外部鼠标/候选窗口、完整原生主题矩阵和逐帧对照仍未完成。
 
 ## 实现边界
 
@@ -46,9 +46,9 @@
 
 自动检查覆盖便携客户端、真实引擎精确改期/独立提醒、claim 去重、草稿保存快照、Windows 注册失败恢复/CLI 归属、平台打包布局、模块搬迁、SID 授权、版本/lock 同步、现有 CLI/MCP 冒烟和 Swift 测试。任务引擎、API 和数据库契约保持兼容。
 
-本地 `npm run check`：175 个 Vitest / 25 文件、24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端构建、Rust 11+5 通过，最终 macOS Preview 和 SwiftUI 对照 App 构建通过。本地只有 CLT，Swift 缺 XCTest，未写成本地通过。`fdb8ce3` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649) 使用完整 Xcode 26.2，Apple Silicon Swift 275（4 跳过）、Intel 275（11 跳过）均 0 失败；Intel GPU 与 opt-in 截图限制见 QA。
+本地 `npm run check`：175 个 Vitest / 25 文件、24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端构建、Rust 11+5 通过，最终 macOS Preview 和 SwiftUI 对照 App 构建通过。本地只有 CLT，Swift 缺 XCTest，未写成本地通过。`7ad1b95` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 使用完整 Xcode 26.2，Apple Silicon Swift 275（4 跳过）、Intel 275（11 跳过）均 0 失败；Intel GPU 与 opt-in 截图限制见 QA。
 
-同一代码的 [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723) Windows x64、ARM64、macOS 全通过。两种 Windows 架构各运行真正 NSIS 包的七组安装/后台/CLI/MCP/重装/卸载冒烟；Windows 测试计数为 Vitest 174 通过/1 跳过、脚本 16 通过/5 跳过、Rust 11+5+3 通过。x64 runner 是 Windows Server 2025，ARM64 是 Windows 11；不能视为 Windows 10/11 的完整 GUI 验收。
+同一代码的 [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) Windows x64、ARM64、macOS 全通过。两种 Windows 架构各运行真正 NSIS 包的七组安装/后台/CLI/MCP/重装/卸载冒烟；Windows 测试计数为 Vitest 174 通过/1 跳过、脚本 19 通过/5 跳过、Rust 11+5+3 通过。x64 runner 是 Windows Server 2025，ARM64 是 Windows 11；不能视为 Windows 10/11 的完整 GUI 验收。
 
 ### 截图反馈与刘海交互
 

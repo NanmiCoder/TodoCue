@@ -2,7 +2,7 @@
 
 更新：2026-10-14。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
 
-本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，已推送并建立 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。代码基准 `fdb8ce3` 已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
+本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，已推送并建立 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。最终代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
 
 ## 代码从哪里继续
 
@@ -35,7 +35,7 @@
 | `packages/cli/src/windows-service.ts`、`windows-integration.ts` | 当前用户后台计划任务、自定义目录登记、服务升级/停止/卸载、CLI 与 PATH 管理 |
 | `apps/desktop/src-tauri/src/bin`、`windows_home.rs` | CLI 转发、后台进程监督、Windows 通知、按目录标识路由冷/热启动 |
 | `scripts/package-windows.mjs`、`stage-runtime.mjs` | 对应架构 Node/SQLite/辅助程序、NSIS、离线 WebView2、Skill 与包校验 |
-| `.github/workflows/desktop-preview.yml` | Windows x64/ARM64 完整构建、NSIS 安装/后台冒烟及 macOS 检查；`fdb8ce3` 远程运行全部通过 |
+| `.github/workflows/desktop-preview.yml` | Windows x64/ARM64 完整构建、NSIS 安装/后台冒烟及 macOS 检查；`7ad1b95` 远程运行全部通过 |
 
 审查确认的八项缺陷已实现修复及回归测试：自定义目录升级/卸载遗漏、四条周期提醒同时领取丢失系统回退、保存期间移除附件又复现、旧已完成查询覆盖新状态、精确截止时间的改期确认遗漏、服务新配置仍运行旧宿主、自定义目录通知启动到错误目录、卸载残留 CLI/PATH。详见实现记录中的证据表；安装、当前用户计划任务、CLI/MCP、升级/卸载已在两个 Windows runner 实测，通知点击及 GUI 行为仍需独立验收。
 
@@ -143,8 +143,8 @@ Windows 包在对应 Windows 主机运行 `npm run windows:preview`。CI 已由 
 ## 检查证据与限制
 
 - 本地 `npm run check`：175 个 Vitest（25 文件）、24 个脚本测试、CLI/MCP 冒烟、release check 通过；`desktop:check` 前端构建和 Rust 11+5 通过；最终 macOS Preview 与原 SwiftUI 对照 App 构建通过。
-- `fdb8ce3` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649) 全通过：Linux 完整检查、Swift Apple Silicon 275（4 跳过）/Intel 275（11 跳过），均 0 失败。Intel VM 跳过无 GPU 的原生动画检查，截图测试需 opt-in。本地 CLT 缺 XCTest 的限制仍如实保留。
-- [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723) 全通过：Windows 两种架构实际包/后台七组检查，macOS 前端/Rust 检查。Windows 平台的 Vitest 174 通过/1 跳过、脚本 16 通过/5 跳过；平台专属跳过不与本地计数混淆。
+- `7ad1b95` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 全通过：Linux 完整检查、Swift Apple Silicon 275（4 跳过）/Intel 275（11 跳过），均 0 失败。Intel VM 跳过无 GPU 的原生动画检查，截图测试需 opt-in。本地 CLT 缺 XCTest 的限制仍如实保留。
+- [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 全通过：Windows 两种架构实际包/后台七组检查，macOS 前端/Rust 检查。Windows 平台的 Vitest 174 通过/1 跳过、脚本 19 通过/5 跳过；平台专属跳过不与本地计数混淆。
 - 实际浏览器/原生证据与截图、布局 JSON 已保存到仓库的两份 QA 记录；没有保存连接 token 或测试数据库。浏览器不替代原生窗口交互，AX 不替代物理鼠标。
 - 本机虚拟刘海完整键盘/粘贴/回车与箭头延迟响应输入通过；真实外部鼠标、候选窗口及 Windows GUI 仍需按清单独立验收。Mac Intel Tauri 包、EventKit 及正式切换尚未完成。
 

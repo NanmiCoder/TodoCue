@@ -51,7 +51,7 @@
 
 ## Windows 两种架构：实际安装包通过
 
-代码 `fdb8ce3` 的 [Desktop preview CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723) 全部通过。x64 使用 Windows Server 2025 Datacenter 10.0.26100 的 `windows-latest` runner；ARM64 使用 Microsoft Windows 11 的 `windows-11-arm` runner。不是 Windows 10 桌面 GUI 验收。
+代码 `7ad1b95` 的 [Desktop preview CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 全部通过。x64 使用 Windows Server 2025 Datacenter 10.0.26100 的 `windows-latest` runner；ARM64 使用 Microsoft Windows 11 的 `windows-11-arm` runner。不是 Windows 10 桌面 GUI 验收。
 
 两种架构分别构建真正的 NSIS 包，并用包内 Node/CLI/SQLite 在中文含空格的隔离目录完成七组检查：
 
@@ -65,8 +65,8 @@
 
 | 架构 | 安装包及 SHA-256 产物 | 安装冒烟 JSON |
 | --- | --- | --- |
-| x64 | [预览产物](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723/artifacts/11891571662) | [七组检查报告](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723/artifacts/11891271820) |
-| ARM64 | [预览产物](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723/artifacts/11891556896) | [七组检查报告](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723/artifacts/11891362054) |
+| x64 | [预览产物](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11898134377) | [七组检查报告](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11898009362) |
+| ARM64 | [预览产物](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11899180283) | [七组检查报告](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11898418361) |
 
 这是 GitHub Actions 临时预览产物，需要仓库访问权限，按 artifact 保留策略过期；不是正式 Release。可重新触发 workflow 重建。
 
@@ -76,8 +76,8 @@ CI 暴露并修复了通知助手平台路径、动态导入文件 URL、Cargo C
 
 - 本地 `npm run check`：25 文件 / 175 个 Vitest、24 个脚本测试、CLI/MCP 冒烟和 release check 通过；版本仍为 0.5.3。
 - `desktop:check`：前端构建及 Rust 11+5 测试通过；最终源码 macOS debug Preview 包构建通过。Windows 的 Rust 测试额外运行 3 个平台测试，两种架构都通过。
-- [Quality gates](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649)：Linux 完整检查通过；完整 Xcode 26.2 的 Swift Apple Silicon 275 个测试（4 跳过）、Intel 275 个（11 跳过）均 0 失败。Intel VM 无可用 GPU，跳过原生动画窗口测试；截图测试为显式 opt-in。本地只有 CLT，缺 XCTest 的限制没有被写成通过。
-- Windows 的 Vitest 为 174 通过/1 跳过，脚本为 16 通过/5 跳过，平台专属跳过与本地数字不同；不能把跨架构构建写成全部 GUI 行为通过。
+- [Quality gates](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359)：Linux 完整检查通过；完整 Xcode 26.2 的 Swift Apple Silicon 275 个测试（4 跳过）、Intel 275 个（11 跳过）均 0 失败。Intel VM 无可用 GPU，跳过原生动画窗口测试；截图测试为显式 opt-in。本地只有 CLT，缺 XCTest 的限制没有被写成通过。
+- Windows 的 Vitest 为 174 通过/1 跳过，脚本为 19 通过/5 跳过，平台专属跳过与本地数字不同；不能把跨架构构建写成全部 GUI 行为通过。
 - macOS AX 控件动作与原生键盘已验证；物理鼠标外部点击、拖选、候选窗口、透明命中、原生悬停时序、多屏/全屏/休眠仍未完成。原生坐标工具无法取得刘海可点击窗口；其他应用定向操作没有可靠全局鼠标证据。
 - Windows GUI、通知点击冷/热启动、离线 WebView2 的干净机安装、多屏/DPI/任务栏、IME、全屏/休眠及提醒并发的实机行为未验证。
 - macOS Intel 的 Tauri 包、真实硬件刘海、EventKit 桥接、偏好导入和生产客户端切换仍是后续迁移项。
@@ -88,6 +88,6 @@ CI 暴露并修复了通知助手平台路径、动态导入文件 URL、Cargo C
 
 仅文档变更的 `b235561` 复跑中，ARM64 的编译/测试通过，但下载 Microsoft WebView2 时 `failed to bundle project: Peer disconnected`，未进入安装冒烟。此故障与更早的 ARM64 下载断连重复，不能把该次失败隐藏成安装通过。原 `fdb8ce3` 的两个完整成功记录和产物仍有效。
 
-`runWindowsBundler` 现在只对包含该 Tauri 打包阶段错误的传输断连最多尝试三次，间隔 2/4 秒；编译、校验和、NSIS 等确定性错误立即失败，耗尽仍返回原退出状态。三个真实子进程回归验证“断连后成功产物”“确定性错误不重试”“反复断连限次失败”。本地完整检查仍为 175 个 Vitest，脚本增至 24 个。最终 CI 是否通过以 PR 检查为准，不能沿用旧成功来覆盖新的失败。
+`runWindowsBundler` 现在只对包含该 Tauri 打包阶段错误的传输断连最多尝试三次，间隔 2/4 秒；编译、校验和、NSIS 等确定性错误立即失败，耗尽仍返回原退出状态。三个真实子进程回归验证“断连后成功产物”“确定性错误不重试”“反复断连限次失败”。本地完整检查仍为 175 个 Vitest，脚本增至 24 个。最终代码 `7ad1b95` 的 [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 与 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 均已全部通过。Windows 两种架构各七组实际安装冒烟再次通过，脚本为 19 通过/5 跳过；具体 job、产物和七组结果保存于 [最终代码 CI 摘要](ci-code-7ad1b95.json)。
 
 同时淘汰 CI 中仅 214 字节的旧 Rust 缓存，使用 v2 key，并要求 Rust 检查成功后才保存，避免构建前失败留下空缓存。截图扩展名已与原生 JPEG / 浏览器 PNG 实际格式匹配，原像素未改变。
