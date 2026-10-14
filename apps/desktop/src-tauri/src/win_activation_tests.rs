@@ -1,6 +1,7 @@
 //! Actual Win32 thread activation regression. This does not claim that a CI
 //! desktop has a foreground application or that WebView input has been tested.
 
+use super::windows_activation::{allow_activation, is_passive, prevent_activation};
 use windows::{
     core::PCWSTR,
     Win32::{
@@ -129,13 +130,25 @@ impl Drop for TestWindow {
 }
 
 #[test]
-fn noactivate_show_preserves_thread_activation_then_explicit_editing_can_activate() {
+fn passive_panel_guard_preserves_thread_activation_and_allows_explicit_editing() {
     // Each Rust test thread owns its windows and activation queue. There is no
     // dependency on the system foreground window, user data, or another app.
     // Class is created first, so its Drop runs after both windows on failures.
     let mut class = WindowClass::register();
     let mut a = class.create("TodoCue isolated activation test A", WINDOW_EX_STYLE(0));
     let mut b = class.create("TodoCue isolated activation test B", WS_EX_NOACTIVATE);
+
+    prevent_activation(b.handle()).expect("Production passive activation guard could not install");
+    assert!(is_passive(b.handle()));
+    let foreign_handle = b.handle().0 as usize;
+    let wrong_thread =
+        std::thread::spawn(move || prevent_activation(HWND(foreign_handle as *mut _)))
+            .join()
+            .expect("Wrong-thread activation check panicked");
+    assert!(
+        wrong_thread.is_err(),
+        "Passive guard accepted a window owned by another thread"
+    );
 
     unsafe {
         // Establish a non-null queue activation baseline without asking to
@@ -150,8 +163,8 @@ fn noactivate_show_preserves_thread_activation_then_explicit_editing_can_activat
         );
 
         for _ in 0..2 {
-            // Match Tao's show path after set_focusable(false): the native style
-            // is NOACTIVATE but Tao uses SW_SHOW, not SW_SHOWNOACTIVATE.
+            // Match Tao's SW_SHOW path and use the production activation guard.
+            // NOACTIVATE alone was proven to steal activation on Windows CI.
             let _ = ShowWindow(b.handle(), SW_SHOW);
             assert!(
                 IsWindowVisible(b.handle()).as_bool(),
@@ -160,7 +173,13 @@ fn noactivate_show_preserves_thread_activation_then_explicit_editing_can_activat
             assert_eq!(
                 GetActiveWindow(),
                 a.handle(),
-                "NOACTIVATE + SW_SHOW stole thread activation"
+                "Guarded SW_SHOW stole thread activation"
+            );
+            let _ = SetActiveWindow(b.handle());
+            assert_eq!(
+                GetActiveWindow(),
+                a.handle(),
+                "Passive B accepted an unsolicited activation"
             );
             let _ = ShowWindow(b.handle(), SW_HIDE);
             assert!(
@@ -174,8 +193,28 @@ fn noactivate_show_preserves_thread_activation_then_explicit_editing_can_activat
             );
         }
 
+        // The hook filters exactly registered HWNDs. It must not block another
+        // task/notch window or leave thread-wide activation disabled.
+        let mut other = class.create(
+            "TodoCue unrelated activation test window",
+            WINDOW_EX_STYLE(0),
+        );
+        let _ = ShowWindow(other.handle(), SW_SHOWNOACTIVATE);
+        let _ = SetActiveWindow(other.handle());
+        assert_eq!(
+            GetActiveWindow(),
+            other.handle(),
+            "Passive panel guard blocked an unrelated window"
+        );
+        let _ = SetActiveWindow(a.handle());
+        assert_eq!(GetActiveWindow(), a.handle());
+        other.destroy();
+
         // Editing restores focusability. Confirm that this restoration is not
         // permanently blocked by the passive presentation's style.
+        allow_activation(b.handle())
+            .expect("Explicit editing could not release passive activation");
+        assert!(!is_passive(b.handle()));
         let style = GetWindowLongPtrW(b.handle(), GWL_EXSTYLE);
         SetWindowLongPtrW(
             b.handle(),
@@ -193,9 +232,20 @@ fn noactivate_show_preserves_thread_activation_then_explicit_editing_can_activat
             b.handle(),
             "Explicit editing could not activate B"
         );
+
+        // Destroying a still-passive window removes its handle, so another
+        // window reusing that value cannot inherit the activation restriction.
+        prevent_activation(b.handle()).expect("Passive guard could not be restored");
+        let _ = SetActiveWindow(a.handle());
+        assert_eq!(GetActiveWindow(), a.handle());
     }
 
+    let destroyed = b.handle();
     b.destroy();
+    assert!(
+        !is_passive(destroyed),
+        "Destroyed HWND remained registered as passive"
+    );
     a.destroy();
     class.unregister();
 }

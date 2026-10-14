@@ -1,5 +1,5 @@
 import { useReducedMotion } from "./useReducedMotion.js";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
@@ -111,6 +111,13 @@ export function Panel() {
   const quickRequest = useRef(new QuickAddRequest());
   const quickFocusRevision = useRef(0);
   const quickInput = useRef<HTMLInputElement>(null);
+  const pendingQuickFocus = useRef(false);
+  const [quickFocusTick, setQuickFocusTick] = useState(0);
+  useLayoutEffect(() => {
+    if (!pendingQuickFocus.current) return;
+    pendingQuickFocus.current = false;
+    if (route === "list" && !quickInput.current?.closest("[inert]")) quickInput.current?.focus();
+  }, [route, quickFocusTick]);
   const t = translate(settings.language);
   const reduced = useReducedMotion();
   useEffect(() => {
@@ -266,10 +273,11 @@ export function Panel() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         void focusPanel().catch(error => setError(String(error)));
+        pendingQuickFocus.current = true;
+        setQuickFocusTick(value => value + 1);
         if (route !== "list") {
           navigate("list");
         }
-        quickInput.current?.focus();
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r") {
         event.preventDefault();
@@ -1460,7 +1468,11 @@ export function Panel() {
                     : "全局快捷键"}
                   <button
                     className="shortcut-recorder pill secondary"
-                    onClick={() => setRecording((value) => !value)}
+                    onClick={(event) => {
+                      event.currentTarget.focus();
+                      void focusPanel().catch(error => setError(String(error)));
+                      setRecording((value) => !value);
+                    }}
                     onKeyDown={(event) => {
                       if (!recording) return;
                       event.preventDefault();

@@ -111,6 +111,7 @@ export function Notch() {
     if (!shouldCollapseQuickLook("outside", { ...interaction.current, editing: false })) return;
     closeQuickLook();
     hovering.current = false;
+    setCueHovered(false);
     if (deferred.current.length) {
       setFeaturedKey(deferred.current.at(-1)!.key);
       setFeatured(true);
@@ -339,12 +340,10 @@ export function Notch() {
     return () => clearInterval(timer);
   }, [runtime.board, runtime.rules]);
   useEffect(() => {
-    if (!featured) return;
-    const timer = setInterval(() => {
-      if (!hovering.current && busyKeys.size === 0) setFeatured(false);
-    }, dial.featureDuration);
-    return () => clearInterval(timer);
-  }, [featured, featuredKey, busyKeys.size, cues.find((cue) => cue.key === featuredKey)?.id]);
+    if (!featured || cueHovered || busyKeys.size > 0) return;
+    const timer = setTimeout(() => setFeatured(false), dial.featureDuration);
+    return () => clearTimeout(timer);
+  }, [featured, featuredKey, cueHovered, busyKeys.size, cues.find((cue) => cue.key === featuredKey)?.id]);
   const stackShown = cues.length > 0 && !folded && !expanded;
   const stackCues = visibleCues(cues, featured ? featuredKey : null);
   useLayoutEffect(() => {

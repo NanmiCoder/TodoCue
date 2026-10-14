@@ -351,6 +351,7 @@ fn panel_present(
     let window = app.get_webview_window("panel").ok_or("Panel unavailable")?;
     fit_panel(&window, &desktop.settings.lock().unwrap(), true)?;
     if focus_input {
+        platform::allow_activation(&window)?;
         window.set_focusable(true).map_err(|e| e.to_string())?;
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
@@ -366,6 +367,7 @@ fn panel_hide(window: WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 fn panel_focus(app: tauri::AppHandle) -> Result<(), String> {
     let window = app.get_webview_window("panel").ok_or("Panel unavailable")?;
+    platform::allow_activation(&window)?;
     window.set_focusable(true).map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
     window.as_ref().set_focus().map_err(|e| e.to_string())

@@ -2,6 +2,9 @@ use tauri::WebviewWindow;
 #[cfg(all(windows, test))]
 #[path = "win_activation_tests.rs"]
 mod win_activation_tests;
+#[cfg(windows)]
+#[path = "windows_activation.rs"]
+mod windows_activation;
 
 /// Ordinary viewing keeps the keyboard in the user's current application.
 #[cfg(target_os = "macos")]
@@ -19,11 +22,50 @@ pub fn show_without_activation(window: &WebviewWindow) -> Result<(), String> {
 }
 #[cfg(windows)]
 pub fn show_without_activation(window: &WebviewWindow) -> Result<(), String> {
-    // Keep Tao's visibility bookkeeping synchronized. Direct ShowWindow bypasses
-    // it and breaks subsequent focus/hide commands. Editing explicitly restores
-    // focusability; ordinary presentation keeps the NOACTIVATE style.
-    window.set_focusable(false).map_err(|e| e.to_string())?;
-    window.show().map_err(|e| e.to_string())
+    if window.label() != "panel" {
+        return Err("Passive activation is only supported for the task panel".into());
+    }
+    on_window_thread(window, |window| {
+        let hwnd =
+            windows::Win32::Foundation::HWND(window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
+        // Tao uses SW_SHOW even with NOACTIVATE, which activates the window on
+        // real Windows. The thread hook persists through queued show operations
+        // while Tauri remains responsible for its visibility bookkeeping.
+        windows_activation::prevent_activation(hwnd)?;
+        window.set_focusable(false).map_err(|e| e.to_string())?;
+        window.show().map_err(|e| e.to_string())
+    })
+}
+#[cfg(windows)]
+pub fn allow_activation(window: &WebviewWindow) -> Result<(), String> {
+    on_window_thread(window, |window| {
+        let hwnd =
+            windows::Win32::Foundation::HWND(window.hwnd().map_err(|e| e.to_string())?.0 as *mut _);
+        windows_activation::allow_activation(hwnd)
+    })
+}
+#[cfg(not(windows))]
+pub fn allow_activation(_window: &WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+#[cfg(windows)]
+fn on_window_thread(
+    window: &WebviewWindow,
+    operation: impl FnOnce(&WebviewWindow) -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    let target = window.clone();
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    // Wry executes this inline on the UI thread and dispatches from other
+    // threads. Acknowledge the operation so hook installation failures never
+    // report success or race a following explicit focus request.
+    window
+        .run_on_main_thread(move || {
+            let _ = send.send(operation(&target));
+        })
+        .map_err(|e| e.to_string())?;
+    receive
+        .recv()
+        .map_err(|_| "Window activation operation did not complete".to_string())?
 }
 #[cfg(not(any(windows, target_os = "macos")))]
 pub fn show_without_activation(window: &WebviewWindow) -> Result<(), String> {
