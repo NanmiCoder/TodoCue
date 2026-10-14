@@ -2,15 +2,15 @@
 
 更新：2026-10-14。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
 
-本轮已从交接提交 `2bf7349` 建立独立 `codex/desktop-native-ui-fixes` 分支，完成刘海输入/退出焦点的一组修复及原版画面对照。具体触发条件、截图和通过/未验证项见 [本轮 QA 记录](qa/desktop-native-ui-fixes/README.md)。继续分支目前只在本地保存，未推送；另一台电脑接手前需确认可以取得本轮分支，旧远端交接提交不包含这些修复。
+本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，已推送并建立 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。代码基准 `fdb8ce3` 已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
 
 ## 代码从哪里继续
 
 - 仓库：<https://github.com/NanmiCoder/TodoCue>。
 - 交接分支：`codex/desktop-migration-handoff`，从 `3058f01379d1cf965445ca5f3bb3b826020e2686` 建立。
-- 新工作树必须从 `origin/codex/desktop-migration-handoff` 建立；从默认分支开始会缺少这次迁移代码。
+- 本轮最初已先 `git fetch origin`，明确从 `origin/codex/desktop-migration-handoff` 的 `2bf7349` 创建新工作树；原主工作区未覆盖。现在接续本轮工作应从 `origin/codex/desktop-native-ui-fixes` 开始；旧交接提交不含这些后续修复。不能从默认分支开始。
 - 推荐继续分支：`codex/desktop-native-ui-fixes`。若该分支已存在，先检查其状态，复用或选择新的 `codex/` 分支，不能覆盖已有分支或工作树。
-- 没有创建 PR、合并主分支或发布安装包。推送交接分支不等于 Windows CI、安装和运行通过。
+- PR 保持草稿；未合并主分支、未发布正式版本。Windows x64/ARM64 已有可安装 CI 预览产物与七组安装/后台检查，GUI 实机验收另列。
 - 本机临时数据、依赖、编译产物、日志和运行中的进程不会随 Git 转移；新电脑需要重新安装依赖并启动隔离运行时。
 
 先阅读仓库 `AGENTS.md`、本文、[实现与验收记录](desktop-migration.md)、[Dial 设计与动效规范](design/dial.md)、[桌面预览启动说明](../apps/desktop/README.md)。比较 UI 时以现有 SwiftUI 源码和实际画面为准，不能把新前端自身当作对照基准。
@@ -35,9 +35,9 @@
 | `packages/cli/src/windows-service.ts`、`windows-integration.ts` | 当前用户后台计划任务、自定义目录登记、服务升级/停止/卸载、CLI 与 PATH 管理 |
 | `apps/desktop/src-tauri/src/bin`、`windows_home.rs` | CLI 转发、后台进程监督、Windows 通知、按目录标识路由冷/热启动 |
 | `scripts/package-windows.mjs`、`stage-runtime.mjs` | 对应架构 Node/SQLite/辅助程序、NSIS、离线 WebView2、Skill 与包校验 |
-| `.github/workflows/desktop-preview.yml` | Windows x64/ARM64 和 macOS 预览构建/检查配置；当前未得到远程运行结果 |
+| `.github/workflows/desktop-preview.yml` | Windows x64/ARM64 完整构建、NSIS 安装/后台冒烟及 macOS 检查；`fdb8ce3` 远程运行全部通过 |
 
-审查确认的八项缺陷已实现修复及回归测试：自定义目录升级/卸载遗漏、四条周期提醒同时领取丢失系统回退、保存期间移除附件又复现、旧已完成查询覆盖新状态、精确截止时间的改期确认遗漏、服务新配置仍运行旧宿主、自定义目录通知启动到错误目录、卸载残留 CLI/PATH。详见实现记录中的证据表；Windows 的实际安装/系统行为仍需独立验收。
+审查确认的八项缺陷已实现修复及回归测试：自定义目录升级/卸载遗漏、四条周期提醒同时领取丢失系统回退、保存期间移除附件又复现、旧已完成查询覆盖新状态、精确截止时间的改期确认遗漏、服务新配置仍运行旧宿主、自定义目录通知启动到错误目录、卸载残留 CLI/PATH。详见实现记录中的证据表；安装、当前用户计划任务、CLI/MCP、升级/卸载已在两个 Windows runner 实测，通知点击及 GUI 行为仍需独立验收。
 
 另修复开发代理丢失 DELETE 请求体的问题，真实代理→HTTP→运行时测试覆盖任务/附件删除。不要删除这些回归测试或为使构建通过而改变 API/数据库契约。
 
@@ -58,7 +58,7 @@
 
 **P0 仍是部分完成，不能关闭全部验收项。** 本机原生坐标工具对刘海报 `noWindowsAvailable`；其他应用的定向自动化操作未提供可靠的全局物理鼠标证据。真实外部点击、鼠标拖选、输入法候选窗口、透明命中和原生悬停延迟仍待设备操作确认。浏览器悬停/离开、外部点击/草稿、延迟保存/同名输入、503 反馈、IME 229 键以及提醒/SSE 保留均有本轮验证，不能替代这些原生项。
 
-最后还修复了点击提交箭头后焦点落到正文的问题：提交时保留焦点归属，下一帧恢复输入，并在转向其他控件时取消恢复。Ego Lite 刘海/主面板及延迟保存转向固定按钮均通过。用户解锁后，源码提交 `4927211` 的最终 macOS Preview 已通过刘海/主面板箭头提交后直接继续输入；暂停隔离运行时延后真实响应，保存中 Tab 转向查看全部，保存返回后仍保持按钮焦点。请求超时后原草稿重试也通过 REST 核对没有重复任务。此处为原生 AX 控件动作和键盘验证，物理鼠标相关验收仍按下述清单继续。
+最终 `fdb8ce3` 还修复面板已激活但 WebView 未取得 first responder，以及箭头提交按钮禁用后才恢复焦点的竞态。现在原生显示/固定同时激活窗口和 WebView，箭头提交同步交回输入，再进入保存状态。最终原生面板和刘海分别暂停隔离运行时、箭头提交后不重新点击输入直接 Cmd+A/粘贴下一条，恢复服务前后完整草稿和焦点均保留；双回车只创建一条，下一条未提交文本未写入数据库。保存中 Tab 转向其他按钮、不被响应抢回，以及请求超时原草稿幂等重试的更早证据保留。临时诊断全部移除。
 
 建议调查顺序：
 
@@ -80,23 +80,24 @@ P0 验收：
 
 ### P1：按原版完成 UI 和动效对照
 
-- [ ] 全部页面逐项核对布局、字号、留白、文字换行、图标、输入/选择/弹层；优先刘海、快速添加、表单，再到详情与日历。
-- [ ] 建立固定数据/时间/背景的对照；中英文、明暗主题、300/340/480/600 宽度；长标题、空、加载、错误、离线、冲突及减少动态效果。
-- [ ] 逐帧对照数字滚动、对勾、表盘波纹、切页重叠、拖动让位/撤销、刘海展开与提醒堆叠；查跳动、闪透、裁切，以及 SSE 提前移除动画元素。
-- [ ] 检查附件选择/粘贴/预览/移除、日历拖动改期、草稿隔离、版本冲突、断线重连，维持已有并发保存回归。
-- [ ] 保存必要截图/录屏和差异记录。字体抗锯齿及系统玻璃差异单独记录，不能承诺所有设备逐像素相同。
-
-本轮已有同一组数据的 SwiftUI / Tauri 刘海原生截图，校准小表盘、行/按钮/输入布局与退出行为；首页完成 16 组语言/主题/宽度布局检查，表单和日历完成中文浅色四种宽度检查。以上是局部证据，不勾选“全部页面”或逐帧验收。
+- [x] 校准刘海/快速添加、自动增长输入、属性值与清除操作、附件画廊/预览、详情和月/周日历；按原版实现按位数字、连续表盘进度、完成反馈与实时减少动效。
+- [x] 同一隔离数据库下保存 SwiftUI / Tauri 首页、表单、详情、日历的实际窗口对照；另有 P0 刘海对照。
+- [x] Ego Lite 448 条页面矩阵、160 条附件矩阵、24 条最小高度检查通过；实际核对媒体匹配、横向溢出、底部操作。中英文、明暗、两种动效、300/340/480/600 宽覆盖见 QA 记录。
+- [x] 真实延迟保存、同名输入、版本冲突保留/读取最新、附件移除、草稿隔离、229 确认键、实时偏好保留编辑会话等行为回归；已有拖动改期/撤销、断线/旧响应测试保留。
+- [ ] 所有页面状态的原生主题/语言视觉验收，Windows 原生布局与玻璃差异。
+- [ ] 逐帧对照数字滚动、表盘波纹、切页、拖动/撤销、刘海展开与提醒堆叠。完成写入实测约 423ms；Ego rAF 约每秒一帧，采样连续性不足，不标成逐帧通过。
+- [ ] 真实鼠标文本选择、输入法候选窗口与附件粘贴等系统交互。
 
 ### P2：Windows 构建、安装与实机验证
 
-- [ ] 在对应架构环境跑完整检查/安装包构建；修复 Unix 假设、工具链、CI、NSIS 或依赖失败。先确认构建结果，再做真实系统验收。
-- [ ] 干净 Windows 10/11 x64 与 Windows 11 ARM64：离线 WebView2、无需另装 Node、原生 SQLite 实际 SQL、CLI 与 MCP stdio。
-- [ ] 多屏/负坐标/不同 DPI 100%–200%、顶部/侧边任务栏、透明命中、焦点与输入法、全屏、休眠、插拔、虚拟桌面；刘海移屏及 1.5 秒驻留。
-- [ ] 托盘退出全部 UI 后后台仍提醒；任务/周期提醒通知点击冷/热启动进入正确自定义目录；协议链接、单实例及后台启动慢时目标不丢失。
-- [ ] 同时多个运行时互斥、服务更换配置、停止等待、注册失败恢复、升级/维护/重装/卸载、CLI/PATH 清理并保留数据库。
-- [ ] 同时四条周期提醒、claim/receipt 失败或超时、系统回退、6 秒收拢、稍后提醒/今天暂停、休眠恢复，无重复投递或吞提醒。
-- [ ] 整理可安装预览产物和真实结果；构建/类型检查通过不能替代以上行为。
+- [x] x64 / ARM64 完整检查、Rust 测试、对应 Node/SQLite/helper、NSIS 构建；修复路径、文件 URL、CRLF、图标、时区、工作区 junction、模块根目录、数值 SID 与升级就绪竞态。
+- [x] 实际安装包的七组冒烟：静默安装、Node 架构/SQLite SQL、自定义中文空格目录/当前用户计划任务、包内 CLI 与 MCP、后台重启、重装恢复、卸载清理并保留数据库。
+- [x] 整理 [CI 与 x64/ARM64 预览下载](qa/desktop-p1-ui/README.md#windows-两种架构实际安装包通过)。x64 runner 为 Windows Server 2025，ARM64 为 Windows 11；不能据此宣称 Windows 10/11 的完整 GUI 通过。
+- [ ] 干净 Windows 10/11 x64、Windows 11 ARM64 离线 WebView2 首次安装及 UI 启动；不另装 Node。
+- [ ] 多屏/负坐标/100%–200% DPI、顶部/侧边任务栏、透明命中、焦点/IME、全屏、休眠、插拔、虚拟桌面、刘海移屏驻留。
+- [ ] 退出全部 UI 后系统提醒、通知冷/热启动与自定义目录路由、协议/单实例/后台慢启动。
+- [ ] 多运行时互斥和注册失败恢复的真实系统故障注入；已有模型回归不能替代系统故障检查。
+- [ ] 四条周期提醒、claim/receipt 失败/超时、系统回退、6 秒收拢、稍后/暂停、休眠补偿，无重复或吞提醒。
 
 ### P3：Windows 完整验收后完成正式 Mac 迁移
 
@@ -107,16 +108,16 @@ P0 验收：
 
 ## 在新电脑启动和检查
 
-macOS：Node 24+（当前使用 26.7.0）、Rust、Xcode 26/Swift 6；Windows：Node、Rust、MSVC C++/Windows SDK，ARM64 对应工具链。无需复制本机 `/Users/nanmi` 路径。
+macOS：Node 24+（CI 固定 26.7.0；本地 26.8.2）、Rust、Xcode 26/Swift 6；Windows：Node、Rust、MSVC C++/Windows SDK，ARM64 对应工具链。无需复制本机 `/Users/nanmi` 路径。
 
-已有仓库中先 fetch 再创建工作树；Codex 可优先使用自带工作树工具并显式指定 `origin/codex/desktop-migration-handoff`。手动等价操作如下，目录按实际情况选择：
+已有仓库中先 fetch，再检查继续分支和 worktree；优先复用适合的隔离工作树。下一位接手应使用已推送的修复分支。若同名分支已存在，检查后复用或选择另一个 `codex/` 分支，不重置已有修改。以下命令仅适用于本地分支尚不存在时：
 
 ```sh
 git fetch origin
-git worktree add -b codex/desktop-native-ui-fixes ../TodoCue-desktop-native-ui-fixes origin/codex/desktop-migration-handoff
+git worktree add -b codex/desktop-native-ui-fixes ../TodoCue-desktop-native-ui-fixes origin/codex/desktop-native-ui-fixes
 cd ../TodoCue-desktop-native-ui-fixes
 npm ci
-npm run desktop:dev
+TODOCUE_HOME=/tmp/todocue-desktop-next npm run desktop:dev
 ```
 
 浏览器：`http://127.0.0.1:5173/`；刘海：`http://127.0.0.1:5173/?surface=notch`。默认隔离数据在系统临时目录的 `todocue-desktop-development`，运行时端口 47832。原生预览默认使用相同临时目录；不要改到个人 `~/.todocue`。若并行多个工作树，先设置不同的 `TODOCUE_HOME` 并检查固定端口冲突，不能同时启动默认开发脚本。
@@ -124,7 +125,7 @@ npm run desktop:dev
 已有 `desktop:dev` 时，第二个终端启动原生预览，避免重复启动 Vite：
 
 ```sh
-npm run tauri --workspace @todocue/desktop -- dev --config '{"build":{"beforeDevCommand":""}}'
+TODOCUE_HOME=/tmp/todocue-desktop-next npm run tauri --workspace @todocue/desktop -- dev --config '{"build":{"beforeDevCommand":""}}'
 ```
 
 仅启动原生开发时，可先用隔离 `TODOCUE_HOME` 启动 `npm run dev:serve`，再启动 `npm run desktop:native`；确保原生进程与运行时使用同一目录。先读桌面 README 再运行，不要把原版生产 App 的退出/启动误当成 Preview 测试。
@@ -137,15 +138,15 @@ npm run desktop:check
 swift test --package-path apps/macos
 ```
 
-Windows 包在对应 Windows 主机运行 `npm run windows:preview`。当前配置包含手动/PR 触发的 CI，不因仅 push 此分支自动触发；未创建 PR，也未启动远程构建。若要发布或创建 PR，遵循当次用户授权，不直接合并主分支。
+Windows 包在对应 Windows 主机运行 `npm run windows:preview`。CI 已由 PR #17 触发并通过；手动触发可重新获取到期产物。安装冒烟脚本只能在可弃用 Windows runner 执行，会安装/卸载预览、登记服务和修改该测试用户的 CLI/PATH；详见桌面 README。PR 不直接合并，预览不提升为正式发布。
 
 ## 检查证据与限制
 
-- 原交接机器：160 个 Vitest、19 个 Node 测试、Rust 16 个测试、Swift 275 个测试（4 个跳过）。本轮机器：164 个 Vitest、19 个 Node 测试、CLI/MCP 冒烟、release check、desktop:check 的前端构建与 Rust 16 个测试通过；macOS debug Preview 和 SwiftUI 对照 App 打包成功。
-- 本轮 Swift 测试缺 `XCTest`（只有 Command Line Tools），未运行通过。Windows 目标标准库/rustup 缺失，无本轮 Windows 构建结果；原交接的 x64/ARM64 helper 类型检查与 Windows SDK `assert.h` 限制保留为历史证据。无安装/通知/计划任务实测。
-- 真实浏览器已覆盖创建/完成/撤销/编辑、延迟保存与草稿、附件移除、旧完成响应、精确改期确认和 DELETE 代理。使用 Ego Lite；浏览器验证不替代原生窗口交互验证。
-- 原交接有外部点击收起观察；本轮完整输入/回车创建、Esc 与应用内打开主面板路径已通过。真实鼠标外部点击和输入法候选窗口仍待复核，详见本轮 QA 记录。
-- 先前的截图临时文件、诊断日志和隔离测试数据库不在 Git 中。仓库保存了首页预览截图；需要新证据时重新生成，不引用另一台电脑不存在的绝对路径。
+- 本地 `npm run check`：175 个 Vitest（25 文件）、21 个脚本测试、CLI/MCP 冒烟、release check 通过；`desktop:check` 前端构建和 Rust 11+5 通过；最终 macOS Preview 与原 SwiftUI 对照 App 构建通过。
+- `fdb8ce3` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649) 全通过：Linux 完整检查、Swift Apple Silicon 275（4 跳过）/Intel 275（11 跳过），均 0 失败。Intel VM 跳过无 GPU 的原生动画检查，截图测试需 opt-in。本地 CLT 缺 XCTest 的限制仍如实保留。
+- [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723) 全通过：Windows 两种架构实际包/后台七组检查，macOS 前端/Rust 检查。Windows 平台的 Vitest 174 通过/1 跳过、脚本 16 通过/5 跳过；平台专属跳过不与本地计数混淆。
+- 实际浏览器/原生证据与截图、布局 JSON 已保存到仓库的两份 QA 记录；没有保存连接 token 或测试数据库。浏览器不替代原生窗口交互，AX 不替代物理鼠标。
+- 本机虚拟刘海完整键盘/粘贴/回车与箭头延迟响应输入通过；真实外部鼠标、候选窗口及 Windows GUI 仍需按清单独立验收。Mac Intel Tauri 包、EventKit 及正式切换尚未完成。
 
 ## 接手时的输出要求
 

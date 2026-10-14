@@ -1,0 +1,218 @@
+[
+  {
+    "language": "zh-CN",
+    "width": 300,
+    "page": "today",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 300,
+    "page": "detail",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 300,
+    "page": "form",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 300,
+    "page": "schedule-popover",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 300,
+    "page": "calendar-short",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 300,
+    "page": "calendar-week",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 600,
+    "page": "today",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 600,
+    "page": "detail",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 600,
+    "page": "form",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 600,
+    "page": "schedule-popover",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 600,
+    "page": "calendar-short",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "zh-CN",
+    "width": 600,
+    "page": "calendar-week",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 300,
+    "page": "today",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 300,
+    "page": "detail",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 300,
+    "page": "form",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 300,
+    "page": "schedule-popover",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 300,
+    "page": "calendar-short",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 300,
+    "page": "calendar-week",
+    "height": 360,
+    "scroll": 300,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 600,
+    "page": "today",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 600,
+    "page": "detail",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 600,
+    "page": "form",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 600,
+    "page": "schedule-popover",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 600,
+    "page": "calendar-short",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  },
+  {
+    "language": "en",
+    "width": 600,
+    "page": "calendar-week",
+    "height": 360,
+    "scroll": 600,
+    "footerVisible": true,
+    "outside": []
+  }
+]

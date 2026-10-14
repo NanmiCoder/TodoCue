@@ -1,0 +1,31 @@
+{
+  "motionSampling": {
+    "status": "inconclusive",
+    "reason": "requestAnimationFrame samples arrived approximately every 1000ms; only endpoints were captured",
+    "writeAfter": 423.3,
+    "responseAfter": 475.5
+  },
+  "browserVisibility": {
+    "visibilityState": "visible",
+    "focused": false
+  },
+  "livePreference": {
+    "title": "live motion preference draft",
+    "opaque": "rgb(42, 44, 48)"
+  },
+  "reducedPopover": {
+    "x": 0,
+    "y": 0,
+    "scale": 1
+  },
+  "ime229": {
+    "writes": 0,
+    "form": true
+  },
+  "conflict": {
+    "draft": "live motion preference draft",
+    "error": "The task changed elsewhere. Your draft is kept.Reload latest task"
+  },
+  "pendingFocus": true,
+  "pendingDraft": "browser draft while pending"
+}
