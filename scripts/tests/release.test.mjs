@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { checkRelease, nextVersion, prepareRelease } from '../release.mjs';
 
 const gitEnv = { ...process.env, GIT_AUTHOR_NAME: 'Release Test', GIT_AUTHOR_EMAIL: 'test@example.invalid',
@@ -88,7 +89,7 @@ test('release commit synchronizes packages, workspace lock and runtime before an
   const scriptRoot = path.resolve(import.meta.dirname, '..');
   execFileSync(process.execPath, ['--input-type=module', '-e',
     'const { prepareRelease } = await import(process.env.RELEASE_SCRIPT); prepareRelease(process.env.RELEASE_FIXTURE, "patch");'],
-    { env: { ...gitEnv, RELEASE_SCRIPT: path.join(scriptRoot, 'release.mjs'), RELEASE_FIXTURE: directory }, stdio: 'pipe' });
+    { env: { ...gitEnv, RELEASE_SCRIPT: pathToFileURL(path.join(scriptRoot, 'release.mjs')).href, RELEASE_FIXTURE: directory }, stdio: 'pipe' });
   assert.equal(checkRelease(directory, 'v0.1.1').version, '0.1.1');
   assert.equal(read('package-lock.json').packages['node_modules/external'].integrity, 'untouched');
   assert.equal(git(directory, 'cat-file', '-t', 'v0.1.1'), 'tag');
@@ -117,7 +118,7 @@ test('desktop installer, Cargo manifest and only its lock entry advance with the
   write('apps/desktop/src-tauri/Cargo.lock', 'version = 4\n\n[[package]]\nname = "third-party"\nversion = "0.1.0"\n\n[[package]]\nname = "todocue-desktop"\nversion = "0.1.0"\n');
   git(directory, 'add', '.'); git(directory, 'commit', '-qm', 'desktop fixture');
   write('release-notes/v0.1.1.md', 'Desktop release');
-  execFileSync(process.execPath, ['--input-type=module', '-e', 'const { prepareRelease } = await import(process.env.RELEASE_SCRIPT); prepareRelease(process.env.RELEASE_FIXTURE, "patch");'], { env: { ...gitEnv, RELEASE_SCRIPT: path.resolve(import.meta.dirname, '../release.mjs'), RELEASE_FIXTURE: directory }, stdio: 'pipe' });
+  execFileSync(process.execPath, ['--input-type=module', '-e', 'const { prepareRelease } = await import(process.env.RELEASE_SCRIPT); prepareRelease(process.env.RELEASE_FIXTURE, "patch");'], { env: { ...gitEnv, RELEASE_SCRIPT: pathToFileURL(path.resolve(import.meta.dirname, '../release.mjs')).href, RELEASE_FIXTURE: directory }, stdio: 'pipe' });
   assert.equal(checkRelease(directory).version, '0.1.1');
   assert.equal(read('apps/desktop/src-tauri/tauri.conf.json').version, '0.1.1');
   const cargo = fs.readFileSync(path.join(directory, 'apps/desktop/src-tauri/Cargo.toml'), 'utf8');
