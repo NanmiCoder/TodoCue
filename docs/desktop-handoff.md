@@ -4,6 +4,8 @@
 
 本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，已推送并建立 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。最终代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
 
+**最新独立审查（审查代码 `09b21da`）：正式分发仍被已确认的 P1 缺陷阻挡。** 三个 subagent 分别审查原生交互、SwiftUI 对照与分发链路，主代理再用 Ego Lite/真实 API 复现。发现自定义目录 CLI 回落默认库、bootstrap 丢服务端口、日历翻页保存到旧日期、完整表单普通 Return 提前保存；另有 Pin 首击无效、图片缩小等 P2/P3。见 [独立审查及证据](qa/desktop-p1-ui/README.md#2026-10-14三路独立代码审查)。这些尚未修复；六个 CI job 全绿不等于正式分发验收或完全复刻。
+
 ## 代码从哪里继续
 
 - 仓库：<https://github.com/NanmiCoder/TodoCue>。

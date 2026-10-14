@@ -91,3 +91,29 @@ CI 暴露并修复了通知助手平台路径、动态导入文件 URL、Cargo C
 `runWindowsBundler` 现在只对包含该 Tauri 打包阶段错误的传输断连最多尝试三次，间隔 2/4 秒；编译、校验和、NSIS 等确定性错误立即失败，耗尽仍返回原退出状态。三个真实子进程回归验证“断连后成功产物”“确定性错误不重试”“反复断连限次失败”。本地完整检查仍为 175 个 Vitest，脚本增至 24 个。最终代码 `7ad1b95` 的 [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 与 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 均已全部通过。Windows 两种架构各七组实际安装冒烟再次通过，脚本为 19 通过/5 跳过；具体 job、产物和七组结果保存于 [最终代码 CI 摘要](ci-code-7ad1b95.json)。
 
 同时淘汰 CI 中仅 214 字节的旧 Rust 缓存，使用 v2 key，并要求 Rust 检查成功后才保存，避免构建前失败留下空缓存。截图扩展名已与原生 JPEG / 浏览器 PNG 实际格式匹配，原像素未改变。
+
+## 2026-10-14：三路独立代码审查
+
+审查对象 `09b21da`；该提交的六个 CI job 均通过（[Desktop](https://github.com/NanmiCoder/TodoCue/actions/runs/38573901586)、[Quality](https://github.com/NanmiCoder/TodoCue/actions/runs/38573901600)）。构建/布局通过不代表所有行为正确。本次分别启动原生交互、SwiftUI 体验对照、安装/后台分发三个独立 subagent，只读审查整套迁移代码及本轮 diff；主代理再复核代码并用 Ego Lite 对真实 API 重现。没有将发现的问题改写成已修复。
+
+结论：Windows x64/ARM64 有受控预览安装包条件，**尚不具备迁移后共享客户端的正式双平台分发条件，尚未完全复刻 SwiftUI**。共享 macOS 的 Tauri 包没有 runtime resources，自动 bootstrap 只有 Windows 分支，仍需外部运行时；Intel 共享包、正式签名/公证、EventKit、偏好迁移和生产切换未完成。原 SwiftUI macOS 正式客户端与共享客户端应分别判断。
+
+本次主代理使用新的隔离 `TODOCUE_HOME=/tmp/todocue-review-20261014`、47832/5173，未运行安装器或操作个人库。复现数据与结果见 [JSON](review-behavior-09b21da.json)、[日历](review-calendar-09b21da.png)、[图片网格](review-gallery-09b21da.png)、[固定按钮](review-pin-09b21da.png)。图片中的 Ego 工具标识不是产品内容。
+
+| 优先级 | 问题、触发与影响 | 当前代码 / 证据边界 |
+| --- | --- | --- |
+| P1 | 自定义 home 的已安装 CLI 没有绑定所属目录。新终端无 TODOCUE_HOME，执行 PATH 上的 todocue 会读默认 .todocue，可能操作另一库；现有安装测试每次显式 --home，掩盖普通调用 | [cli.rs](../../../apps/desktop/src-tauri/src/bin/cli.rs#L19)、[bootstrap.ts](../../../packages/cli/src/bootstrap.ts#L64)。独立代理在临时目录编译原 shim，用实际 resolveHome 做子进程探针确认回落；未操作真实 Windows 用户库 |
+| P1 | GUI bootstrap 重建 spec 时丢失用户安装的 port，完整 JSON 比较触发重装，覆盖 --port 47832 为默认 47831；另一 home 占用默认端口时启动失败 | [bootstrap.ts](../../../packages/cli/src/bootstrap.ts#L63)。代码确定路径，尚未做 Windows 故障注入；应保留旧 port 并覆盖 bootstrap 回归 |
+| P1 | 日历翻页只改 anchor，selected / 快速添加目标不变。实测从 Oct 2026 翻到 Nov 2026，议程仍 Today，真实新任务 scheduledDate=2026-10-14。周议程点击也没有更新 selected | [pages.tsx](../../../apps/desktop/src/pages.tsx#L195)、[周议程](../../../apps/desktop/src/pages.tsx#L326)。月翻页和实际创建已动态确认；周选择为源代码对照。Swift AppModel.stepCalendar 同步移动选择 |
+| P1 | 完整表单标题普通 Return 直接 save，项目弹层普通 Return 又通过表单默认提交创建任务；原版标题只结束编辑，项目只确认属性，保存使用 Cmd+Return | [Composer.tsx](../../../apps/desktop/src/Composer.tsx#L298)、[项目输入](../../../apps/desktop/src/Composer.tsx#L445)。两条真实创建请求和任务均已确认；不是合成 IME 键测试 |
+| P2 | 悬停展开后首次点击 Pin 无效：捕获阶段先 setPinned(true)，click 再按 !pinned 反转。实测前后 aria-pressed 都 false，指针离开后快览收起 | [Notch.tsx](../../../apps/desktop/src/Notch.tsx#L514)、[Pin click](../../../apps/desktop/src/Notch.tsx#L569)。真实 Ego hover/mouse click 复现；不代替原生物理外部点击验收 |
+| P2 | 单张已有图片没有撑满表单网格，旧 align-items:center 使 column flex 内网格收缩。实测容器255px，网格86.6px；原生配对图也能看到约71pt的小图而非原版整列图 | [style.css](../../../apps/desktop/src/style.css#L1552)、[后续覆盖](../../../apps/desktop/src/style.css#L2032)。截图与 DOM computed geometry 确认 |
+| P2 | 同一 Windows home 的正斜杠、尾分隔符和尾部点得到不同 Rust ID，Node path.resolve 后 ID 相同；单实例、Run 项和通知登记不一致，可重复开窗或留下启动项 | [windows_home.rs](../../../apps/desktop/src-tauri/src/windows_home.rs#L6)、[windows-integration.ts](../../../packages/cli/src/windows-integration.ts#L15)。独立代理及主代理词法 hash 探针确认；完整通知/卸载系统路径未实机复验 |
+| P2 | POSTINSTALL 只 Pop 启动服务的退出码，不检查失败；升级已停旧服务后恢复失败，安装器仍完成，后台提醒离线 | [windows-hooks.nsh](../../../apps/desktop/src-tauri/windows-hooks.nsh#L15)。代码确定异常路径，未做真实计划任务故障注入 |
+| P2 | 第四条新任务提醒变成不可操作的 +1：新 cue 尾部追加并设置 featuredKey，但渲染只取前三条；原版保留 featured，即使位于前三条之外 | [Notch.tsx](../../../apps/desktop/src/Notch.tsx#L865)、[NotchStackView.swift](../../../apps/macos/Sources/TodoCue/NotchStackView.swift#L13)。静态数据流确认，未新增原生并发提醒复测 |
+| P2 | 当天精确 dueAt 已过，详情仍显示 To do，元数据只按日期判断，不呈现原版红色逾期；日历也缺相应日期状态 | [Detail.tsx](../../../apps/desktop/src/Detail.tsx#L130)、[metadata.tsx](../../../apps/desktop/src/metadata.tsx#L64)。Swift/React 逻辑确认，未新增实时逾期 UI 测试 |
+| P2 | 普通查看面板与请求编辑统一调用宿主/WebView focus；macOS Tao 会激活应用，偏离原版仅编辑请求取 key 的行为 | [lib.rs](../../../apps/desktop/src-tauri/src/lib.rs#L341)、[SidePanelController.swift](../../../apps/macos/Sources/TodoCue/SidePanelController.swift#L165)。代码确定激活调用，另一应用插入点的原生复验待完成 |
+| P2 | 托盘/菜单栏禁用左击菜单，却没有左击处理；禁用刘海且无快捷键时，左击图标无效，只能右击菜单。原版普通点击即可打开菜单 | [lib.rs](../../../apps/desktop/src-tauri/src/lib.rs#L825)。本地 tray-icon 实现与 Swift 原码确认，未新增系统托盘实测 |
+| P3 | 详情头部高度和属性文字颜色仍有静态偏差：87pt detail header 下移内容；active chip 整行橙色，原版仅图标着色 | [style.css](../../../apps/desktop/src/style.css#L2011)、[active chip](../../../apps/desktop/src/style.css#L1505)。配对截图/样式对照，不能归入字体或玻璃差异 |
+
+以上问题在本次审查时均未修复。优先清除四项 P1，再回归 P2 交互与安装故障路径；修复后重新验证，不能把本页旧 CI 或布局计数当成修复验收。悬停展开可能抢同应用编辑焦点的另一候选，仍需原生动态证据，本次未列为确认 bug。逐帧、候选窗口、物理外部点击和 Windows GUI/DPI/多屏仍保持未验证。
