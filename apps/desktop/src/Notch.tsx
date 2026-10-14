@@ -777,6 +777,7 @@ export function Notch() {
                         };
                       const operation = quickRequest.current.begin(payload);
                       if (!operation) return;
+                      if (ownsFocus) quickInput.current?.focus();
                       void taskAction(async () => {
                         try {
                           await client.createTask(payload, { idempotencyKey: operation.key });

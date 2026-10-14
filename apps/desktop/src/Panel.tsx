@@ -1095,6 +1095,8 @@ export function Panel() {
                       payload = { title, scheduledDate: addDate };
                     const operation = quickRequest.current.begin(payload);
                     if (!operation) return;
+                    // Disabling the submit button can move focus to BODY before the response.
+                    if (ownsFocus) quickInput.current?.focus();
                     void run(async () => {
                       try {
                         await client.createTask(payload, { idempotencyKey: operation.key });

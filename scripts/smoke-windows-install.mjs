@@ -97,7 +97,15 @@ try {
 
   // Reinstall the same preview to exercise the installer maintenance hooks.
   await run(installer, ["/S", `/D=${app}`], 300000);
-  const afterUpgrade = await command("service", "status");
+  // /Run acknowledges scheduling before the host/Node health endpoint is ready.
+  // Poll without starting it ourselves, so a broken installer resume hook still fails.
+  const readyBy = Date.now() + 15000;
+  let afterUpgrade;
+  do {
+    afterUpgrade = await command("service", "status");
+    if (afterUpgrade.launchAgent.loaded) break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  } while (Date.now() < readyBy);
   assert.equal(afterUpgrade.launchAgent.installed, true);
   assert.equal(afterUpgrade.launchAgent.loaded, true);
   assert.equal((await command("show", created.task.id)).task.id, created.task.id);
