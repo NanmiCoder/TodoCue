@@ -24,7 +24,8 @@ export async function windowsInstall(paths: RuntimePaths, spec: WindowsRuntimeSp
   const { stdout } = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value"], { windowsHide: true });
   const sid = stdout.trim();
   fs.mkdirSync(paths.home, { recursive: true });
-  await exec("icacls.exe", [paths.home, "/inheritance:r", "/grant:r", `${sid}:(OI)(CI)F`], { windowsHide: true });
+  // icacls requires * for a numeric SID; without it the SID is treated as an account name.
+  await exec("icacls.exe", [paths.home, "/inheritance:r", "/grant:r", `*${sid}:(OI)(CI)F`], { windowsHide: true });
   const file = path.join(paths.home, "runtime-task.xml");
   fs.writeFileSync(file, "\uFEFF" + taskXml(spec, sid), "utf16le");
   const registered = await taskRegistered(paths);
