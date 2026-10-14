@@ -32,6 +32,15 @@ jobs:
           node-version: '26.7.0'
           cache: npm
       - run: rustup update stable
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: rust-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: desktop-rust-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml') }}
+          restore-keys: desktop-rust-${{ runner.os }}-${{ runner.arch }}-
       - run: npm ci --ignore-scripts
       - run: npm run desktop:build
       - run: npm run check
@@ -42,6 +51,14 @@ jobs:
           name: todocue-windows-${{ matrix.arch }}-preview
           path: apps/desktop/src-tauri/target/*/release/bundle/nsis/*
           if-no-files-found: error
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
   macos:
     runs-on: macos-26
     timeout-minutes: 30
@@ -52,5 +69,22 @@ jobs:
           node-version: '26.7.0'
           cache: npm
       - run: rustup update stable
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: rust-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: desktop-rust-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml') }}
+          restore-keys: desktop-rust-${{ runner.os }}-${{ runner.arch }}-
       - run: npm ci --ignore-scripts
       - run: npm run desktop:check
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
