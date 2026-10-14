@@ -2072,6 +2072,13 @@ body[data-dragging="true"] {
   height: 6px;
   align-items: center;
 }
+.calendar-grid .day-dots i { width: 5px; height: 5px; }
+.calendar-grid .day-dots i.overflow { width: 6px; height: 6px; }
+.calendar-grid .day-dots i.done { background: transparent; border: 1.4px solid var(--muted); }
+.calendar-grid .day-dots i.ghost { border-width: 1.4px; }
+.calendar-grid .day-dots i.deadline { width: 2px; height: 6px; background: #d64b43; }
+.calendar-history { border-top: 0.5px solid #ffffff24; margin-top: 10px; padding-top: 5px; }
+.calendar-history-toggle { display: flex; align-items: center; gap: 7px; width: 100%; padding: 5px 4px; color: var(--muted); font-size: 12px; text-align: left; }
 .calendar-grid .month-days button.selected > span {
   font-weight: 600;
 }

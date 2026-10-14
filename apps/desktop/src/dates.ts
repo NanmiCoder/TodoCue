@@ -46,6 +46,13 @@ export function planDate(task: Task): string | null {
     (task.dueAt ? dateOf(task.dueAt, task.timezone) : null)
   );
 }
+export function calendarBucket(tasks: Task[], day: string) {
+  const planned = tasks.filter(task => task.status === "todo" && planDate(task) === day);
+  const history = tasks.filter(task => task.status !== "todo" && planDate(task) === day);
+  const deadlines = tasks.filter(task => task.status === "todo" && planDate(task) !== day &&
+    (task.dueDate ?? (task.dueAt ? dateOf(task.dueAt, task.timezone) : null)) === day);
+  return { planned, history, deadlines };
+}
 export function shiftDate(date: string, days: number): string {
   const value = new Date(`${date}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);

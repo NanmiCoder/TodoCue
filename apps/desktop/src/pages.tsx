@@ -30,6 +30,7 @@ import {
   calendarDays,
   weekdayLabels,
   calendarTitle,
+  calendarBucket,
 } from "./dates.js";
 import { motionTokens, spring } from "./tokens.js";
 import { LatestRequest } from "./model.js";
@@ -111,6 +112,7 @@ export function CalendarPage({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState<Record<string, boolean>>({});
   const [confirm, setConfirm] = useState<{ task: Task; date: string } | null>(
     null,
   );
@@ -177,15 +179,18 @@ export function CalendarPage({
     })),
   );
   const planned = (day: string) =>
-    visible.filter((task) => planDate(task) === day);
+    calendarBucket(visible, day).planned;
+  const history = (day: string) => calendarBucket(visible, day).history;
   const deadlines = (day: string) =>
-    activeTasks.filter(
-      (task) =>
-        planDate(task) !== day &&
-        (task.dueDate ??
-          (task.dueAt ? dateOf(task.dueAt, task.timezone) : null)) === day,
-    );
+    calendarBucket(visible, day).deadlines;
   const bucket = (day: string) => [...planned(day), ...deadlines(day)];
+  const showsHistory = (day: string) => historyExpanded[day] ?? (bucket(day).length === 0 && !ghosts.some(ghost => ghost.date === day));
+  const marks = (day: string) => [
+    ...deadlines(day).map(task => ({ key: `due:${task.id}`, kind: "deadline" })),
+    ...planned(day).map(task => ({ key: task.id, kind: "todo" })),
+    ...history(day).map(task => ({ key: task.id, kind: "done" })),
+    ...ghosts.filter(ghost => ghost.date === day).map((_, index) => ({ key: `ghost:${index}`, kind: "ghost" })),
+  ];
   function page(direction: number) {
     if (span === "week") setAnchor(shiftDate(anchor, 7 * direction));
     else {
@@ -289,24 +294,21 @@ export function CalendarPage({
                   }}
                   aria-label={day}
                   aria-pressed={selected === day}
-                  aria-description={`${dayLabel(day, language, today)} · ${bucket(day).length} ${zh ? "件安排" : "planned"}`}
+                  aria-description={`${dayLabel(day, language, today)} · ${planned(day).length} ${zh ? "待办" : "planned"} · ${deadlines(day).length} ${zh ? "截止" : "due"} · ${history(day).length} ${zh ? "历史" : "completed"}`}
                 >
                   <span className="calendar-date">
                     {selected === day && <motion.i className="calendar-selection" layoutId={reduced ? undefined : `calendar-selection:${from}`} transition={reduced ? { duration: 0.12 } : motionTokens.snap} />}
                     <span>{Number(day.slice(-2))}</span>
                   </span>
                   <div className="day-dots">
-                    {bucket(day)
+                    {marks(day)
                       .slice(0, 3)
-                      .map((task) => (
+                      .map((mark, index) => (
                         <i
-                          key={task.id}
-                          className={task.status === "done" ? "done" : ""}
+                          key={mark.key}
+                          className={`${mark.kind} ${marks(day).length > 3 && index === 2 ? "overflow" : ""}`}
                         />
                       ))}
-                    {ghosts.some((ghost) => ghost.date === day) && (
-                      <i className="ghost" />
-                    )}
                   </div>
                 </button>
               ))}
@@ -337,9 +339,10 @@ export function CalendarPage({
             }}
           >
             <h3 className={day === today ? "is-today" : ""}>
-              {dayLabel(day, language, today)} <span>{bucket(day).length}</span>
+              {dayLabel(day, language, today)} {planned(day).length > 0 && <span>{planned(day).length}</span>}
             </h3>
             {bucket(day).length === 0 &&
+              history(day).length === 0 &&
               !ghosts.some((ghost) => ghost.date === day) && (
                 <p className="muted">
                   {zh ? "这天没有安排" : "Nothing planned"}
@@ -395,6 +398,17 @@ export function CalendarPage({
                   <span>{zh ? "待生成" : "Not generated"}</span>
                 </div>
               ))}
+            {history(day).length > 0 && <div className="calendar-history">
+              <button type="button" className="calendar-history-toggle" aria-expanded={showsHistory(day)}
+                aria-label={zh ? `${showsHistory(day) ? "收起" : "展开"}已完成 ${day}` : `${showsHistory(day) ? "Collapse" : "Expand"} completed ${day}`}
+                onClick={() => setHistoryExpanded(current => ({ ...current, [day]: !showsHistory(day) }))}>
+                <Icon name="chevron" size={10} style={{ transform: showsHistory(day) ? "rotate(90deg)" : undefined }} />
+                {zh ? "已完成" : "Completed"} <span>{history(day).length}</span>
+              </button>
+              {showsHistory(day) && history(day).map(task => <TaskRow key={task.id} task={task} today={today}
+                disabled={!online || task.status !== "done"} onOpen={onOpen}
+                onComplete={async task => { const result = await onComplete(task); if (result !== false) setRevision(value => value + 1); return result; }} />)}
+            </div>}
           </section>
         ))}
         </CalendarSwap>

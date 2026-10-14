@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { calendarDays, calendarFirstWeekday, calendarTitle, weekdayLabels } from "../src/dates.js";
+import { calendarBucket, calendarDays, calendarFirstWeekday, calendarTitle, weekdayLabels } from "../src/dates.js";
+import { makeEngine } from "../../../packages/engine/test/helpers.js";
 
 describe("calendar region and civil dates", () => {
+  it("counts open plans separately from history and deadlines without doubling due-only work", () => {
+    const f = makeEngine({ tz: "UTC" });
+    try {
+      const planned = f.engine.createTask({ title: "Planned", scheduledDate: "2026-10-14" }).task;
+      const otherDay = f.engine.createTask({ title: "Due elsewhere", scheduledDate: "2026-10-13", dueDate: "2026-10-14" }).task;
+      const dueOnly = f.engine.createTask({ title: "Due only", dueDate: "2026-10-14" }).task;
+      const finished = f.engine.createTask({ title: "Finished", scheduledDate: "2026-10-14", dueDate: "2026-10-15" }).task;
+      const done = f.engine.completeTask(finished.id);
+      const tasks = [planned, otherDay, dueOnly, done];
+      const bucket = calendarBucket(tasks, "2026-10-14");
+      expect(bucket.planned.map(task => task.id)).toEqual([planned.id, dueOnly.id]);
+      expect(bucket.history.map(task => task.id)).toEqual([done.id]);
+      expect(bucket.deadlines.map(task => task.id)).toEqual([otherDay.id]);
+      expect(calendarBucket(tasks, "2026-10-15").deadlines).toEqual([]);
+    } finally { f.db.close(); }
+  });
   it("keeps Chinese Monday first and follows the English user's region", () => {
     expect(calendarFirstWeekday("zh-CN", "en-US")).toBe(1);
     expect(calendarFirstWeekday("en", "en-US")).toBe(7);
