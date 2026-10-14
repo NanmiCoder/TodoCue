@@ -1,6 +1,6 @@
 # 共享 UI 校准与 Windows 安装验证
 
-2026-10-14。代码基准 `fdb8ce3`，分支 `codex/desktop-native-ui-fixes`，原交接提交 `2bf7349`。[草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 的目标分支是 `codex/desktop-migration-handoff`。没有合并主分支、升级版本或发布正式包。
+2026-10-14。UI 代码基准 `fdb8ce3`，分支 `codex/desktop-native-ui-fixes`，原交接提交 `2bf7349`。[草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 的目标分支是 `codex/desktop-migration-handoff`。没有合并主分支、升级版本或发布正式包。
 
 本机 Apple Silicon / macOS 26；全部本地 UI 操作使用 `TODOCUE_HOME=/tmp/todocue-desktop-native-ui-fixes-20261014`，运行时端口 47832，Ego Lite 端口 5173。没有使用个人生产数据库。报告只保存布局/行为测量和测试文本，不保存连接 token 或数据库。
 
@@ -74,7 +74,7 @@ CI 暴露并修复了通知助手平台路径、动态导入文件 URL、Cargo C
 
 ## 质量检查与剩余边界
 
-- 本地 `npm run check`：25 文件 / 175 个 Vitest、21 个脚本测试、CLI/MCP 冒烟和 release check 通过；版本仍为 0.5.3。
+- 本地 `npm run check`：25 文件 / 175 个 Vitest、24 个脚本测试、CLI/MCP 冒烟和 release check 通过；版本仍为 0.5.3。
 - `desktop:check`：前端构建及 Rust 11+5 测试通过；最终源码 macOS debug Preview 包构建通过。Windows 的 Rust 测试额外运行 3 个平台测试，两种架构都通过。
 - [Quality gates](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649)：Linux 完整检查通过；完整 Xcode 26.2 的 Swift Apple Silicon 275 个测试（4 跳过）、Intel 275 个（11 跳过）均 0 失败。Intel VM 无可用 GPU，跳过原生动画窗口测试；截图测试为显式 opt-in。本地只有 CLT，缺 XCTest 的限制没有被写成通过。
 - Windows 的 Vitest 为 174 通过/1 跳过，脚本为 16 通过/5 跳过，平台专属跳过与本地数字不同；不能把跨架构构建写成全部 GUI 行为通过。
@@ -83,3 +83,11 @@ CI 暴露并修复了通知助手平台路径、动态导入文件 URL、Cargo C
 - macOS Intel 的 Tauri 包、真实硬件刘海、EventKit 桥接、偏好导入和生产客户端切换仍是后续迁移项。
 
 下一次验证先跑 [交接清单](../../desktop-handoff.md) 中这些实机项；不重复已通过的打包修复，也不以缺设备要求重写任务引擎、API 或数据库。
+
+## 打包下载的后续稳定性修正
+
+仅文档变更的 `b235561` 复跑中，ARM64 的编译/测试通过，但下载 Microsoft WebView2 时 `failed to bundle project: Peer disconnected`，未进入安装冒烟。此故障与更早的 ARM64 下载断连重复，不能把该次失败隐藏成安装通过。原 `fdb8ce3` 的两个完整成功记录和产物仍有效。
+
+`runWindowsBundler` 现在只对包含该 Tauri 打包阶段错误的传输断连最多尝试三次，间隔 2/4 秒；编译、校验和、NSIS 等确定性错误立即失败，耗尽仍返回原退出状态。三个真实子进程回归验证“断连后成功产物”“确定性错误不重试”“反复断连限次失败”。本地完整检查仍为 175 个 Vitest，脚本增至 24 个。最终 CI 是否通过以 PR 检查为准，不能沿用旧成功来覆盖新的失败。
+
+同时淘汰 CI 中仅 214 字节的旧 Rust 缓存，使用 v2 key，并要求 Rust 检查成功后才保存，避免构建前失败留下空缓存。截图扩展名已与原生 JPEG / 浏览器 PNG 实际格式匹配，原像素未改变。

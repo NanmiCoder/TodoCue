@@ -55,7 +55,7 @@
 
 ## 质量检查和限制
 
-- 最新本地 `npm run check`：175 个 Vitest（25 文件）、21 个发布/打包脚本测试、CLI/MCP 冒烟、release check 通过。
+- 最新本地 `npm run check`：175 个 Vitest（25 文件）、24 个发布/打包脚本测试、CLI/MCP 冒烟、release check 通过。
 - `npm run desktop:check`：TypeScript/Vite 构建、Rust 11+5 个测试通过；最终 macOS debug Preview 构建通过；SwiftUI / notifier 对照 App 构建通过。
 - 本地只有 CLT，Swift 缺 XCTest，未写成本地通过；本轮 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649) 使用 Xcode 26.2，Apple Silicon Swift 275（4 跳过）、Intel 275（11 跳过）均 0 失败。Intel VM GPU/opt-in 截图限制见 P1 记录。
 - 本轮 [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723) Windows x64/ARM64 实际 NSIS 构建、安装/CLI/MCP/计划任务/后台重启/重装恢复/卸载保留数据库全部通过；下载和报告见 P1 记录。Windows GUI/通知点击并未据此标成通过。

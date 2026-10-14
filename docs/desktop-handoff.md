@@ -90,7 +90,7 @@ P0 验收：
 
 ### P2：Windows 构建、安装与实机验证
 
-- [x] x64 / ARM64 完整检查、Rust 测试、对应 Node/SQLite/helper、NSIS 构建；修复路径、文件 URL、CRLF、图标、时区、工作区 junction、模块根目录、数值 SID 与升级就绪竞态。
+- [x] x64 / ARM64 完整检查、Rust 测试、对应 Node/SQLite/helper、NSIS 构建；修复路径、文件 URL、CRLF、图标、时区、工作区 junction、模块根目录、数值 SID 与升级就绪竞态；后续为重复 WebView2 断连加三次限次重试，并淘汰空 Rust 缓存。
 - [x] 实际安装包的七组冒烟：静默安装、Node 架构/SQLite SQL、自定义中文空格目录/当前用户计划任务、包内 CLI 与 MCP、后台重启、重装恢复、卸载清理并保留数据库。
 - [x] 整理 [CI 与 x64/ARM64 预览下载](qa/desktop-p1-ui/README.md#windows-两种架构实际安装包通过)。x64 runner 为 Windows Server 2025，ARM64 为 Windows 11；不能据此宣称 Windows 10/11 的完整 GUI 通过。
 - [ ] 干净 Windows 10/11 x64、Windows 11 ARM64 离线 WebView2 首次安装及 UI 启动；不另装 Node。
@@ -142,7 +142,7 @@ Windows 包在对应 Windows 主机运行 `npm run windows:preview`。CI 已由 
 
 ## 检查证据与限制
 
-- 本地 `npm run check`：175 个 Vitest（25 文件）、21 个脚本测试、CLI/MCP 冒烟、release check 通过；`desktop:check` 前端构建和 Rust 11+5 通过；最终 macOS Preview 与原 SwiftUI 对照 App 构建通过。
+- 本地 `npm run check`：175 个 Vitest（25 文件）、24 个脚本测试、CLI/MCP 冒烟、release check 通过；`desktop:check` 前端构建和 Rust 11+5 通过；最终 macOS Preview 与原 SwiftUI 对照 App 构建通过。
 - `fdb8ce3` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490649) 全通过：Linux 完整检查、Swift Apple Silicon 275（4 跳过）/Intel 275（11 跳过），均 0 失败。Intel VM 跳过无 GPU 的原生动画检查，截图测试需 opt-in。本地 CLT 缺 XCTest 的限制仍如实保留。
 - [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38557490723) 全通过：Windows 两种架构实际包/后台七组检查，macOS 前端/Rust 检查。Windows 平台的 Vitest 174 通过/1 跳过、脚本 16 通过/5 跳过；平台专属跳过不与本地计数混淆。
 - 实际浏览器/原生证据与截图、布局 JSON 已保存到仓库的两份 QA 记录；没有保存连接 token 或测试数据库。浏览器不替代原生窗口交互，AX 不替代物理鼠标。
