@@ -3,16 +3,17 @@
   "version": "0.5.3",
   "private": true,
   "type": "module",
-  "description": "TodoCue: local task runtime with a macOS notch/side-panel client, CLI and MCP.",
+  "description": "TodoCue: local task runtime with native macOS and shared Tauri desktop clients, CLI and MCP.",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/desktop"
   ],
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
-    "clean": "rm -rf packages/*/dist packages/*/tsconfig.tsbuildinfo",
+    "clean": "node scripts/clean.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b tsconfig.build.json --noEmit",
@@ -26,7 +27,12 @@
     "install:local": "npm run build && node packages/cli/dist/index.js install",
     "test:smoke": "node scripts/smoke.mjs",
     "check": "npm run build && npm test && npm run test:release && npm run test:smoke && npm run release:check",
-    "check:macos": "npm run check && swift test --package-path apps/macos"
+    "check:macos": "npm run check && swift test --package-path apps/macos",
+    "desktop:dev": "node scripts/dev-desktop.mjs",
+    "desktop:build": "npm run build && npm run build --workspace @todocue/desktop",
+    "desktop:native": "npm run tauri --workspace @todocue/desktop -- dev",
+    "desktop:check": "npm run desktop:build && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "windows:preview": "node scripts/package-windows.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

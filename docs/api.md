@@ -1,7 +1,7 @@
 # TodoCue Local API (v1)
 
 Single-user local HTTP API served by the TodoCue runtime on `127.0.0.1`.
-CLI, MCP and the macOS client are all thin clients of this API.
+CLI, MCP, the native macOS client and the shared desktop preview are thin clients of this API. `packages/client` provides a browser-compatible typed client; the desktop host proxies authentication and SSE.
 
 ## Connection
 
@@ -245,3 +245,12 @@ Runtime checks every five seconds. Startup/wake skips missed periodic reminders,
 - If no App claims within three seconds, the next scheduler pass selects a silent system notification. Selection and replay guards prevent competing channels. Each actual asynchronous system delivery rechecks active hours; an unsent occurrence that has left its window is marked missed and re-armed. A crash after channel selection may lose that occurrence; it never triggers catch-up delivery through a second channel.
 
 Finished instance records are retained for 30 days; the current waiting/diagnostic record is retained. JSON exports include additive `periodicReminders` and `periodicOccurrences` arrays. Deleting a rule removes its instances.
+
+
+## Cross-platform desktop preview
+
+The `/v1` endpoints, SQLite format and CLI JSON shapes remain compatible. The Rust host reads the local connection file, restricts requests to its authenticated loopback API, and forwards parsed SSE events; the WebView receives task data but never the token. The portable client adds board, move/reset/undo and periodic claim/receipt/preview methods for existing endpoints.
+
+On Windows, notification authorization reports the current system setting. Disabled notifications require the user to enable TodoCue in Settings; `request-authorization` does not pretend to present a macOS permission prompt. Notifications use `todocue://task/<id>?home=<registered-id>` and `todocue://periodic/<id>?home=<registered-id>`. The opaque directory identifier resolves through current-user installation records, never carries a token or a raw path, and must belong to the receiving installation. Unknown identifiers are rejected instead of opening the default data directory. Cold-launch targets wait for the renderer and local runtime before being consumed; warm launches are scoped to the same data directory. Legacy targets without the query continue to open the current installation's remembered directory. The standalone background service and notifier do not depend on the UI process.
+
+[Migration and acceptance status](desktop-migration.md) records which behaviors are locally verified and which require Windows hardware.

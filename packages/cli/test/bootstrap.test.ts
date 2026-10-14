@@ -33,7 +33,7 @@ describe("packaged CLI installation", () => {
     expect(failed.ok).toBe(false);
     expect(calls).toBe(4);
   });
-  it("executes from paths containing shell metacharacters and preserves arguments", () => {
+  it.skipIf(process.platform === "win32")("executes from paths containing shell metacharacters and preserves arguments", () => {
     const root = temp();
     const dir = path.join(root, "TodoCue ' $literal `literal` App");
     fs.mkdirSync(dir);
@@ -53,10 +53,13 @@ describe("packaged CLI installation", () => {
     fs.writeFileSync(paths.token, "existing token");
     const bin = path.join(root, "external-bin");
     fs.mkdirSync(bin);
-    fs.symlinkSync("/unrelated/tool", path.join(bin, "todocue"));
+    const unrelated = path.join(bin, "todocue");
+    if (process.platform === "win32") fs.writeFileSync(unrelated, "unrelated command");
+    else fs.symlinkSync("/unrelated/tool", unrelated);
     installCliWrapper(paths, "/Applications/TodoCue.app/node", "/Applications/TodoCue.app/cli.js", [bin]);
     installCliWrapper(paths, "/Applications/TodoCue.app/new-node", "/Applications/TodoCue.app/new-cli.js", [bin]);
-    expect(fs.readlinkSync(path.join(bin, "todocue"))).toBe("/unrelated/tool");
+    if (process.platform === "win32") expect(fs.readFileSync(unrelated, "utf8")).toBe("unrelated command");
+    else expect(fs.readlinkSync(unrelated)).toBe("/unrelated/tool");
     expect(fs.readFileSync(paths.database, "utf8")).toBe("existing database bytes");
     expect(fs.readFileSync(paths.token, "utf8")).toBe("existing token");
     expect(fs.readFileSync(path.join(paths.bin, "todocue"), "utf8")).toContain("new-node");

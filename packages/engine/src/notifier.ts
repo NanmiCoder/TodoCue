@@ -27,9 +27,8 @@ export interface NotifierStatus {
   authorization: NotificationAuthorization;
   detail: string | null;
   /**
-   * True when macOS has already recorded a decision for the helper's bundle. It only ever
-   * shows the permission prompt once, so there is no point asking again — the user has to
-   * flip the switch in System Settings, which `openSystemSettings()` takes them to.
+   * True when notification permission needs to be changed in system settings: macOS
+   * has recorded a decision, or Windows app notifications have been disabled.
    */
   needsSystemSettings?: boolean;
 }
@@ -85,6 +84,10 @@ export class MemoryNotifier implements NotificationSink {
 export interface HelperNotifierOptions {
   /** Explicit helper executable path. */
   helperPath?: string;
+  /** Executable prefix arguments, for a portable script helper in development/tests. */
+  helperArgs?: string[];
+  /** Originating data directory for Windows notification click-through. */
+  home?: string;
   /** Extra candidate locations (e.g. repo build dir). */
   searchPaths?: string[];
   /** Fall back to `osascript display notification` when the helper is unavailable. */
@@ -93,6 +96,7 @@ export interface HelperNotifierOptions {
 }
 
 export function defaultHelperCandidates(home: string): string[] {
+  if (process.platform === "win32") return [path.join(home, "bin", "TodoCueNotifier.exe")];
   const rel = "TodoCueNotifier.app/Contents/MacOS/TodoCueNotifier";
   return [
     path.join(home, "bin", rel),
@@ -132,7 +136,8 @@ export class HelperNotifier implements NotificationSink {
   private async runHelper(args: string[], timeoutMs = 15_000): Promise<Record<string, unknown>> {
     const helper = this.resolveHelper();
     if (!helper) throw new Error("NOTIFIER_UNAVAILABLE: TodoCueNotifier helper not found");
-    const { stdout } = await execFileP(helper, args, { timeout: timeoutMs, maxBuffer: 1024 * 1024 }).catch((e: unknown) => {
+    const homeArgs = process.platform === "win32" && this.opts.home ? ["--home", this.opts.home] : [];
+    const { stdout } = await execFileP(helper, [...(this.opts.helperArgs ?? []), ...args, ...homeArgs], { timeout: timeoutMs, maxBuffer: 1024 * 1024, windowsHide: true }).catch((e: unknown) => {
       const err = e as { stdout?: string; stderr?: string; message: string };
       // The helper prints a JSON line even on failure; surface it.
       const line = (err.stdout ?? "").trim().split("\n").pop();
@@ -170,7 +175,7 @@ export class HelperNotifier implements NotificationSink {
       if (res.ok !== true) throw new Error(String(res.error ?? "helper reported failure"));
       return typeof res.channel === "string" ? res.channel : "helper";
     }
-    if (this.opts.allowOsascriptFallback ?? true) {
+    if (this.opts.allowOsascriptFallback ?? process.platform === "darwin") {
       const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       const script = `display notification "${esc(payload.body ?? "")}" with title "${esc(payload.title)}"${
         payload.subtitle ? ` subtitle "${esc(payload.subtitle)}"` : ""
@@ -189,7 +194,7 @@ export class HelperNotifier implements NotificationSink {
         available: false,
         path: null,
         authorization: "unknown",
-        detail: (this.opts.allowOsascriptFallback ?? true)
+        detail: (this.opts.allowOsascriptFallback ?? process.platform === "darwin")
           ? "helper not installed; reminders fall back to osascript notifications (no click-through)"
           : "helper not installed",
       };

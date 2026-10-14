@@ -122,6 +122,7 @@ The DMG is written to `apps/macos/build/`. Local packaging downloads and verifie
 | Path | Responsibility |
 | --- | --- |
 | `apps/macos` | SwiftUI / AppKit client and notification helper |
+| `apps/desktop`, `packages/client` | Shared Tauri 2 frontend and portable client (migration preview) |
 | `packages/engine` | Task rules, recurring occurrences, reminders, and SQLite |
 | `packages/server` | Local API, authentication, and SSE updates |
 | `packages/cli`, `packages/shared` | CLI / MCP interfaces and shared contracts |
@@ -132,6 +133,8 @@ Use `npm run dev:serve` for development and `TODOCUE_HOME` to isolate developmen
 [Release guide (中文)](docs/github-release.md) · [Implementation and QA (中文)](docs/implementation-plan.md) · [Open an issue](https://github.com/NanmiCoder/TodoCue/issues)
 
 </details>
+
+A cross-platform migration preview is now in the source tree. Use `npm run desktop:dev` with isolated data to inspect the shared UI; the preview workflow builds Windows x64/ARM64 installers. Windows device and full visual acceptance are pending, and the production macOS client remains native. See [preview setup](apps/desktop/README.md), [migration/QA status](docs/desktop-migration.md), and [development handoff](docs/desktop-handoff.md).
 
 ## License
 

@@ -1,0 +1,146 @@
+# TodoCue 跨平台客户端开发交接
+
+更新：2026-10-14。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
+
+## 代码从哪里继续
+
+- 仓库：<https://github.com/NanmiCoder/TodoCue>。
+- 交接分支：`codex/desktop-migration-handoff`，从 `3058f01379d1cf965445ca5f3bb3b826020e2686` 建立。
+- 新工作树必须从 `origin/codex/desktop-migration-handoff` 建立；从默认分支开始会缺少这次迁移代码。
+- 推荐继续分支：`codex/desktop-native-ui-fixes`。若该分支已存在，先检查其状态，复用或选择新的 `codex/` 分支，不能覆盖已有分支或工作树。
+- 没有创建 PR、合并主分支或发布安装包。推送交接分支不等于 Windows CI、安装和运行通过。
+- 本机临时数据、依赖、编译产物、日志和运行中的进程不会随 Git 转移；新电脑需要重新安装依赖并启动隔离运行时。
+
+先阅读仓库 `AGENTS.md`、本文、[实现与验收记录](desktop-migration.md)、[Dial 设计与动效规范](design/dial.md)、[桌面预览启动说明](../apps/desktop/README.md)。比较 UI 时以现有 SwiftUI 源码和实际画面为准，不能把新前端自身当作对照基准。
+
+## 已确定的产品方向
+
+1. React + TypeScript + CSS/Motion 负责共享前端，Rust + Tauri 2 负责窗口与系统接入；任务引擎、SQLite、API、CLI/MCP 继续复用。
+2. 保留现有设计、交互和动效；SwiftUI 源码需移植，但用户不接受重新设计成另一套 UI。优先视觉和使用体感一致，弹簧参数按原版校准。
+3. 最终两端共享前端，先交付 Windows，再完成正式 macOS 切换。当前 macOS Preview 用于对照，原 SwiftUI 生产客户端仍保留。
+4. Windows 10/11 x64、Windows 11 ARM64；macOS 14+、Intel 和 Apple Silicon。ARM64 验收包含 Node、SQLite、通知程序，不能只检查外壳。
+5. Windows 使用顶部虚拟刘海，顶部任务栏时按工作区顶部定位。macOS 保留原生玻璃和原生能力；Apple 同步只在 Mac 提供，本次不新增云同步或 Windows 日历集成。
+6. 数据仍本机保存并兼容 `TODOCUE_HOME`；Windows 默认 `%USERPROFILE%\.todocue`。提醒由独立后台服务投递，退出 UI 后仍有效。
+7. 用户暂时没有可接入的 Windows 设备，将后续自己测试。先完成本机可验证的实现；硬件缺失不作为要求用户再次提供设备的理由，也不能据此宣称 Windows 通过。
+
+## 已有实现：接着改，不要从头重写
+
+| 位置 | 内容 |
+| --- | --- |
+| `apps/desktop/src` | 今日/即将到来/全部、详情、表单、日历、历史、周期提醒、附件、设置、刘海，以及共享 token、图标、日期、草稿和拖动逻辑 |
+| `apps/desktop/src-tauri/src/lib.rs`、`platform.rs` | Tauri 窗口、托盘、快捷键、尺寸记忆、玻璃、显示器定位、原生鼠标/焦点接入 |
+| `apps/desktop/src-tauri/src/runtime.rs`、`packages/client` | 宿主代理 REST/SSE，token 保持在宿主；便携类型化客户端；原 server 客户端保留 `fromHome()` 兼容入口 |
+| `packages/cli/src/windows-service.ts`、`windows-integration.ts` | 当前用户后台计划任务、自定义目录登记、服务升级/停止/卸载、CLI 与 PATH 管理 |
+| `apps/desktop/src-tauri/src/bin`、`windows_home.rs` | CLI 转发、后台进程监督、Windows 通知、按目录标识路由冷/热启动 |
+| `scripts/package-windows.mjs`、`stage-runtime.mjs` | 对应架构 Node/SQLite/辅助程序、NSIS、离线 WebView2、Skill 与包校验 |
+| `.github/workflows/desktop-preview.yml` | Windows x64/ARM64 和 macOS 预览构建/检查配置；当前未得到远程运行结果 |
+
+审查确认的八项缺陷已实现修复及回归测试：自定义目录升级/卸载遗漏、四条周期提醒同时领取丢失系统回退、保存期间移除附件又复现、旧已完成查询覆盖新状态、精确截止时间的改期确认遗漏、服务新配置仍运行旧宿主、自定义目录通知启动到错误目录、卸载残留 CLI/PATH。详见实现记录中的证据表；Windows 的实际安装/系统行为仍需独立验收。
+
+另修复开发代理丢失 DELETE 请求体的问题，真实代理→HTTP→运行时测试覆盖任务/附件删除。不要删除这些回归测试或为使构建通过而改变 API/数据库契约。
+
+## 首先完成：刘海交互与输入（P0）
+
+用户报告：展开刘海后点击其他区域不会收起；快速输入出现橙色矩形边框；收起刘海落在菜单栏下方；整体 UI/交互体感明显弱于原 SwiftUI。
+
+本次已经做的调整：
+
+- macOS 虚拟刘海锚定屏幕顶部，按菜单栏高度设置收起高度，窗口层级 `NSStatusWindowLevel + 1`；Windows 仍锚定工作区。布局单测与本机收起截图已核对。
+- 刘海输入改为 36 高的圆角胶囊、容器细描边、26 加号和单独提交按钮；移除 input 的矩形 outline。面板快速输入、搜索、正文输入也做了相应调整。
+- macOS 增加 AppKit 本地/全局鼠标点击监听，外部点击只关闭快览，保留草稿和提醒堆叠。实际坐标点击其他应用窗口后收起、重新展开草稿保留已经观察到。
+- 鼠标离开与外部点击采用不同规则；已有文字不再永久阻止离开收起。原生输入不使用 WebView blur 直接关闭；Windows 失焦路径还检查指针是否在窗口外，尚无实机验证。
+
+**尚未完成的验证和需要调查的问题：**
+
+原生自动化执行选择文本/粘贴/回车时，多次观察到快览在操作完成前收起、AX 元素失效或键盘落到收起内容；未创建测试任务。此前有中文粘贴和草稿保留成功的观察，但最终原生包的完整回车创建流程没有通过。根因尚未确认，不能把它写为“输入已修好”。下一位先区分真实用户交互与自动化激活/窗口定位的影响，再定位状态或焦点链。
+
+建议调查顺序：
+
+1. 分别用鼠标悬停、点击收起条、点击输入/加号进入快览；实际点击输入后输入中文/英文、粘贴、选择文本、连续回车创建，核对焦点与持久化数据。
+2. 检查 `Notch.tsx` 的 expanded/pinned、hover/leave timer、input focus、`presentNotch`；检查 `lib.rs` 的原生 resize 动画、宿主状态与 focusable/set_focus 更新；检查 `platform.rs` 的全局/本地事件源和窗口号。
+3. 若加诊断，记录是哪条路径引发关闭，不要仅凭失焦推断外部点击；提交前移除临时日志。上一轮临时 `QA mouse` 输出已删除。
+4. 原生 AX 树可能先于 0.36 秒窗口扩张出现；仅凭元素已出现在树中不能确认输入位置已进入窗口。验证工具的 AX click 与真正坐标鼠标点击也有差异，不能用菜单 AX action 证明全局 mouse monitor。
+5. 逐条复测下面验收要求；在没有完整证据前不要扩大成新的 UI 重写或宣称问题全部解决。
+
+P0 验收：
+
+- 悬停约 200ms 展开，离开约 350ms 收起；点击后固定，编辑期间保持展开。
+- 点击刘海内部控件、文本选择、中文输入法候选和粘贴不会意外关闭；回车只创建一次，保存时继续输入不丢下一条草稿。
+- 点击其他应用、桌面或本应用的另一窗口能收起快览，即使有草稿/已固定；重新展开保留未提交草稿。
+- Esc 先清草稿，再收起；关闭快览不清除提醒堆叠。新提醒、延迟回执和 SSE 到达不能破坏这套状态。
+- 不抢悬停/提醒的键盘焦点，不让透明空白遮住桌面点击；保存和网络失败有可见反馈。
+
+## 后续工作顺序与完成条件
+
+### P1：按原版完成 UI 和动效对照
+
+- [ ] 全部页面逐项核对布局、字号、留白、文字换行、图标、输入/选择/弹层；优先刘海、快速添加、表单，再到详情与日历。
+- [ ] 建立固定数据/时间/背景的对照；中英文、明暗主题、300/340/480/600 宽度；长标题、空、加载、错误、离线、冲突及减少动态效果。
+- [ ] 逐帧对照数字滚动、对勾、表盘波纹、切页重叠、拖动让位/撤销、刘海展开与提醒堆叠；查跳动、闪透、裁切，以及 SSE 提前移除动画元素。
+- [ ] 检查附件选择/粘贴/预览/移除、日历拖动改期、草稿隔离、版本冲突、断线重连，维持已有并发保存回归。
+- [ ] 保存必要截图/录屏和差异记录。字体抗锯齿及系统玻璃差异单独记录，不能承诺所有设备逐像素相同。
+
+### P2：Windows 构建、安装与实机验证
+
+- [ ] 在对应架构环境跑完整检查/安装包构建；修复 Unix 假设、工具链、CI、NSIS 或依赖失败。先确认构建结果，再做真实系统验收。
+- [ ] 干净 Windows 10/11 x64 与 Windows 11 ARM64：离线 WebView2、无需另装 Node、原生 SQLite 实际 SQL、CLI 与 MCP stdio。
+- [ ] 多屏/负坐标/不同 DPI 100%–200%、顶部/侧边任务栏、透明命中、焦点与输入法、全屏、休眠、插拔、虚拟桌面；刘海移屏及 1.5 秒驻留。
+- [ ] 托盘退出全部 UI 后后台仍提醒；任务/周期提醒通知点击冷/热启动进入正确自定义目录；协议链接、单实例及后台启动慢时目标不丢失。
+- [ ] 同时多个运行时互斥、服务更换配置、停止等待、注册失败恢复、升级/维护/重装/卸载、CLI/PATH 清理并保留数据库。
+- [ ] 同时四条周期提醒、claim/receipt 失败或超时、系统回退、6 秒收拢、稍后提醒/今天暂停、休眠恢复，无重复投递或吞提醒。
+- [ ] 整理可安装预览产物和真实结果；构建/类型检查通过不能替代以上行为。
+
+### P3：Windows 完整验收后完成正式 Mac 迁移
+
+- [ ] 接入真实硬件刘海、安全区、空间/菜单栏、原生玻璃与浮窗完整行为。
+- [ ] 从旧 UI 模型解耦 EventKit 同步，通过桥接接入新客户端，保留同步关联。
+- [ ] 导入语言、尺寸、快捷键与同步偏好；支持 macOS 14+、Intel/Apple Silicon。
+- [ ] 保持同一数据目录只有一个生产客户端，提供旧版回退；达到功能和视觉验收后再停止维护 SwiftUI 页面。
+
+## 在新电脑启动和检查
+
+macOS：Node 24+（当前使用 26.7.0）、Rust、Xcode 26/Swift 6；Windows：Node、Rust、MSVC C++/Windows SDK，ARM64 对应工具链。无需复制本机 `/Users/nanmi` 路径。
+
+已有仓库中先 fetch 再创建工作树；Codex 可优先使用自带工作树工具并显式指定 `origin/codex/desktop-migration-handoff`。手动等价操作如下，目录按实际情况选择：
+
+```sh
+git fetch origin
+git worktree add -b codex/desktop-native-ui-fixes ../TodoCue-desktop-native-ui-fixes origin/codex/desktop-migration-handoff
+cd ../TodoCue-desktop-native-ui-fixes
+npm ci
+npm run desktop:dev
+```
+
+浏览器：`http://127.0.0.1:5173/`；刘海：`http://127.0.0.1:5173/?surface=notch`。默认隔离数据在系统临时目录的 `todocue-desktop-development`，运行时端口 47832。原生预览默认使用相同临时目录；不要改到个人 `~/.todocue`。若并行多个工作树，先设置不同的 `TODOCUE_HOME` 并检查固定端口冲突，不能同时启动默认开发脚本。
+
+已有 `desktop:dev` 时，第二个终端启动原生预览，避免重复启动 Vite：
+
+```sh
+npm run tauri --workspace @todocue/desktop -- dev --config '{"build":{"beforeDevCommand":""}}'
+```
+
+仅启动原生开发时，可先用隔离 `TODOCUE_HOME` 启动 `npm run dev:serve`，再启动 `npm run desktop:native`；确保原生进程与运行时使用同一目录。先读桌面 README 再运行，不要把原版生产 App 的退出/启动误当成 Preview 测试。
+
+按改动范围运行：
+
+```sh
+npm run check
+npm run desktop:check
+swift test --package-path apps/macos
+```
+
+Windows 包在对应 Windows 主机运行 `npm run windows:preview`。当前配置包含手动/PR 触发的 CI，不因仅 push 此分支自动触发；未创建 PR，也未启动远程构建。若要发布或创建 PR，遵循当次用户授权，不直接合并主分支。
+
+## 检查证据与限制
+
+- 最近本机检查：160 个 Vitest、19 个 Node 发布/打包测试、CLI/MCP 冒烟和 release check；Rust 16 个测试；Swift 275 个测试、4 个跳过；共享前端及 macOS debug Preview 打包成功。
+- 三个 Windows helper 的最新代码通过了隔离 x64/ARM64 类型检查。完整 Windows Tauri 宿主在 Mac cross-check 缺 Windows SDK `assert.h`；无实际安装/通知/计划任务验收。
+- 真实浏览器已覆盖创建/完成/撤销/编辑、延迟保存与草稿、附件移除、旧完成响应、精确改期确认和 DELETE 代理。使用 Ego Lite；浏览器验证不替代原生窗口交互验证。
+- 原生刘海外部点击收起与草稿保留有实测观察；原生完整输入/回车创建尚未完成，必须先处理。
+- 先前的截图临时文件、诊断日志和隔离测试数据库不在 Git 中。仓库保存了首页预览截图；需要新证据时重新生成，不引用另一台电脑不存在的绝对路径。
+
+## 接手时的输出要求
+
+先简述当前平台、工作树、首个复现路径，然后持续实施。每个关键修复记录真实触发条件、原因、用户可观察结果和测试边界；更新本文的未完成清单及实现记录。完成一组可验证任务再提交；没有 Windows 硬件时继续可做的代码与构建，但把剩余实机项保留为未完成。
+
+不要以“React 做不到 SwiftUI”替代定位问题，不重写引擎/API/数据库，不隐藏未通过的原生交互，也不要把这份交接快照当作完成四阶段迁移。

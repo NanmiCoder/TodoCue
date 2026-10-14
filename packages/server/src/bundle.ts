@@ -15,6 +15,10 @@ export function appBundle(root = runtimeRoot()): string | null {
 }
 
 export function packagedHelper(app = appBundle()): string | null {
+  if (process.platform === "win32") {
+    const executable = path.join(path.dirname(runtimeRoot()), "TodoCueNotifier.exe");
+    return fs.existsSync(executable) ? executable : null;
+  }
   if (!app) return null;
   const executable = path.join(app, "Contents", "Helpers", "TodoCueNotifier.app", "Contents", "MacOS", "TodoCueNotifier");
   return fs.existsSync(executable) ? executable : null;

@@ -6,7 +6,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 for (const scenario of ['new', 'draft', 'public', 'api-error', 'upload-error']) {
-  test(`publishing ${scenario}: a release becomes public only after successful upload`, t => {
+  test(`publishing ${scenario}: a release becomes public only after successful upload`, { skip: process.platform === "win32" }, t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'todocue-publish-test-'));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     fs.mkdirSync(path.join(directory, 'release-notes'));

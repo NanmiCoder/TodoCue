@@ -8,6 +8,9 @@ apps/macos/*.xcodeproj
 *.log
 coverage/
 .ui-review/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+.desktop-qa/
 *.p12
 *.p8
 *.keychain-db

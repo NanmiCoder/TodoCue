@@ -108,3 +108,22 @@ test('unrelated staged work cannot enter a release commit or trigger version edi
   assert.equal(git(directory, 'status', '--porcelain'), status);
   assert.equal(git(directory, 'tag', '--list'), '');
 });
+
+
+test('desktop installer, Cargo manifest and only its lock entry advance with the runtime', t => {
+  const { directory, write, read } = fixture(t);
+  write('apps/desktop/src-tauri/tauri.conf.json', { version: '0.1.0' });
+  write('apps/desktop/src-tauri/Cargo.toml', '[package]\nname = "todocue-desktop"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nthird-party = "0.1.0"\n');
+  write('apps/desktop/src-tauri/Cargo.lock', 'version = 4\n\n[[package]]\nname = "third-party"\nversion = "0.1.0"\n\n[[package]]\nname = "todocue-desktop"\nversion = "0.1.0"\n');
+  git(directory, 'add', '.'); git(directory, 'commit', '-qm', 'desktop fixture');
+  write('release-notes/v0.1.1.md', 'Desktop release');
+  execFileSync(process.execPath, ['--input-type=module', '-e', 'const { prepareRelease } = await import(process.env.RELEASE_SCRIPT); prepareRelease(process.env.RELEASE_FIXTURE, "patch");'], { env: { ...gitEnv, RELEASE_SCRIPT: path.resolve(import.meta.dirname, '../release.mjs'), RELEASE_FIXTURE: directory }, stdio: 'pipe' });
+  assert.equal(checkRelease(directory).version, '0.1.1');
+  assert.equal(read('apps/desktop/src-tauri/tauri.conf.json').version, '0.1.1');
+  const cargo = fs.readFileSync(path.join(directory, 'apps/desktop/src-tauri/Cargo.toml'), 'utf8');
+  assert.match(cargo, /version = "0.1.1"/); assert.match(cargo, /third-party = "0.1.0"/);
+  const lock = fs.readFileSync(path.join(directory, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8');
+  assert.match(lock, /name = "third-party"\nversion = "0.1.0"/); assert.match(lock, /name = "todocue-desktop"\nversion = "0.1.1"/);
+  write('apps/desktop/src-tauri/tauri.conf.json', { version: '0.1.0' });
+  assert.throws(() => checkRelease(directory), /tauri.conf/);
+});

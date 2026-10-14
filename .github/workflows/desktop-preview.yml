@@ -1,0 +1,56 @@
+name: Desktop preview builds
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - apps/desktop/**
+      - packages/client/**
+      - packages/cli/**
+      - packages/server/**
+      - scripts/package-windows.mjs
+      - scripts/stage-runtime.mjs
+      - package-lock.json
+      - .github/workflows/desktop-preview.yml
+permissions:
+  contents: read
+jobs:
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '26.7.0'
+          cache: npm
+      - run: rustup update stable
+      - run: npm ci --ignore-scripts
+      - run: npm run desktop:build
+      - run: npm run check
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: npm run windows:preview
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: todocue-windows-${{ matrix.arch }}-preview
+          path: apps/desktop/src-tauri/target/*/release/bundle/nsis/*
+          if-no-files-found: error
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '26.7.0'
+          cache: npm
+      - run: rustup update stable
+      - run: npm ci --ignore-scripts
+      - run: npm run desktop:check

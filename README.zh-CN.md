@@ -122,6 +122,7 @@ DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的�
 | 路径 | 职责 |
 | --- | --- |
 | `apps/macos` | SwiftUI / AppKit 客户端与通知辅助程序 |
+| `apps/desktop`、`packages/client` | Tauri 2 共享前端与便携客户端（迁移预览） |
 | `packages/engine` | 任务规则、重复实例、提醒与 SQLite |
 | `packages/server` | Local API、认证与 SSE 实时同步 |
 | `packages/cli`、`packages/shared` | CLI / MCP 接口与共享契约 |
@@ -132,6 +133,8 @@ DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的�
 [发布指南](docs/github-release.md) · [实现与验收](docs/implementation-plan.md) · [提交 Issue](https://github.com/NanmiCoder/TodoCue/issues)
 
 </details>
+
+跨平台迁移预览已加入源码：`npm run desktop:dev` 可在隔离数据上对照共享界面；Windows x64/ARM64 的当前用户安装包由 preview workflow 构建。Windows 实机与完整视觉验收仍待完成，正式 macOS 版继续使用现有原生客户端。见 [预览运行与构建](apps/desktop/README.md)、[实施/验收状态](docs/desktop-migration.md)及 [继续开发交接](docs/desktop-handoff.md)。
 
 ## 许可证
 

@@ -1,0 +1,47 @@
+[package]
+name = "todocue-desktop"
+version = "0.5.3"
+edition = "2021"
+default-run = "todocue-desktop"
+
+[lib]
+name = "todocue_desktop"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["sync", "time", "fs", "macros"] }
+url = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.6"
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_WinRT", "Win32_Security", "UI_Notifications", "Data_Xml_Dom"] }
+
+[[bin]]
+name = "todocue-cli"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "todocue-runtime"
+path = "src/bin/runtime-host.rs"
+
+[[bin]]
+name = "TodoCueNotifier"
+path = "src/bin/notifier.rs"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["block2", "NSWindow", "NSView", "NSEvent", "NSScreen", "NSVisualEffectView", "NSGlassEffectView", "NSApplication"] }
+objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSProcessInfo"] }

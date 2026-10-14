@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import { stageRuntime, runtimePackages } from './stage-runtime.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -61,10 +62,7 @@ run('/usr/bin/tar', ['-xzf', archive, '-C', cache]);
 const distribution = path.join(cache, archiveName);
 copy(path.join(distribution, 'bin/node'), path.join(runtime, 'bin/node'));
 copy(path.join(distribution, 'LICENSE'), path.join(runtime, 'NODE-LICENSE'));
-for (const file of ['package.json', 'package-lock.json']) copy(path.join(root, file), path.join(runtime, file));
-for (const name of ['shared', 'engine', 'server', 'cli']) {
-  for (const file of ['package.json', 'dist']) copy(path.join(root, 'packages', name, file), path.join(runtime, 'packages', name, file));
-}
+stageRuntime(root, runtime);
 console.log('Installing locked production dependencies inside the app…');
 run(path.join(distribution, 'bin/node'), [path.join(distribution, 'lib/node_modules/npm/bin/npm-cli.js'),
   'ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'], {
@@ -77,7 +75,7 @@ for (const file of fs.readdirSync(prebuilds)) {
 copy(path.join(out, 'TodoCueNotifier.app'), path.join(app, 'Contents/Helpers/TodoCueNotifier.app'));
 copy(path.join(root, 'skills/todocue'), path.join(resources, 'skills/todocue'));
 const runtimeDigest = createHash('sha256');
-for (const name of ['shared', 'engine', 'server', 'cli']) {
+for (const name of runtimePackages) {
   const directory = path.join(runtime, 'packages', name, 'dist');
   for (const relative of fs.readdirSync(directory, { recursive: true }).sort()) {
     if (relative.endsWith('.js')) runtimeDigest.update(name + '/' + relative).update(fs.readFileSync(path.join(directory, relative)));
