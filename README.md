@@ -138,6 +138,8 @@ A cross-platform migration preview is now in the source tree. Use `npm run deskt
 
 The latest preview verifies macOS notch/panel typing, paste, Enter and continued input during saving, and aligns forms, attachments, details and calendars with the SwiftUI reference. Windows x64/ARM64 builds and seven installed-package smoke checks pass in CI. [Evidence, comparison screenshots and preview downloads](docs/qa/desktop-p1-ui/README.md) distinguish these checks from pending physical mouse, IME, Windows GUI and frame-by-frame acceptance.
 
+The [independent review fixes](docs/qa/desktop-review-fixes/README.md) correct CLI home/port recovery, calendar selection, form Return behavior, reminders and native focus. Both Windows architectures pass ten installed-package checks. Device acceptance and production macOS migration remain pending.
+
 ## License
 
 [MIT](LICENSE) © 2026 NanmiCoder. Contributions welcome.

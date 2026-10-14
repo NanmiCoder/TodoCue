@@ -4,6 +4,8 @@
 
 本轮 `codex/desktop-native-ui-fixes` 已推送到 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为原交接分支。代码 `7ad1b95` 的 Windows x64/ARM64 与 macOS CI 全通过。见 [P0 输入证据](qa/desktop-native-ui-fixes/README.md) 和 [P1 原版对照、632 条布局测量、安装包及质量记录](qa/desktop-p1-ui/README.md)。真实外部鼠标/候选窗口、完整原生主题矩阵和逐帧对照仍未完成。
 
+2026-10-15追加：原独立审查13项已修复到 `50762d4`，回归与实测见 [修复记录](qa/desktop-review-fixes/README.md)。新增Windows实际安装故障注入已在两种架构CI通过；其余正式迁移边界保持不变。
+
 ## 实现边界
 
 | 部分 | 当前实现 |

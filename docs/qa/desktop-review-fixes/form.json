@@ -1,0 +1,44 @@
+{
+  "emptyProject": {
+    "posts": 0,
+    "popup": true
+  },
+  "projectEnter": {
+    "posts": 0,
+    "chip": "Fixed project"
+  },
+  "estimateEnter": {
+    "posts": 0,
+    "chip": "25m"
+  },
+  "newlines": {
+    "posts": 0,
+    "title": "FIX plain Return retains draft\nsecond line",
+    "notes": "Notes line 1\nNotes line 2"
+  },
+  "saved": {
+    "posts": [
+      {
+        "title": "FIX plain Return retains draft\nsecond line",
+        "notes": "Notes line 1\nNotes line 2",
+        "project": "Fixed project",
+        "priority": "none",
+        "estimateMinutes": 25,
+        "scheduledDate": null,
+        "scheduledAt": null,
+        "dueDate": null,
+        "dueAt": null,
+        "reminderAt": null,
+        "timezone": "Asia/Shanghai"
+      }
+    ],
+    "tasks": [
+      {
+        "title": "FIX plain Return retains draft\nsecond line",
+        "project": "Fixed project",
+        "estimate": 25,
+        "notes": "Notes line 1\nNotes line 2"
+      }
+    ]
+  }
+}

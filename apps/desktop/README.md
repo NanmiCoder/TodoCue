@@ -72,3 +72,5 @@ swift test --package-path apps/macos
 本地 `check` 175 个 Vitest / 24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端/Rust 11+5 通过。[Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 的完整 Xcode Swift Apple Silicon 275（4 跳过）、Intel 275（11 跳过）均 0 失败。本地 CLT 缺 XCTest，不冒充本地通过。
 
 真实鼠标外部点击、候选窗口、透明命中、Windows GUI/通知点击/多屏/DPI/休眠、全原生视觉/逐帧验收，以及 Mac Intel Tauri 包、EventKit 和正式客户端切换仍待完成。
+
+2026-10-15的[独立审查修复](../../docs/qa/desktop-review-fixes/README.md)补齐CLI所属目录、bootstrap端口、普通Return、日历选择、Pin、图片、逾期、提醒与被动窗口焦点；本地208项Vitest/34项脚本测试及desktop检查通过。最新50762d4两架构十组安装及恢复失败/不健康测试均通过，正式分发和完整SwiftUI复刻仍未验收。

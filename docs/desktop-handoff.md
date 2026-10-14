@@ -1,10 +1,10 @@
 # TodoCue 跨平台客户端开发交接
 
-更新：2026-10-14。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
+更新：2026-10-15。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
 
-本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，已推送并建立 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。最终代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
+本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，已推送并建立 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。此前代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
 
-**最新独立审查（审查代码 `09b21da`）：正式分发仍被已确认的 P1 缺陷阻挡。** 三个 subagent 分别审查原生交互、SwiftUI 对照与分发链路，主代理再用 Ego Lite/真实 API 复现。发现自定义目录 CLI 回落默认库、bootstrap 丢服务端口、日历翻页保存到旧日期、完整表单普通 Return 提前保存；另有 Pin 首击无效、图片缩小等 P2/P3。见 [独立审查及证据](qa/desktop-p1-ui/README.md#2026-10-14三路独立代码审查)。这些尚未修复；六个 CI job 全绿不等于正式分发验收或完全复刻。
+**2026-10-15 独立审查修复：** 原审查13项已有实现修复，并补上CLI目录/端口、日历、普通Return、Pin、图片、逾期、提醒容量、被动窗口与安装恢复回归。三个subagent再次独立复审，主代理完成Ego/原生/真实API复测；最新源码为 `50762d4`。见 [本轮修复与证据](qa/desktop-review-fixes/README.md)。Windows双架构新增十组安装及恢复故障测试均已实测通过，实机与正式macOS迁移项仍未完成；不将全绿CI或布局计数当作正式发布/完全复刻。
 
 ## 代码从哪里继续
 
@@ -93,8 +93,9 @@ P0 验收：
 ### P2：Windows 构建、安装与实机验证
 
 - [x] x64 / ARM64 完整检查、Rust 测试、对应 Node/SQLite/helper、NSIS 构建；修复路径、文件 URL、CRLF、图标、时区、工作区 junction、模块根目录、数值 SID 与升级就绪竞态；后续为重复 WebView2 断连加三次限次重试，并淘汰空 Rust 缓存。
-- [x] 实际安装包的七组冒烟：静默安装、Node 架构/SQLite SQL、自定义中文空格目录/当前用户计划任务、包内 CLI 与 MCP、后台重启、重装恢复、卸载清理并保留数据库。
+- [x] 此前实际安装包的七组冒烟：静默安装、Node 架构/SQLite SQL、自定义中文空格目录/当前用户计划任务、包内 CLI 与 MCP、后台重启、重装恢复、卸载清理并保留数据库。
 - [x] 整理 [CI 与 x64/ARM64 预览下载](qa/desktop-p1-ui/README.md#windows-两种架构实际安装包通过)。x64 runner 为 Windows Server 2025，ARM64 为 Windows 11；不能据此宣称 Windows 10/11 的完整 GUI 通过。
+- [x] 最新50762d4两架构十组安装冒烟：无home参数shim、端口保留、恢复失败/不健康、数据与恢复标记保留及重试。见[本轮证据](qa/desktop-review-fixes/README.md)。
 - [ ] 干净 Windows 10/11 x64、Windows 11 ARM64 离线 WebView2 首次安装及 UI 启动；不另装 Node。
 - [ ] 多屏/负坐标/100%–200% DPI、顶部/侧边任务栏、透明命中、焦点/IME、全屏、休眠、插拔、虚拟桌面、刘海移屏驻留。
 - [ ] 退出全部 UI 后系统提醒、通知冷/热启动与自定义目录路由、协议/单实例/后台慢启动。
