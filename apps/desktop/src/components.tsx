@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useReducedMotion } from "motion/react";
 import type { Task } from "@todocue/shared";
 import { motionTokens } from "./tokens.js";
 import { Icon } from "./icons.js";
@@ -18,6 +18,31 @@ export function Mark() {
       />
       <circle cx="17" cy="10" r="2" fill="currentColor" />
     </svg>
+  );
+}
+export function Numeral({ value }: { value: number }) {
+  const reduced = useReducedMotion();
+  const previous = useRef(value);
+  const direction = value >= previous.current ? 1 : -1;
+  useEffect(() => { previous.current = value; }, [value]);
+  return (
+    <span className="numeral">
+      <span className="sr-only">{value}</span>
+      {String(value).split("").map((digit, index) => (
+        <span className="numeral-digit" aria-hidden="true" key={String(value).length - index}>
+          <AnimatePresence initial={false} custom={direction}>
+            <motion.span key={digit} custom={direction}
+              variants={{
+                enter: (direction: number) => ({ y: reduced ? 0 : `${direction * 45}%`, opacity: 0 }),
+                exit: (direction: number) => ({ y: reduced ? 0 : `${-direction * 45}%`, opacity: 0 }),
+              }}
+              initial="enter" animate={{ y: 0, opacity: 1 }} exit="exit"
+              transition={reduced ? { duration: 0.12 } : motionTokens.settle}
+            >{digit}</motion.span>
+          </AnimatePresence>
+        </span>
+      ))}
+    </span>
   );
 }
 export function Gauge({
@@ -42,6 +67,15 @@ export function Gauge({
     previous.current = completed;
   }, [completed, ready]);
   const progress = Math.min(1, completed / Math.max(total, 1));
+  const progressValue = useMotionValue(progress);
+  const [shownProgress, setShownProgress] = useState(progress);
+  useMotionValueEvent(progressValue, "change", setShownProgress);
+  useEffect(() => {
+    if (reduced || !ready) { progressValue.set(progress); return; }
+    const playback = animate(progressValue, progress, motionTokens.settle);
+    return () => playback.stop();
+  }, [progress, reduced, ready, progressValue]);
+  const faceProgress = Math.max(0, Math.min(1, shownProgress));
   const center = diameter / 2;
   const radius = center - 4;
   const dots = Math.max(24, Math.floor(diameter / 2.3));
@@ -60,9 +94,9 @@ export function Gauge({
             key={i}
             cx={center + Math.cos(angle) * radius}
             cy={center + Math.sin(angle) * radius}
-            r={i / dots < progress ? 1.5 : 1.1}
-            fill={i / dots < progress ? "#F26A2E" : "var(--muted)"}
-            opacity={i / dots < progress ? 1 : 0.55}
+            r={i / dots < faceProgress ? 1.5 : 1.1}
+            fill={i / dots < faceProgress ? "#F26A2E" : "var(--muted)"}
+            opacity={i / dots < faceProgress ? 1 : 0.55}
           />
         );
       })}
@@ -75,10 +109,11 @@ export function Gauge({
         strokeWidth=".5"
         opacity=".07"
       />
-      {progress > 0 && (
+      {faceProgress > 0 && (
         <circle
-          cx={center + radius * Math.sin(progress * 2 * Math.PI)}
-          cy={center - radius * Math.cos(progress * 2 * Math.PI)}
+          className="gauge-tip"
+          cx={center + radius * Math.sin(faceProgress * 2 * Math.PI)}
+          cy={center - radius * Math.cos(faceProgress * 2 * Math.PI)}
           r="3"
           fill="#F26A2E"
         />
@@ -100,6 +135,7 @@ export function Gauge({
         x={center}
         y={center + diameter * 0.06}
         textAnchor="middle"
+        style={{ fontSize: diameter * 0.16 }}
         key={completed}
         initial={reduced ? false : { opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
@@ -210,7 +246,7 @@ export function TaskRow({
               ? [1, 0.82, 1.16, 1]
               : 1,
         }}
-        transition={{ duration: 0.54, times: [0, 0.148, 0.444, 1] }}
+        transition={{ duration: reduced ? 0.12 : 0.42, times: [0, 0.148, 0.444, 1] }}
       >
         <svg viewBox="0 0 20 20">
           <motion.path

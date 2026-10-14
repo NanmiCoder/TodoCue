@@ -361,7 +361,8 @@ export function Notch() {
         // AX/DOM elements can exist before the native window has grown around them.
         if (active && presented && interaction.current.expanded && pendingFocus.current) {
           pendingFocus.current = false;
-          if (document.activeElement !== quickInput.current) quickInput.current?.focus();
+          if (!document.hasFocus()) quickInput.current?.blur();
+          if (document.activeElement !== quickInput.current || !document.hasFocus()) quickInput.current?.focus();
         }
       }).catch((error) => { if (active) setError(String(error)); });
     };

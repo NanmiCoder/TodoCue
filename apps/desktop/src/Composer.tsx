@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useLayoutEffect } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS,
@@ -11,10 +11,12 @@ import {
 } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { DatePicker } from "./DatePicker.js";
-import { dateOf, shiftDate } from "./dates.js";
+import { dateOf, shiftDate, weekdayLabels } from "./dates.js";
 import { Icon, type IconName } from "./icons.js";
 import { draftPayload, newDraft, type TaskDraft } from "./drafts.js";
 import { motionTokens } from "./tokens.js";
+import { isCompositionKey } from "./quickAdd.js";
+import { useTextAreaSize } from "./useTextAreaSize.js";
 
 export function Composer({
   task,
@@ -31,6 +33,7 @@ export function Composer({
   onChange: (draft: TaskDraft) => void;
   onSaved: (task: Task, submitted: TaskDraft) => void;
 }) {
+  const reduced = useReducedMotion();
   const [draft, setDraft] = useState(initial);
   const current = useRef(initial);
   const mounted = useRef(true);
@@ -43,9 +46,13 @@ export function Composer({
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
+  const savePending = useRef(false);
   const [dragged, setDragged] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
+  const notesInput = useRef<HTMLTextAreaElement>(null);
+  useTextAreaSize(titleInput, draft.title, 2, 4);
+  useTextAreaSize(notesInput, draft.notes);
   useEffect(() => {
     titleInput.current?.focus();
   }, []);
@@ -68,7 +75,7 @@ export function Composer({
   useEffect(() => {
     if (!popover) return;
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !isCompositionKey(event)) {
         event.preventDefault();
         event.stopPropagation();
         setPopover(null);
@@ -161,7 +168,8 @@ export function Composer({
     }
   }
   async function save() {
-    if (busy || reading || !online) return;
+    if (savePending.current || reading || !online) return;
+    savePending.current = true;
     setBusy(true);
     setError(null);
     const submitted = current.current;
@@ -184,6 +192,7 @@ export function Composer({
         setError(value.message ?? String(error));
       }
     } finally {
+      savePending.current = false;
       if (mounted.current) setBusy(false);
     }
   }
@@ -241,9 +250,10 @@ export function Composer({
       }}
       onKeyDown={(event) => {
         if (
+          !event.defaultPrevented &&
           (event.metaKey || event.ctrlKey) &&
           event.key === "Enter" &&
-          !event.nativeEvent.isComposing
+          !isCompositionKey(event.nativeEvent)
         ) {
           event.preventDefault();
           void save();
@@ -276,7 +286,7 @@ export function Composer({
               if (
                 event.key === "Enter" &&
                 !event.shiftKey &&
-                !event.nativeEvent.isComposing
+                !isCompositionKey(event.nativeEvent)
               ) {
                 event.preventDefault();
                 void save();
@@ -284,6 +294,7 @@ export function Composer({
             }}
           />
           <textarea
+            ref={notesInput}
             rows={2}
             placeholder={label(
               "添加备注、链接或详细想法...",
@@ -345,10 +356,10 @@ export function Composer({
                   className="composer-popover frost"
                   style={popupPosition}
                   key={popover}
-                  initial={{ opacity: 0, scale: 0.96, y: 4 }}
+                  initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 4 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  transition={motionTokens.snap}
+                  transition={reduced ? { duration: 0.12 } : motionTokens.snap}
                 >
                   {popover === "schedule" && (
                     <>
@@ -535,6 +546,8 @@ export function Composer({
                               <button
                                 type="button"
                                 key={index}
+                                aria-label={weekdayLabels(language, 1, true)[index]}
+                                aria-pressed={draft.weekdays.includes(index + 1)}
                                 className={
                                   draft.weekdays.includes(index + 1)
                                     ? "selected"
@@ -637,6 +650,7 @@ export function Composer({
                   <span>{file.name}</span>
                   <button
                     type="button"
+                    aria-label={label(`移除 ${file.name}`, `Remove ${file.name}`)}
                     onClick={() =>
                       update({
                         uploads: draft.uploads.filter((_, i) => index !== i),

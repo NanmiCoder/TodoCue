@@ -15,7 +15,9 @@ pub fn monitor_notch_clicks(app: &tauri::AppHandle) -> Result<(), String> {
         MainThreadMarker::new().ok_or("Mouse monitors must be installed on the main thread")?;
     let mask = NSEventMask::LeftMouseDown | NSEventMask::RightMouseDown;
     let global_app = app.clone();
-    let global = RcBlock::new(move |_event: NonNull<NSEvent>| crate::notch_outside(&global_app));
+    let global = RcBlock::new(move |_event: NonNull<NSEvent>| {
+        crate::notch_outside(&global_app);
+    });
     let local_app = app.clone();
     let local = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
         if let Some(window) = local_app.get_webview_window("notch") {
@@ -39,6 +41,28 @@ pub fn monitor_notch_clicks(app: &tauri::AppHandle) -> Result<(), String> {
 }
 #[cfg(not(target_os = "macos"))]
 pub fn monitor_notch_clicks(_app: &tauri::AppHandle) -> Result<(), String> {
+    Ok(())
+}
+
+/// Mirror the original non-activating bar: hiding its key window releases the keyboard,
+/// then notch_present places and re-shows the collapsed bar without focusing it.
+#[cfg(target_os = "macos")]
+pub fn release_notch_keyboard(window: &WebviewWindow) -> Result<(), String> {
+    let target = window.clone();
+    window
+        .run_on_main_thread(move || {
+            if let Ok(raw) = target.ns_window() {
+                unsafe {
+                    let native = &*(raw as *const objc2_app_kit::NSWindow);
+                    native.makeFirstResponder(None);
+                    native.orderOut(None);
+                }
+            }
+        })
+        .map_err(|error| error.to_string())
+}
+#[cfg(not(target_os = "macos"))]
+pub fn release_notch_keyboard(_window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 

@@ -1,5 +1,32 @@
 import type { Task, UpdateTaskInput, Series } from "@todocue/shared";
-import { DateTime } from "luxon";
+import { DateTime, Info } from "luxon";
+
+// Match CalendarRange: Chinese starts Monday; English follows the user's region.
+// Keep ISO weekdays (Monday = 1) separate from JavaScript's Sunday = 0.
+export function calendarFirstWeekday(language: string, region: string): number {
+  return language === "en" ? Info.getStartOfWeek({ locale: region }) : 1;
+}
+export function calendarDays(span: "month" | "week", anchor: string, firstDay: number): string[] {
+  const start = span === "month" ? `${anchor.slice(0, 7)}-01` : anchor;
+  const weekday = new Date(`${start}T12:00:00Z`).getUTCDay() || 7;
+  const offset = (weekday - firstDay + 7) % 7;
+  const length = span === "week" ? 7 : Math.ceil((offset + DateTime.fromISO(start).daysInMonth!) / 7) * 7;
+  return Array.from({ length }, (_, index) => shiftDate(start, index - offset));
+}
+export function weekdayLabels(language: string, firstDay = 1, full = false): string[] {
+  const labels = language === "en"
+    ? (full ? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"])
+    : (full ? ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"] : ["一", "二", "三", "四", "五", "六", "日"]);
+  return Array.from({ length: 7 }, (_, index) => labels[(index + firstDay - 1) % 7]!);
+}
+export function calendarTitle(span: "month" | "week", anchor: string, language: string, firstDay: number, today: string): string {
+  const date = (day: string) => new Date(`${day}T12:00:00Z`);
+  if (span === "month") return new Intl.DateTimeFormat(language, { year: "numeric", month: "short", timeZone: "UTC" }).format(date(anchor));
+  const days = calendarDays("week", anchor, firstDay);
+  const year = days.every(day => day.slice(0, 4) === today.slice(0, 4)) ? undefined : "numeric";
+  const formatter = new Intl.DateTimeFormat(language, { year, month: "short", day: "numeric", timeZone: "UTC" });
+  return `${formatter.format(date(days[0]!))} – ${formatter.format(date(days[6]!))}`;
+}
 export function dateOf(instant: string, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,

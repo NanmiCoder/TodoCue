@@ -343,7 +343,8 @@ fn panel_show(app: tauri::AppHandle, desktop: State<'_, Desktop>) -> Result<(), 
     let window = app.get_webview_window("panel").ok_or("Panel unavailable")?;
     fit_panel(&window, &desktop.settings.lock().unwrap(), true)?;
     window.show().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())
+    window.set_focus().map_err(|e| e.to_string())?;
+    window.as_ref().set_focus().map_err(|e| e.to_string())
 }
 #[tauri::command]
 fn panel_hide(window: WebviewWindow) -> Result<(), String> {
@@ -464,10 +465,18 @@ async fn notch_present(
         return Ok(false);
     }
     let previous = desktop.notch.lock().unwrap().clone();
+    let release_keyboard = cfg!(target_os = "macos")
+        && !state.expanded
+        && previous.expanded
+        && window.is_focused().unwrap_or(false);
     window
         .set_focusable(state.expanded)
         .map_err(|e| e.to_string())?;
-    window.show().map_err(|e| e.to_string())?;
+    if release_keyboard {
+        platform::release_notch_keyboard(&window)?;
+    } else {
+        window.show().map_err(|e| e.to_string())?;
+    }
     // On Windows clear NOACTIVATE before requesting focus. Hover alone never activates.
     let current_size = window
         .inner_size()
@@ -481,6 +490,8 @@ async fn notch_present(
     )?;
     if state.pinned && !previous.pinned {
         window.set_focus().map_err(|e| e.to_string())?;
+        // The native key window and the renderer's first responder are separate on macOS.
+        window.as_ref().set_focus().map_err(|e| e.to_string())?;
     }
     let changed = previous.width != state.width || previous.height != state.height;
     *desktop.notch.lock().unwrap() = state.clone();
@@ -496,7 +507,7 @@ async fn notch_present(
                 return Ok(false);
             }
             let elapsed = start.elapsed().as_secs_f64();
-            let finished = state.reduced_motion || elapsed >= 0.36;
+            let finished = state.reduced_motion || release_keyboard || elapsed >= 0.36;
             let progress = if finished {
                 1.0
             } else {
@@ -543,6 +554,9 @@ async fn notch_present(
         size.width,
         size.height,
     )?;
+    if release_keyboard {
+        window.show().map_err(|e| e.to_string())?;
+    }
     Ok(window.is_visible().unwrap_or(false)
         && size.width >= state.width - 1.0
         && size.height >= state.height - 1.0)
@@ -814,10 +828,7 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => {
-                        if let Some(window) = app.get_webview_window("panel") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        let _ = panel_show(app.clone(), app.state::<Desktop>());
                     }
                     "quit" => app.exit(0),
                     _ => {}

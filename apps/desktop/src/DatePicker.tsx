@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Icon } from "./icons.js";
-import { shiftDate } from "./dates.js";
+import { calendarDays, calendarFirstWeekday, weekdayLabels } from "./dates.js";
 
 export function DatePicker({
   value,
@@ -13,16 +13,8 @@ export function DatePicker({
 }) {
   const [month, setMonth] = useState(value.slice(0, 7));
   const start = `${month}-01`;
-  const offset = (new Date(`${start}T12:00:00Z`).getUTCDay() + 6) % 7;
-  const length = new Date(
-    Number(month.slice(0, 4)),
-    Number(month.slice(5, 7)),
-    0,
-  ).getDate();
-  const dates = Array.from(
-    { length: Math.ceil((offset + length) / 7) * 7 },
-    (_, i) => shiftDate(start, i - offset),
-  );
+  const firstDay = calendarFirstWeekday(language, navigator.language);
+  const dates = calendarDays("month", start, firstDay);
   function page(direction: number) {
     const date = new Date(`${start}T12:00:00Z`);
     date.setUTCMonth(date.getUTCMonth() + direction);
@@ -57,10 +49,7 @@ export function DatePicker({
         </button>
       </div>
       <div className="weekday-labels">
-        {(zh
-          ? ["一", "二", "三", "四", "五", "六", "日"]
-          : ["M", "T", "W", "T", "F", "S", "S"]
-        ).map((day, i) => (
+        {weekdayLabels(language, firstDay).map((day, i) => (
           <span key={i}>{day}</span>
         ))}
       </div>
@@ -70,6 +59,7 @@ export function DatePicker({
             type="button"
             key={date}
             aria-label={date}
+            aria-pressed={date === value}
             className={`${date === value ? "selected" : ""} ${date.slice(0, 7) === month ? "" : "other-month"}`}
             onClick={() => {
               onChange(date);

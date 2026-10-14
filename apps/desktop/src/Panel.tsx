@@ -20,10 +20,10 @@ import {
   defaults,
 } from "./bridge.js";
 import { translate } from "./i18n.js";
-import { Gauge, Mark, TaskRow } from "./components.js";
+import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
 import { Detail } from "./Detail.js";
-import { afterSave, newDraft, type TaskDraft } from "./drafts.js";
+import { afterSave, composerDraft, newDraft, type TaskDraft } from "./drafts.js";
 import { Icon } from "./icons.js";
 import { TaskMetadata } from "./metadata.js";
 import {
@@ -355,18 +355,14 @@ export function Panel() {
       stopped = true;
     };
   }, [eventRevision, liveBoard, selected?.id, route, connection.online]);
-  function edit(task?: Task, title?: string) {
+  function edit(task?: Task, title?: string, fromQuickAdd = false) {
     navigate("form");
     setFormSession(crypto.randomUUID());
     setSelected(task);
-    setDraft(
-      drafts.current.get(task?.id ?? "new") ??
-        newDraft(
-          task,
-          route === "calendar" ? calendarState.selected : board?.context.today,
-          title ?? quick,
-        ),
-    );
+    const date = (route === "calendar" ? calendarState.selected : board?.context.today) ?? new Date().toISOString().slice(0, 10);
+    setDraft(task ? drafts.current.get(task.id) ?? newDraft(task, date)
+      : composerDraft(drafts.current.get("new"), date, title, fromQuickAdd, route === "calendar"));
+    if (fromQuickAdd && title?.trim()) { setQuick(""); quickRequest.current.edited(); }
     setConflict(false);
     setError(null);
   }
@@ -636,7 +632,7 @@ export function Panel() {
                     {view === tab && (
                       <motion.span
                         className="dot-active"
-                        layoutId="selected-view"
+                        layoutId={reduced ? undefined : "selected-view"}
                         transition={motionTokens.snap}
                       />
                     )}
@@ -661,18 +657,7 @@ export function Panel() {
               </div>
             </nav>
             <div className="instrument">
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  className="numeral"
-                  key={`${view}:${count}`}
-                  initial={{ y: reduced ? 0 : 12, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: reduced ? 0 : -12, opacity: 0 }}
-                  transition={reduced ? { duration: 0.12 } : motionTokens.settle}
-                >
-                  {count}
-                </motion.span>
-              </AnimatePresence>
+              <Numeral value={count} />
               <div className="instrument-caption">
                 <strong>
                   {settings.language === "en"
@@ -1140,7 +1125,7 @@ export function Panel() {
                       <AnimatePresence mode="popLayout" initial={false}>
                         <motion.span
                           key={quick.trim() ? "send" : "plus"}
-                          initial={{ opacity: 0, scale: 0.4 }}
+                          initial={{ opacity: 0, scale: reduced ? 1 : 0.4 }}
                           animate={{
                             opacity: 1,
                             scale: 1,
@@ -1149,8 +1134,8 @@ export function Panel() {
                                 ? 90
                                 : 0,
                           }}
-                          exit={{ opacity: 0, scale: 0.4 }}
-                          transition={motionTokens.snap}
+                          exit={{ opacity: 0, scale: reduced ? 1 : 0.4 }}
+                          transition={reduced ? { duration: 0.12 } : motionTokens.snap}
                         >
                           <Icon name={quick.trim() ? "up" : "plus"} size={20} />
                         </motion.span>
@@ -1188,7 +1173,7 @@ export function Panel() {
                       <button
                         className="icon-button"
                         type="button"
-                        onClick={() => edit()}
+                        onClick={() => edit(undefined, quick, true)}
                         aria-label={t("details")}
                       >
                         <Icon name="edit" />
@@ -1217,7 +1202,7 @@ export function Panel() {
                         <button
                           className="text-button"
                           type="button"
-                          onClick={() => edit(undefined, quick)}
+                          onClick={() => edit(undefined, quick, true)}
                         >
                           {t("details")}
                         </button>
@@ -1622,6 +1607,7 @@ function RouteSurface({
     <motion.div
       className="page-content"
       inert={!present}
+      aria-hidden={!present}
       style={{ zIndex: depth }}
       initial={{ y: reduced ? 0 : 14, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
