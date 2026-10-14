@@ -32,6 +32,8 @@ import {
   weekdayLabels,
   calendarTitle,
   calendarBucket,
+  stepCalendar,
+  taskOverdue,
 } from "./dates.js";
 import { motionTokens, spring } from "./tokens.js";
 import { LatestRequest } from "./model.js";
@@ -103,7 +105,7 @@ export function CalendarPage({
     return () => observer.disconnect();
   }, []);
   const setSpan = (span: CalendarState["span"]) =>
-    setState((current) => ({ ...current, span }));
+    setState((current) => ({ ...current, span, anchor: current.selected, collapsed: false }));
   const setAnchor = (anchor: string) =>
     setState((current) => ({ ...current, anchor }));
   const setSelected = (selected: string) =>
@@ -118,7 +120,6 @@ export function CalendarPage({
     null,
   );
   const zh = language !== "en";
-  const monthStart = anchor.slice(0, 7) + "-01";
   const firstDay = calendarFirstWeekday(language, globalThis.navigator.language);
   const days = calendarDays(span, anchor, firstDay);
   const from = days[0]!;
@@ -193,12 +194,9 @@ export function CalendarPage({
     ...ghosts.filter(ghost => ghost.date === day).map((_, index) => ({ key: `ghost:${index}`, kind: "ghost" })),
   ];
   function page(direction: number) {
-    if (span === "week") setAnchor(shiftDate(anchor, 7 * direction));
-    else {
-      const date = new Date(`${monthStart}T12:00:00Z`);
-      date.setUTCMonth(date.getUTCMonth() + direction);
-      setAnchor(date.toISOString().slice(0, 10));
-    }
+    const next = stepCalendar(state, direction, firstDay);
+    setState(current => ({ ...current, ...next }));
+    onQuickDate(next.selected);
   }
   async function move(task: Task, date: string, allow = false) {
     if (!online) return;
@@ -274,7 +272,7 @@ export function CalendarPage({
                 <button
                   style={{ height: cellHeight }}
                   key={day}
-                  className={`${selected === day ? "selected" : ""} ${day.slice(0, 7) !== anchor.slice(0, 7) ? "other-month" : ""} ${day === today ? "is-today" : ""}`}
+                  className={`${selected === day ? "selected" : ""} ${day.slice(0, 7) !== anchor.slice(0, 7) ? "other-month" : ""} ${day === today ? "is-today" : ""} ${bucket(day).some(task => taskOverdue(task, today)) ? "has-overdue" : ""}`}
                   onClick={() => {
                     setSelected(day);
                     onQuickDate(day);
@@ -324,8 +322,12 @@ export function CalendarPage({
         <CalendarSwap className="calendar-agenda-days" key={span === "week" ? `week:${from}` : `day:${selected}`} direction={direction} distance={span === "week" ? 24 : 0}>
         {(span === "week" ? days : [selected]).map((day) => (
           <section
-            className="day-agenda"
+            className={`day-agenda ${day === selected ? "selected" : ""}`}
             key={day}
+            onClick={(event) => {
+              if ((event.target as Element).closest("button, input, a, summary")) return;
+              setSelected(day); onQuickDate(day);
+            }}
             onDragOver={(event) => {
               if (online) event.preventDefault();
             }}
@@ -340,7 +342,7 @@ export function CalendarPage({
             }}
           >
             <h3 className={day === today ? "is-today" : ""}>
-              {dayLabel(day, language, today)} {planned(day).length > 0 && <span>{planned(day).length}</span>}
+              <button type="button" aria-pressed={day === selected} onClick={() => { setSelected(day); onQuickDate(day); }}>{dayLabel(day, language, today)}</button> {planned(day).length > 0 && <span>{planned(day).length}</span>}
             </h3>
             {bucket(day).length === 0 &&
               history(day).length === 0 &&
@@ -383,6 +385,7 @@ export function CalendarPage({
                   <TaskRow
                     key={`due:${task.id}`}
                     task={task}
+                    today={today}
                     disabled={!online}
                     onOpen={onOpen}
                     onComplete={onComplete}

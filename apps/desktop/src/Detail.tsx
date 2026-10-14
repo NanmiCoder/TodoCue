@@ -3,7 +3,7 @@ import { useIsPresent } from "motion/react";
 import type { Reminder, Series, Task } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { Icon, type IconName } from "./icons.js";
-import { dayLabel, reschedule, shiftDate } from "./dates.js";
+import { dayLabel, reschedule, shiftDate, taskOverdue } from "./dates.js";
 import { estimateLabel, timeLabel } from "./metadata.js";
 import { AttachmentGallery, AttachmentPreview, type FilePreview } from "./Attachments.js";
 
@@ -52,6 +52,7 @@ export function Detail({
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [viewing, setViewing] = useState<FilePreview | null>(null);
   const disabled = !online || busy || working;
+  const overdue = taskOverdue(task, today);
   const instant = (value: string | null) =>
     value ? timeLabel(value, task.timezone, language, today) : null;
   useEffect(() => {
@@ -128,10 +129,10 @@ export function Detail({
       <div className="detail-scroll">
         <div className="detail-title">
           <span
-            className={`detail-status ${task.status === "done" ? "accent" : "muted"}`}
+            className={`detail-status ${overdue ? "overdue" : task.status === "done" ? "accent" : "muted"}`}
           >
             <Icon name={task.status === "done" ? "check" : "clock"} size={12} />
-            {text(
+            {overdue ? text("已逾期", "Overdue") : text(
               {
                 todo: "待办",
                 done: "已完成",

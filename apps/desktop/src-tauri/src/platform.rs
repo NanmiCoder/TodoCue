@@ -1,4 +1,34 @@
 use tauri::WebviewWindow;
+#[cfg(all(windows, test))]
+#[path = "win_activation_tests.rs"]
+mod win_activation_tests;
+
+/// Ordinary viewing keeps the keyboard in the user's current application.
+#[cfg(target_os = "macos")]
+pub fn show_without_activation(window: &WebviewWindow) -> Result<(), String> {
+    let target = window.clone();
+    window
+        .run_on_main_thread(move || {
+            if let Ok(raw) = target.ns_window() {
+                unsafe {
+                    (&*(raw as *const objc2_app_kit::NSWindow)).orderFrontRegardless();
+                }
+            }
+        })
+        .map_err(|e| e.to_string())
+}
+#[cfg(windows)]
+pub fn show_without_activation(window: &WebviewWindow) -> Result<(), String> {
+    // Keep Tao's visibility bookkeeping synchronized. Direct ShowWindow bypasses
+    // it and breaks subsequent focus/hide commands. Editing explicitly restores
+    // focusability; ordinary presentation keeps the NOACTIVATE style.
+    window.set_focusable(false).map_err(|e| e.to_string())?;
+    window.show().map_err(|e| e.to_string())
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn show_without_activation(window: &WebviewWindow) -> Result<(), String> {
+    window.show().map_err(|e| e.to_string())
+}
 
 #[cfg(target_os = "macos")]
 thread_local! {

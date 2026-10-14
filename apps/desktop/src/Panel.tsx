@@ -12,6 +12,7 @@ import { TodoCueError } from "@todocue/shared";
 import {
   client,
   hidePanel,
+  focusPanel,
   loadSettings,
   native,
   saveSettings,
@@ -206,11 +207,11 @@ export function Panel() {
     };
   }, []);
   useEffect(() => {
-    if (!pendingTarget || !connection.online) return;
+    if (!pendingTarget || (!connection.online && pendingTarget.kind !== "new_task")) return;
     let stopped = false;
     void (async () => {
       if (pendingTarget.kind === "new_task") {
-        edit();
+        edit(undefined, undefined, false, false);
       } else if (pendingTarget.kind === "task" && pendingTarget.id) {
         const { task } = await client.getTask(pendingTarget.id);
         if (!stopped) {
@@ -264,6 +265,7 @@ export function Panel() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
+        void focusPanel().catch(error => setError(String(error)));
         if (route !== "list") {
           navigate("list");
         }
@@ -355,7 +357,8 @@ export function Panel() {
       stopped = true;
     };
   }, [eventRevision, liveBoard, selected?.id, route, connection.online]);
-  function edit(task?: Task, title?: string, fromQuickAdd = false) {
+  function edit(task?: Task, title?: string, fromQuickAdd = false, focus = true) {
+    if (focus) void focusPanel().catch(error => setError(String(error)));
     navigate("form");
     setFormSession(crypto.randomUUID());
     setSelected(task);
@@ -367,6 +370,7 @@ export function Panel() {
     setError(null);
   }
   function editPeriodic(rule?: PeriodicReminder) {
+    void focusPanel().catch(error => setError(String(error)));
     navigate("periodicForm");
     setFormSession(crypto.randomUUID());
     setPeriodicSelected(rule);
@@ -471,6 +475,9 @@ export function Panel() {
   return (
     <main className="panel-shell"
       onPointerDownCapture={(event) => {
+        if (native && navigator.userAgent.includes("Windows") &&
+          (event.target as Element).closest("input, textarea, button, select, summary, [contenteditable=true]"))
+          void focusPanel().catch(error => setError(String(error)));
         if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
       }}
       onFocusCapture={(event) => {

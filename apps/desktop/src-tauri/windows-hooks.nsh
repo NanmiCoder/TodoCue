@@ -14,6 +14,11 @@
   WriteRegStr HKCU "Software\Classes\todocue\shell\open\command" "" '$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\"'
   nsExec::ExecToLog '$\"$INSTDIR\runtime\bin\node.exe$\" $\"$INSTDIR\runtime\packages\cli\dist\index.js$\" windows-integration start'
   Pop $0
+  StrCmp $0 "0" todocue_start_done
+    MessageBox MB_OK|MB_ICONSTOP "TodoCue background runtime could not restart ($0). Your data and recovery settings have been kept. Check its background logs and scheduled task, then retry the installation." /SD IDOK
+    SetErrorLevel 1
+    Abort
+  todocue_start_done:
 !macroend
 !macro NSIS_HOOK_PREUNINSTALL
   ; Remove only integration. The ~/.todocue database and backups stay intact.

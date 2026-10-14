@@ -47,6 +47,7 @@ export function Composer({
   const [popupPosition, setPopupPosition] = useState({ left: 20, top: 200 });
   const [projects, setProjects] = useState<string[]>([]);
   const [popover, setPopover] = useState<string | null>(null);
+  const [propertyText, setPropertyText] = useState("");
   const [viewing, setViewing] = useState<FilePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -79,6 +80,7 @@ export function Composer({
   }, [online]);
   useEffect(() => {
     if (!popover) return;
+    setPropertyText(popover === "project" ? current.current.project : popover === "estimate" ? current.current.estimate : "");
     const dismiss = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isCompositionKey(event)) {
         event.preventDefault();
@@ -113,6 +115,16 @@ export function Composer({
     if (mounted.current) setDraft(next);
     onChange(next);
     if (!conflict && mounted.current) setError(null);
+  }
+  function confirmProperty() {
+    if (popover === "project") {
+      if (!propertyText.trim()) return;
+      update({ project: propertyText.trim() });
+    } else if (popover === "estimate") {
+      if (!propertyText.trim() || !Number.isInteger(Number(propertyText)) || Number(propertyText) < 0) return;
+      update({ estimate: propertyText });
+    }
+    setPopover(null);
   }
   async function files(files: FileList | File[]) {
     setReading((count) => count + 1);
@@ -270,6 +282,11 @@ export function Composer({
         ) {
           event.preventDefault();
           void save();
+        } else if (!event.defaultPrevented && event.key === "Enter" &&
+          !isCompositionKey(event.nativeEvent) && (event.target as Element).closest(".composer-popover input")) {
+          // A property input must never implicitly submit the task form.
+          event.preventDefault();
+          confirmProperty();
         }
       }}
     >
@@ -299,10 +316,11 @@ export function Composer({
               if (
                 event.key === "Enter" &&
                 !event.shiftKey &&
+                !event.altKey && !event.metaKey && !event.ctrlKey &&
                 !isCompositionKey(event.nativeEvent)
               ) {
                 event.preventDefault();
-                void save();
+                event.currentTarget.blur();
               }
             }}
           />
@@ -445,9 +463,9 @@ export function Composer({
                     <label className="field-row">
                       {label("项目", "Project")}
                       <input
-                        value={draft.project}
+                        value={propertyText}
                         onChange={(event) =>
-                          update({ project: event.target.value })
+                          setPropertyText(event.target.value)
                         }
                       />
                     </label>
@@ -457,10 +475,10 @@ export function Composer({
                       {projects
                         .filter(
                           (project) =>
-                            !draft.project ||
+                            !propertyText ||
                             project
                               .toLowerCase()
-                              .includes(draft.project.toLowerCase()),
+                              .includes(propertyText.toLowerCase()),
                         )
                         .map((project) => (
                           <button
@@ -484,9 +502,9 @@ export function Composer({
                         type="number"
                         min="0"
                         step="1"
-                        value={draft.estimate}
+                        value={propertyText}
                         onChange={(event) =>
-                          update({ estimate: event.target.value })
+                          setPropertyText(event.target.value)
                         }
                       />
                       {label("分钟", "minutes")}
@@ -610,7 +628,7 @@ export function Composer({
                   <button
                     type="button"
                     className="text-button popover-done"
-                    onClick={() => setPopover(null)}
+                    onClick={confirmProperty}
                   >
                     {label("完成", "Done")}
                   </button>

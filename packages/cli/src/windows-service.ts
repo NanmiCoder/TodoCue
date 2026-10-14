@@ -88,6 +88,11 @@ export async function windowsProductIntegration(root: string, action: "stop" | "
       await windowsStop(paths);
     } else if (action === "start" && owned && value.resumeAfterUpgrade) {
       await windowsStart(paths);
+      const deadline = Date.now() + 15000;
+      while (!await isRuntimeAlive(paths)) {
+        if (Date.now() >= deadline) throw new Error(`Windows runtime did not recover; see ${paths.logs}`);
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
       saveWindowsHome({ ...value, resumeAfterUpgrade: false });
     } else if (action === "uninstall") {
       if (owned) await windowsUninstall(paths);

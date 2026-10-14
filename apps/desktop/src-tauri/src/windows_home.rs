@@ -4,8 +4,65 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 pub fn home_id(home: &Path) -> String {
-    let hash = Sha256::digest(home.to_string_lossy().to_lowercase().as_bytes());
+    let hash = Sha256::digest(path_key(home).as_bytes());
     hash[..6].iter().map(|byte| format!("{byte:02x}")).collect()
+}
+// Node's path.win32.resolve normalizes separators and dot segments before hashing.
+// This is lexical: a newly selected data directory need not exist yet.
+fn path_key(path: &Path) -> String {
+    normalize_absolute(&path.to_string_lossy()).to_lowercase()
+}
+fn normalize_absolute(value: &str) -> String {
+    let value = value.replace('/', "\\");
+    let bytes = value.as_bytes();
+    let (root, tail) = if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && bytes[2] == b'\\'
+    {
+        (value[..3].to_owned(), &value[3..])
+    } else if value.starts_with(r"\\?\") || value.starts_with(r"\\.\") {
+        (value[..4].to_owned(), &value[4..])
+    } else if let Some(unc) = value.strip_prefix(r"\\") {
+        let mut parts = unc.split('\\').filter(|part| !part.is_empty());
+        if let (Some(server), Some(share)) = (parts.next(), parts.next()) {
+            let root = format!(r"\\{server}\{share}\");
+            // Skip both components even when separators were repeated.
+            let mut end = 2;
+            for _ in 0..2 {
+                while value.as_bytes().get(end) == Some(&b'\\') {
+                    end += 1;
+                }
+                while value.as_bytes().get(end).is_some_and(|c| *c != b'\\') {
+                    end += 1;
+                }
+            }
+            (root, &value[end..])
+        } else {
+            return value;
+        }
+    } else {
+        // Non-Windows test fixtures retain the host path contract.
+        return value.replace('\\', "/");
+    };
+    let mut parts = Vec::new();
+    for part in tail.split('\\') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+    }
+    format!("{root}{}", parts.join("\\"))
+}
+#[cfg(windows)]
+pub fn resolve_home(home: &Path) -> Result<PathBuf, String> {
+    let absolute = std::path::absolute(home).map_err(|e| e.to_string())?;
+    Ok(PathBuf::from(normalize_absolute(
+        &absolute.to_string_lossy(),
+    )))
 }
 pub fn quote_argument(value: &str) -> String {
     let mut output = String::from("\"");
@@ -71,7 +128,7 @@ pub fn homes_directory() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(|value| PathBuf::from(value).join("TodoCue/homes"))
 }
 fn same_path(a: &Path, b: &Path) -> bool {
-    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+    path_key(a) == path_key(b)
 }
 pub fn registered_home(dir: &Path, id: &str, root: &Path) -> Result<PathBuf, String> {
     if id.len() != 12
@@ -142,6 +199,16 @@ pub fn launch_home(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn resolving_new_homes_matches_node_without_requiring_existing_directories() {
+        let root = format!("C:/TodoCue-absent-{}/", std::process::id());
+        let first = resolve_home(Path::new(&format!("{root}other/../new/"))).unwrap();
+        let second = resolve_home(Path::new(&format!("{root}new/.").replace('/', "\\"))).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(home_id(&first), home_id(&second));
+        assert!(!first.exists());
+    }
     #[test]
     fn startup_keeps_paths_with_spaces_and_trailing_slashes_as_single_arguments() {
         assert_eq!(
@@ -159,6 +226,26 @@ mod tests {
             home_id(Path::new(r"C:\Users\User\.todocue")),
             "b135982fc11b"
         );
+        for home in [
+            r"C:\Custom data",
+            "C:/Custom data",
+            "C:\\Custom data\\",
+            r"C:\Custom data\.",
+            r"C:\other\..\Custom data",
+        ] {
+            assert_eq!(home_id(Path::new(home)), "c2a4d1e3040d", "{home}");
+        }
+        for (home, id) in [
+            (r"C:\", "3dc8472eaebe"),
+            (r"C:\foo\bar\..\..\..", "3dc8472eaebe"),
+            (r"\\server\share\foo\..\", "af69ebc65f06"),
+            (r"\\server\share\..\..\after", "190d11be5e27"),
+            (r"\\?\C:\foo\..\..", "284a6a0bf182"),
+            (r"\\?\UNC\server\share\..\..", "3e01337bba34"),
+            (r"\\.\pipe\foo\..", "58cf6af39b15"),
+        ] {
+            assert_eq!(home_id(Path::new(home)), id, "{home}");
+        }
     }
     #[test]
     fn cold_and_warm_routes_select_the_registered_home_and_reject_unknown_namespaces() {

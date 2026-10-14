@@ -19,6 +19,7 @@ import {
 } from "./bridge.js";
 import {
   CueStack,
+  visibleCues,
   taskCue,
   canPresentPeriodic,
   periodicActive,
@@ -51,6 +52,7 @@ export function Notch() {
   const busyCues = useRef(new Set<string>());
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
   const [featured, setFeatured] = useState(false);
+  const [cueHovered, setCueHovered] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<DesktopSettings>(defaults);
   const [bandHeight, setBandHeight] = useState(24);
@@ -338,10 +340,13 @@ export function Notch() {
   }, [runtime.board, runtime.rules]);
   useEffect(() => {
     if (!featured) return;
-    const timer = setTimeout(() => setFeatured(false), dial.featureDuration);
-    return () => clearTimeout(timer);
-  }, [featured, featuredKey, cues.find((cue) => cue.key === featuredKey)?.id]);
+    const timer = setInterval(() => {
+      if (!hovering.current && busyKeys.size === 0) setFeatured(false);
+    }, dial.featureDuration);
+    return () => clearInterval(timer);
+  }, [featured, featuredKey, busyKeys.size, cues.find((cue) => cue.key === featuredKey)?.id]);
   const stackShown = cues.length > 0 && !folded && !expanded;
+  const stackCues = visibleCues(cues, featured ? featuredKey : null);
   useLayoutEffect(() => {
     const node = content.current;
     if (!node) return;
@@ -460,6 +465,7 @@ export function Notch() {
       transition={reduced ? { duration: 0.12 } : motionTokens.expand}
       onMouseEnter={() => {
         hovering.current = true;
+        setCueHovered(true);
         clearTimeout(leaveTimer.current);
         if (!expanded && !stackShown && !rearmAfterLeave.current)
           hoverTimer.current = setTimeout(
@@ -469,6 +475,7 @@ export function Notch() {
       }}
       onMouseLeave={() => {
         hovering.current = false;
+        setCueHovered(false);
         rearmAfterLeave.current = false;
         clearTimeout(hoverTimer.current);
         if (deferred.current.length) {
@@ -516,7 +523,7 @@ export function Notch() {
                   pendingFocus.current = false;
                   quickFocusRevision.current++;
                 }
-                if (expanded) {
+                if (expanded && !(target instanceof Element && target.closest("[data-pin-control]"))) {
                   clearTimeout(leaveTimer.current);
                   interaction.current.pinned = true;
                   setPinned(true);
@@ -566,6 +573,7 @@ export function Notch() {
                     </button>
                     <button
                       className={`icon-button ${pinned ? "accent" : ""}`}
+                      data-pin-control
                       onClick={() => {
                         const value = !pinned;
                         interaction.current.pinned = value;
@@ -589,7 +597,7 @@ export function Notch() {
                       </button>
                     </p>
                   )}
-                  {cues.slice(0, 3).map((cue) => (
+                  {cues.map((cue) => (
                     <CueCard
                       key={cue.key}
                       cue={cue}
@@ -862,11 +870,11 @@ export function Notch() {
                       <Icon name="close" />
                     </button>
                   </div>
-                  {cues.slice(0, 3).map((cue) => (
+                  {stackCues.map((cue) => (
                     <CueCard
                       key={cue.key}
                       cue={cue}
-                      featured={featured && cue.key === featuredKey}
+                      featured={(featured && cue.key === featuredKey) || (cues.length === 1 && cueHovered)}
                       language={settings.language}
                       disabled={
                         !runtime.connection.online || busyKeys.has(cue.key)
@@ -882,8 +890,8 @@ export function Notch() {
                   ))}
                 </>
               )}
-              {cues.length > 3 && !expanded && (
-                <span className="muted">+{cues.length - 3}</span>
+              {cues.length > stackCues.length && !expanded && (
+                <button className="muted" aria-label={settings.language === "en" ? "Show all reminders" : "查看全部提醒"} onClick={focusQuickAdd}>+{cues.length - stackCues.length}</button>
               )}
               {error && (
                 <p role="alert" className="error">

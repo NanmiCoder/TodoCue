@@ -8,7 +8,8 @@ const scheduler = vi.hoisted(() => ({
   tasks: new Map<string, { home: string; running: Record<string, unknown> | null }>(),
   calls: [] as { command: string; args: string[]; env?: NodeJS.ProcessEnv }[],
   userPath: ["C:\\Other tools"],
-  failCreate: false, failStop: false,
+  failCreate: false, failStop: false, failRun: false, unhealthy: false,
+  healthChecks: 0,
   stopGate: undefined as Promise<void> | undefined,
 }));
 vi.mock("node:child_process", async importOriginal => {
@@ -44,6 +45,7 @@ vi.mock("node:child_process", async importOriginal => {
         scheduler.tasks.set(name, { home, running: null });
       }
       if (args.includes("/Run")) {
+        if (scheduler.failRun) throw new Error("Scheduled task cannot start");
         if (!task) throw new Error("Task missing");
         task.running ??= JSON.parse(fs.readFileSync(path.join(task.home, "windows-runtime.json"), "utf8"));
       }
@@ -54,6 +56,14 @@ vi.mock("node:child_process", async importOriginal => {
   } });
   return { ...original, execFile };
 });
+vi.mock("@todocue/server", async importOriginal => ({
+  ...await importOriginal<typeof import("@todocue/server")>(),
+  isRuntimeAlive: async (paths: { home: string }) => {
+    scheduler.healthChecks++;
+    const task = [...scheduler.tasks.values()].find(value => value.home === paths.home);
+    return task?.running && !scheduler.unhealthy ? { pid: 101, baseUrl: "http://127.0.0.1:47831", token: "fixture", startedAt: "fixture" } : null;
+  },
+}));
 import { ensureWindowsCliPath, taskName, windowsInstall, windowsProductIntegration, windowsUninstall, type WindowsRuntimeSpec } from "../src/windows-service.js";
 import { registerWindowsHome, windowsHomes } from "../src/windows-integration.js";
 import { installWindowsCli } from "../src/bootstrap.js";
@@ -65,8 +75,9 @@ beforeEach(() => {
   vi.stubEnv("TODOCUE_HOME", "");
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs(); fs.rmSync(base, { recursive: true, force: true });
-  scheduler.tasks.clear(); scheduler.calls = []; scheduler.failCreate = false; scheduler.failStop = false; scheduler.stopGate = undefined; scheduler.userPath = ["C:\\Other tools"];
+  scheduler.tasks.clear(); scheduler.calls = []; scheduler.failCreate = false; scheduler.failStop = false; scheduler.failRun = false; scheduler.unhealthy = false; scheduler.healthChecks = 0; scheduler.stopGate = undefined; scheduler.userPath = ["C:\\Other tools"];
 });
 function fixture(homeName = "custom data & files", appName = "Installed TodoCue") {
   const paths = runtimePaths(path.join(base, homeName)); ensureHome(paths);
@@ -110,6 +121,28 @@ describe("Windows product lifecycle without the original shell environment", () 
     const f = fixture(); await windowsInstall(f.paths, f.spec); scheduler.failCreate = true;
     await expect(windowsInstall(f.paths, { ...f.spec, port: 47832 })).rejects.toThrow("Registration refused");
     expect(scheduler.tasks.get(taskName(f.paths.home))?.running?.port).toBe(47831);
+  });
+  it("keeps upgrade recovery state and task data when the scheduler rejects /Run", async () => {
+    const f = fixture(); await windowsInstall(f.paths, f.spec);
+    fs.writeFileSync(f.paths.database, "preserve task data");
+    await windowsProductIntegration(f.root, "stop"); scheduler.failRun = true;
+    await expect(windowsProductIntegration(f.root, "start")).rejects.toThrow("Scheduled task cannot start");
+    expect(windowsHomes(f.root)[0]?.resumeAfterUpgrade).toBe(true);
+    expect(fs.readFileSync(f.paths.database, "utf8")).toBe("preserve task data");
+    scheduler.failRun = false; await windowsProductIntegration(f.root, "start");
+    expect(windowsHomes(f.root)[0]?.resumeAfterUpgrade).toBe(false);
+    expect(scheduler.tasks.get(taskName(f.paths.home))?.running).toBeTruthy();
+  });
+  it("does not clear recovery merely because /Run acknowledges an unhealthy host", async () => {
+    const f = fixture(); await windowsInstall(f.paths, f.spec);
+    await windowsProductIntegration(f.root, "stop"); scheduler.unhealthy = true;
+    vi.useFakeTimers();
+    const failure = expect(windowsProductIntegration(f.root, "start")).rejects.toThrow(/runtime|healthy|start/i);
+    await vi.advanceTimersByTimeAsync(16000); await failure;
+    expect(scheduler.healthChecks).toBeGreaterThan(1);
+    expect(windowsHomes(f.root)[0]?.resumeAfterUpgrade).toBe(true);
+    scheduler.unhealthy = false; await windowsProductIntegration(f.root, "start");
+    expect(windowsHomes(f.root)[0]?.resumeAfterUpgrade).toBe(false);
   });
   it("product uninstall removes its CLI, pointer and managed PATH but preserves task data and other installations", async () => {
     const f = fixture(), other = fixture("other data", "Other install");

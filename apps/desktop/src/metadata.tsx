@@ -1,5 +1,5 @@
 import type { Task } from "@todocue/shared";
-import { dayLabel, dateOf } from "./dates.js";
+import { dayLabel, dateOf, taskOverdue } from "./dates.js";
 import { Icon } from "./icons.js";
 
 export function timeLabel(
@@ -61,9 +61,7 @@ export function TaskMetadata({
       {due && (
         <span
           className={
-            today &&
-            (task.dueDate ?? dateOf(task.dueAt!, task.timezone)) < today &&
-            task.status === "todo"
+            taskOverdue(task, today ?? dateOf(new Date().toISOString(), task.timezone))
               ? "overdue"
               : ""
           }

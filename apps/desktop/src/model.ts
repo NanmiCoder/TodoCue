@@ -11,6 +11,9 @@ export interface Cue {
   periodic?: PeriodicReminder;
   dormant?: boolean;
 }
+export function visibleCues(cues: Cue[], featuredKey: string | null) {
+  return cues.filter((cue, index) => index < 3 || cue.key === featuredKey);
+}
 
 /** Pure state logic, shared by both windows and exercised with the real runtime. */
 export class CueStack {

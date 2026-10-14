@@ -58,6 +58,25 @@ export function shiftDate(date: string, days: number): string {
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
 }
+export function stepCalendar(state: { span: "month" | "week"; anchor: string; selected: string }, steps: number, firstDay: number) {
+  if (state.span === "week") {
+    const anchor = shiftDate(state.anchor, steps * 7);
+    const weekday = new Date(`${state.selected}T12:00:00Z`).getUTCDay();
+    const selected = calendarDays("week", anchor, firstDay).find(day => new Date(`${day}T12:00:00Z`).getUTCDay() === weekday)!;
+    return { anchor, selected };
+  }
+  const month = new Date(`${state.anchor.slice(0, 7)}-01T12:00:00Z`);
+  month.setUTCMonth(month.getUTCMonth() + steps);
+  const last = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
+  month.setUTCDate(Math.min(Number(state.anchor.slice(-2)), last));
+  const anchor = month.toISOString().slice(0, 10);
+  return { anchor, selected: anchor };
+}
+export function taskOverdue(task: Task, today: string, now = Date.now()): boolean {
+  return task.status === "todo" && (task.dueAt
+    ? Date.parse(task.dueAt) < now
+    : !!task.dueDate && task.dueDate < today);
+}
 export function dayLabel(date: string, language: string, today?: string) {
   if (!date) return language === "en" ? "Unscheduled" : "未安排";
   if (date === today) return language === "en" ? "Today" : "今天";

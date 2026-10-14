@@ -33,6 +33,14 @@ export function installWindowsCli(packaged: string, target: string, root: string
   return target;
 }
 
+/** Keep a home's selected port while updating the installed runtime paths. */
+export function installedWindowsPort(home: string): number | undefined {
+  try {
+    const { port } = JSON.parse(fs.readFileSync(path.join(home, "windows-runtime.json"), "utf8"));
+    return Number.isInteger(port) && port >= 0 && port <= 65535 ? port : undefined;
+  } catch { return undefined; }
+}
+
 /** Install only our wrapper; never replace an unrelated command or symlink. */
 export function installCliWrapper(paths: RuntimePaths, node: string, entry: string, linkDirs = ["/opt/homebrew/bin", "/usr/local/bin"]): string {
   const wrapper = path.join(paths.bin, "todocue");
@@ -60,7 +68,7 @@ export async function bootstrapRuntime(home: string): Promise<{ running: boolean
   if (process.platform === "win32") {
     const paths = runtimePaths(home); ensureHome(paths);
     const root = runtimeRoot(); const app = path.dirname(root);
-    const spec = windowsSpec(paths, { nodePath: path.join(root, "bin", "node.exe"), cliEntry: path.join(root, "packages", "cli", "dist", "index.js") });
+    const spec = windowsSpec(paths, { nodePath: path.join(root, "bin", "node.exe"), cliEntry: path.join(root, "packages", "cli", "dist", "index.js"), port: installedWindowsPort(home) });
     const cli = path.join(paths.bin, "todocue.exe");
     const packagedCli = path.join(app, "todocue-cli.exe");
     // The shim retains the installed runtime path separately, so it works from the user bin.
