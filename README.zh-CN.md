@@ -134,11 +134,13 @@ DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的�
 
 </details>
 
-跨平台迁移预览已加入源码：`npm run desktop:dev` 可在隔离数据上对照共享界面；Windows x64/ARM64 的当前用户安装包由 preview workflow 构建。Windows 实机与完整视觉验收仍待完成，正式 macOS 版继续使用现有原生客户端。见 [预览运行与构建](apps/desktop/README.md)、[实施/验收状态](docs/desktop-migration.md)及 [继续开发交接](docs/desktop-handoff.md)。
+跨平台迁移预览已加入源码：`npm run desktop:dev` 可在隔离数据上对照共享界面；preview workflow 构建 Windows x64/ARM64 当前用户安装包与 macOS Apple Silicon/Intel 共享 App ZIP。Windows 实机与完整视觉验收仍待完成，正式 macOS 版继续使用现有原生客户端。见 [预览运行与构建](apps/desktop/README.md)、[实施/验收状态](docs/desktop-migration.md)及 [继续开发交接](docs/desktop-handoff.md)。
 
-最新预览已回归 macOS 刘海/面板输入、粘贴、回车与保存中继续输入，按原版校准表单、附件、详情和日历；Windows x64/ARM64 构建与七组真实安装包冒烟通过。[实测记录、对照截图与预览下载](docs/qa/desktop-p1-ui/README.md)明确区分这些结果与真实鼠标、候选窗口、Windows GUI 和逐帧等未验证项。
+此前 UI 对照阶段已回归 macOS 刘海/面板输入、粘贴、回车与保存中继续输入，按原版校准表单、附件、详情和日历；当时 Windows x64/ARM64 构建与七组真实安装包冒烟通过。[实测记录、对照截图与预览下载](docs/qa/desktop-p1-ui/README.md)明确区分这些结果与真实鼠标、候选窗口、Windows GUI 和逐帧等未验证项。
 
 [独立审查修复](docs/qa/desktop-review-fixes/README.md)补齐CLI目录/端口恢复、日历选择、普通回车、提醒和原生焦点。Windows两架构十组安装包回归均通过；实机验收与正式macOS切换仍待完成。
+
+[合并后构建与下载](docs/qa/desktop-builds/README.md)提供四种共享 Preview 和两种 Developer ID 签名、公证的 SwiftUI DMG，相关 CI 全通过。共享 Mac 预览为 ad-hoc 签名并需要外部隔离运行时；这些 CI 产物与正式 Release 分开。
 
 ## 许可证
 

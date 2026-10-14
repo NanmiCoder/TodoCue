@@ -1,6 +1,6 @@
 # 桌面独立审查修复与回归
 
-2026-10-15。修复提交 `193292e`、`50762d4`，继续使用 `codex/desktop-native-ui-fixes` 和 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。不合并主分支、不升级版本、不发布正式包。
+2026-10-15。修复提交 `193292e`、`50762d4`，[PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 已按用户授权合并到 `codex/desktop-migration-handoff`（`a57d012`）。后续共享 Mac 双架构构建配置亦已合并，见[六种构建产物与 CI](../desktop-builds/README.md)。未合并主分支、未升级版本、未正式发布。
 
 全部本机操作使用 `TODOCUE_HOME=/tmp/todocue-review-fixes-20261015`，运行时 47832、Vite 5173。Ego Lite TaskSpace 24 覆盖本轮浏览器复测；原生使用此目录启动的 TodoCue Preview。没有读取个人生产数据库，证据不含连接 token。
 
@@ -58,7 +58,7 @@
 - Mac物理外部鼠标/桌面命中、拖选、IME候选、真实硬件刘海及多屏；AX定向动作不能证明全局物理mouse monitor。
 - 本轮定向坐标注入到计算器能改变其显示，但没有观察到刘海收起；这个尝试不计为外部点击通过，仍需确认全局真实事件路径。
 - 全套CueMark/翼标波纹以及50ms逐帧、完整原生主题/透明度/系统字体矩阵。当前不能宣称完整复刻SwiftUI。
-- 共享macOS正式运行时打包/bootstrap、Intel包、签名/公证、EventKit、偏好迁移和生产客户端切换。当前是预览修复，不是正式双平台发布。
+- 共享macOS正式运行时打包/bootstrap、Developer ID签名/公证、EventKit、偏好迁移和生产客户端切换。Apple Silicon/Intel 的 ad-hoc 共享预览包已构建并通过归档验证；原 SwiftUI 双架构公证 DMG 不替代共享 Mac 的正式迁移验收。
 
 ## 截图
 

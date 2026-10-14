@@ -2,9 +2,11 @@
 
 2026-10-14。当前为可运行的迁移预览，目标是保留 Dial 设计与交互。Windows 双架构构建与安装/后台冒烟已在 CI 完成，GUI 实机验收仍未完成；完成验收前不切换正式 macOS 客户端，也不宣称四个阶段已经全部交付。后续工作按 [交接任务与继续开发说明](desktop-handoff.md)执行。
 
-本轮 `codex/desktop-native-ui-fixes` 已推送到 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为原交接分支。代码 `7ad1b95` 的 Windows x64/ARM64 与 macOS CI 全通过。见 [P0 输入证据](qa/desktop-native-ui-fixes/README.md) 和 [P1 原版对照、632 条布局测量、安装包及质量记录](qa/desktop-p1-ui/README.md)。真实外部鼠标/候选窗口、完整原生主题矩阵和逐帧对照仍未完成。
+本轮 `codex/desktop-native-ui-fixes` 的 [PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 已按用户授权合并到原交接分支（`a57d012`）。代码 `7ad1b95` 的 Windows x64/ARM64 与 macOS CI 全通过。见 [P0 输入证据](qa/desktop-native-ui-fixes/README.md) 和 [P1 原版对照、632 条布局测量、安装包及质量记录](qa/desktop-p1-ui/README.md)。真实外部鼠标/候选窗口、完整原生主题矩阵和逐帧对照仍未完成。
 
 2026-10-15追加：原独立审查13项已修复到 `50762d4`，回归与实测见 [修复记录](qa/desktop-review-fixes/README.md)。新增Windows实际安装故障注入已在两种架构CI通过；其余正式迁移边界保持不变。
+
+同日合并后构建：Windows x64/ARM64 的 NSIS 与各十组安装检查、原 SwiftUI Apple Silicon/Intel 的 Developer ID 公证 DMG 均通过。[PR #18](https://github.com/NanmiCoder/TodoCue/pull/18) 补齐共享 Mac 双架构 release App ZIP，四目标 Desktop 和三项 Quality CI 通过后合并交接分支（`3bb8ceb`）。[产物、源码与验收边界](qa/desktop-builds/README.md)明确区分共享 Mac 的 ad-hoc / 外部运行时条件和原 SwiftUI 独立 DMG；没有合并 main 或正式发布。
 
 ## 实现边界
 

@@ -29,7 +29,7 @@ TODOCUE_HOME=/tmp/todocue-desktop-dev "apps/desktop/src-tauri/target/debug/bundl
 
 产物在 `src-tauri/target/debug/bundle/macos/TodoCue Preview.app`。macOS 预览默认仍使用临时目录；没有接入 EventKit、旧版偏好迁移和真实硬件刘海，不替代当前 SwiftUI App。
 
-桌面 CI 的 macOS matrix 在 Apple Silicon 与 Intel runner 分别构建 release 配置的共享 Preview App，验证 Mach-O 架构和 ad-hoc 签名，上传 `todocue-macos-arm64-desktop-preview` / `todocue-macos-x64-desktop-preview`。ZIP 内有 App、SHA-256 和 `BUILD.json`，记录版本、架构与源码提交。这些共享 App 尚需外部隔离运行时；现有 `Release macOS` 手动 Action 另行构建带运行时、Developer ID 签名及公证的 SwiftUI DMG，两类产物应分别使用。
+桌面 CI 的 macOS matrix 在 Apple Silicon 与 Intel runner 分别构建 release 配置的共享 Preview App，验证 Mach-O 架构和 ad-hoc 签名，上传 `todocue-macos-arm64-desktop-preview` / `todocue-macos-x64-desktop-preview`。Artifact 含 App ZIP、SHA-256 和 `BUILD.json`，记录版本、架构与源码提交。两架构已在 CI 实测通过，下载后架构/整包签名/校验和亦通过；见[下载与构建记录](../../docs/qa/desktop-builds/README.md)。这些共享 App 尚需外部隔离运行时；现有 `Release macOS` 手动 Action 另行构建带运行时、Developer ID 签名及公证的 SwiftUI DMG，两类产物应分别使用。
 
 ## Windows 构建
 
@@ -42,9 +42,9 @@ npm run windows:preview
 
 脚本对 Tauri 打包下载阶段的 `Peer disconnected` 限次重试（三次总尝试）；编译、校验和或 NSIS 错误不会被重试或忽略。脚本构建前端与三个原生辅助程序，下载并校验官方 Node 26.7.0，安装锁定的生产依赖，实际用该架构的 Node 和 SQLite执行 SQL，再生成当前用户级 NSIS 安装包和 SHA-256 文件。携带 WebView2 离线安装程序和 TodoCue Skill。Rust Windows 目标静态链接 CRT，SQLite 分发保留对应架构的原生模块。
 
-`.github/workflows/desktop-preview.yml` 提供 Windows x64、Windows ARM64 和 macOS 检查；可手动或由相关 PR 触发。代码 `7ad1b95` 的 [本轮 CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 三个 job 全通过，Windows 两种架构实际执行了包内 Node/SQLite、当前用户后台计划任务、CLI/MCP、重装恢复及卸载保留数据库的七组冒烟。
+`.github/workflows/desktop-preview.yml` 提供 Windows x64/ARM64 安装包与 macOS Apple Silicon/Intel 共享 App；可手动或由相关 PR 触发。[最新 CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756) 四个 job 全通过，Windows 两种架构实际执行了包内 Node/SQLite、当前用户后台计划任务、CLI/MCP、重装、恢复故障及卸载保留数据库的十组检查。
 
-预览下载：[x64](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11898134377)、[ARM64](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367/artifacts/11899180283)，包括 NSIS 和 SHA-256；需要仓库访问权限，按 CI artifact 保留策略过期，不是正式 Release。x64 runner 为 Windows Server 2025，ARM64 为 Windows 11，尚不代表 Windows 10/11 GUI 验收。
+预览下载：[x64](https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11924179248)、[ARM64](https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11924138417)，包括 NSIS 和 SHA-256；需要仓库访问权限，按 CI artifact 保留策略过期，不是正式 Release。x64 runner 为 Windows Server 2025，ARM64 为 Windows 11，尚不代表 Windows 10/11 GUI 验收。
 
 安装包冒烟仅在可弃用的 Windows 测试用户/runner 执行：
 
@@ -71,8 +71,8 @@ swift test --package-path apps/macos
 
 本轮修正原生窗口/WebView 焦点、粘贴/回车和箭头提交期间继续输入，校准表单/附件、详情、日历及 Dial。见 [P0 输入证据](../../docs/qa/desktop-native-ui-fixes/README.md) 和 [P1 对照截图、632 条布局测量与安装验证](../../docs/qa/desktop-p1-ui/README.md)。实际系统偏好切换、版本冲突和延迟响应保留草稿均通过。
 
-本地 `check` 175 个 Vitest / 24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端/Rust 11+5 通过。[Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 的完整 Xcode Swift Apple Silicon 275（4 跳过）、Intel 275（11 跳过）均 0 失败。本地 CLT 缺 XCTest，不冒充本地通过。
+前一轮 UI 对照阶段的本地 `check` 175 个 Vitest / 24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端/Rust 11+5 通过。[当时的 Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 的完整 Xcode Swift Apple Silicon 275（4 跳过）、Intel 275（11 跳过）均 0 失败。本地 CLT 缺 XCTest，不冒充本地通过。
 
-真实鼠标外部点击、候选窗口、透明命中、Windows GUI/通知点击/多屏/DPI/休眠、全原生视觉/逐帧验收，以及 Mac Intel Tauri 包、EventKit 和正式客户端切换仍待完成。
+真实鼠标外部点击、候选窗口、透明命中、Windows GUI/通知点击/多屏/DPI/休眠、全原生视觉/逐帧验收，以及共享 Mac 正式运行时、Developer ID 签名/公证、EventKit 和正式客户端切换仍待完成。Mac Intel Tauri release 预览包的构建与归档验证已通过。
 
 2026-10-15的[独立审查修复](../../docs/qa/desktop-review-fixes/README.md)补齐CLI所属目录、bootstrap端口、普通Return、日历选择、Pin、图片、逾期、提醒与被动窗口焦点；本地208项Vitest/34项脚本测试及desktop检查通过。最新50762d4两架构十组安装及恢复失败/不健康测试均通过，正式分发和完整SwiftUI复刻仍未验收。

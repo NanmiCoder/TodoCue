@@ -2,17 +2,19 @@
 
 更新：2026-10-15。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
 
-本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，已推送并建立 [草稿 PR #17](https://github.com/NanmiCoder/TodoCue/pull/17)，目标为 `codex/desktop-migration-handoff`。此前代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
+本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，[PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 已按用户授权合并到 `codex/desktop-migration-handoff`（`a57d012`）。此前代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
 
 **2026-10-15 独立审查修复：** 原审查13项已有实现修复，并补上CLI目录/端口、日历、普通Return、Pin、图片、逾期、提醒容量、被动窗口与安装恢复回归。三个subagent再次独立复审，主代理完成Ego/原生/真实API复测；最新源码为 `50762d4`。见 [本轮修复与证据](qa/desktop-review-fixes/README.md)。Windows双架构新增十组安装及恢复故障测试均已实测通过，实机与正式macOS迁移项仍未完成；不将全绿CI或布局计数当作正式发布/完全复刻。
+
+**合并后构建：** [PR #18](https://github.com/NanmiCoder/TodoCue/pull/18) 补齐共享 Mac 双架构 release App，七项 CI 通过后合并到交接分支（`3bb8ceb`）。Windows x64/ARM64 NSIS、共享 Mac Apple Silicon/Intel App ZIP、原 SwiftUI 双架构 Developer ID 公证 DMG 均已生成。[六种产物下载、源码记录、测试和边界](qa/desktop-builds/README.md)已整理。共享 Mac 仍需要外部隔离运行时；main 和正式 Release 未改变。
 
 ## 代码从哪里继续
 
 - 仓库：<https://github.com/NanmiCoder/TodoCue>。
 - 交接分支：`codex/desktop-migration-handoff`，从 `3058f01379d1cf965445ca5f3bb3b826020e2686` 建立。
-- 本轮最初已先 `git fetch origin`，明确从 `origin/codex/desktop-migration-handoff` 的 `2bf7349` 创建新工作树；原主工作区未覆盖。现在接续本轮工作应从 `origin/codex/desktop-native-ui-fixes` 开始；旧交接提交不含这些后续修复。不能从默认分支开始。
-- 推荐继续分支：`codex/desktop-native-ui-fixes`。若该分支已存在，先检查其状态，复用或选择新的 `codex/` 分支，不能覆盖已有分支或工作树。
-- PR 保持草稿；未合并主分支、未发布正式版本。Windows x64/ARM64 已有可安装 CI 预览产物与七组安装/后台检查，GUI 实机验收另列。
+- 本轮最初已先 `git fetch origin`，明确从 `origin/codex/desktop-migration-handoff` 的 `2bf7349` 创建新工作树；原主工作区未覆盖。修复和构建配置已合并，现在应从最新 `origin/codex/desktop-migration-handoff` 继续；不要从默认分支或旧交接提交开始。
+- 继续分支可使用新的 `codex/desktop-next`。若同名分支已存在，先检查其状态，复用或选择另一个 `codex/` 分支，不能覆盖已有分支或工作树。
+- PR #17/#18 已合并交接分支；未合并主分支、未发布正式版本。Windows 两架构各十组安装检查通过，Mac 两架构共享预览和原 SwiftUI 公证包均已构建；GUI 与正式共享 Mac 迁移另列。
 - 本机临时数据、依赖、编译产物、日志和运行中的进程不会随 Git 转移；新电脑需要重新安装依赖并启动隔离运行时。
 
 先阅读仓库 `AGENTS.md`、本文、[实现与验收记录](desktop-migration.md)、[Dial 设计与动效规范](design/dial.md)、[桌面预览启动说明](../apps/desktop/README.md)。比较 UI 时以现有 SwiftUI 源码和实际画面为准，不能把新前端自身当作对照基准。
@@ -37,7 +39,7 @@
 | `packages/cli/src/windows-service.ts`、`windows-integration.ts` | 当前用户后台计划任务、自定义目录登记、服务升级/停止/卸载、CLI 与 PATH 管理 |
 | `apps/desktop/src-tauri/src/bin`、`windows_home.rs` | CLI 转发、后台进程监督、Windows 通知、按目录标识路由冷/热启动 |
 | `scripts/package-windows.mjs`、`stage-runtime.mjs` | 对应架构 Node/SQLite/辅助程序、NSIS、离线 WebView2、Skill 与包校验 |
-| `.github/workflows/desktop-preview.yml` | Windows x64/ARM64 完整构建、NSIS 安装/后台冒烟及 macOS 检查；`7ad1b95` 远程运行全部通过 |
+| `.github/workflows/desktop-preview.yml` | Windows x64/ARM64 完整构建、NSIS 十组安装/恢复检查；Mac Apple Silicon/Intel 检查、release 共享 App 和 ZIP；最新四项 CI 全通过 |
 
 审查确认的八项缺陷已实现修复及回归测试：自定义目录升级/卸载遗漏、四条周期提醒同时领取丢失系统回退、保存期间移除附件又复现、旧已完成查询覆盖新状态、精确截止时间的改期确认遗漏、服务新配置仍运行旧宿主、自定义目录通知启动到错误目录、卸载残留 CLI/PATH。详见实现记录中的证据表；安装、当前用户计划任务、CLI/MCP、升级/卸载已在两个 Windows runner 实测，通知点击及 GUI 行为仍需独立验收。
 
@@ -104,7 +106,9 @@ P0 验收：
 
 ### P3：Windows 完整验收后完成正式 Mac 迁移
 
+- [x] 共享 Mac Apple Silicon/Intel 预览包的 release 构建、架构、ad-hoc 签名、归档与下载校验通过；仍需外部隔离运行时。
 - [ ] 接入真实硬件刘海、安全区、空间/菜单栏、原生玻璃与浮窗完整行为。
+- [ ] 共享 Mac 的正式运行时打包/bootstrap、Developer ID 签名与公证；现有 SwiftUI 公证 DMG 不替代此项。
 - [ ] 从旧 UI 模型解耦 EventKit 同步，通过桥接接入新客户端，保留同步关联。
 - [ ] 导入语言、尺寸、快捷键与同步偏好；支持 macOS 14+、Intel/Apple Silicon。
 - [ ] 保持同一数据目录只有一个生产客户端，提供旧版回退；达到功能和视觉验收后再停止维护 SwiftUI 页面。
@@ -113,12 +117,12 @@ P0 验收：
 
 macOS：Node 24+（CI 固定 26.7.0；本地 26.8.2）、Rust、Xcode 26/Swift 6；Windows：Node、Rust、MSVC C++/Windows SDK，ARM64 对应工具链。无需复制本机 `/Users/nanmi` 路径。
 
-已有仓库中先 fetch，再检查继续分支和 worktree；优先复用适合的隔离工作树。下一位接手应使用已推送的修复分支。若同名分支已存在，检查后复用或选择另一个 `codex/` 分支，不重置已有修改。以下命令仅适用于本地分支尚不存在时：
+已有仓库中先 fetch，再检查继续分支和 worktree；优先复用适合的隔离工作树。下一位接手应使用最新交接分支。若同名分支已存在，检查后复用或选择另一个 `codex/` 分支，不重置已有修改。以下命令仅适用于本地分支尚不存在时：
 
 ```sh
 git fetch origin
-git worktree add -b codex/desktop-native-ui-fixes ../TodoCue-desktop-native-ui-fixes origin/codex/desktop-native-ui-fixes
-cd ../TodoCue-desktop-native-ui-fixes
+git worktree add -b codex/desktop-next ../TodoCue-desktop-next origin/codex/desktop-migration-handoff
+cd ../TodoCue-desktop-next
 npm ci
 TODOCUE_HOME=/tmp/todocue-desktop-next npm run desktop:dev
 ```
@@ -141,15 +145,16 @@ npm run desktop:check
 swift test --package-path apps/macos
 ```
 
-Windows 包在对应 Windows 主机运行 `npm run windows:preview`。CI 已由 PR #17 触发并通过；手动触发可重新获取到期产物。安装冒烟脚本只能在可弃用 Windows runner 执行，会安装/卸载预览、登记服务和修改该测试用户的 CLI/PATH；详见桌面 README。PR 不直接合并，预览不提升为正式发布。
+Windows 包在对应 Windows 主机运行 `npm run windows:preview`。PR #17/#18 的 CI 和合并后手动 Action 已通过；手动触发可重新获取到期产物。安装冒烟脚本只能在可弃用 Windows runner 执行，会安装/卸载预览、登记服务和修改该测试用户的 CLI/PATH；详见桌面 README。本轮仅合并交接分支，预览未提升为正式发布。
 
 ## 检查证据与限制
 
-- 本地 `npm run check`：175 个 Vitest（25 文件）、24 个脚本测试、CLI/MCP 冒烟、release check 通过；`desktop:check` 前端构建和 Rust 11+5 通过；最终 macOS Preview 与原 SwiftUI 对照 App 构建通过。
+- 前一轮 UI 对照阶段的本地 `npm run check`：175 个 Vitest（25 文件）、24 个脚本测试、CLI/MCP 冒烟、release check 通过；`desktop:check` 前端构建和 Rust 11+5 通过；当时 macOS Preview 与原 SwiftUI 对照 App 构建通过。
 - `7ad1b95` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 全通过：Linux 完整检查、Swift Apple Silicon 275（4 跳过）/Intel 275（11 跳过），均 0 失败。Intel VM 跳过无 GPU 的原生动画检查，截图测试需 opt-in。本地 CLT 缺 XCTest 的限制仍如实保留。
 - [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 全通过：Windows 两种架构实际包/后台七组检查，macOS 前端/Rust 检查。Windows 平台的 Vitest 174 通过/1 跳过、脚本 19 通过/5 跳过；平台专属跳过不与本地计数混淆。
 - 实际浏览器/原生证据与截图、布局 JSON 已保存到仓库的两份 QA 记录；没有保存连接 token 或测试数据库。浏览器不替代原生窗口交互，AX 不替代物理鼠标。
-- 本机虚拟刘海完整键盘/粘贴/回车与箭头延迟响应输入通过；真实外部鼠标、候选窗口及 Windows GUI 仍需按清单独立验收。Mac Intel Tauri 包、EventKit 及正式切换尚未完成。
+- 本机虚拟刘海完整键盘/粘贴/回车与箭头延迟响应输入通过；真实外部鼠标、候选窗口及 Windows GUI 仍需按清单独立验收。Mac Intel Tauri release 预览包已构建并验证归档；正式共享运行时、EventKit 及客户端切换尚未完成。
+- 最新 [Quality / 四架构 Desktop / 原 SwiftUI 公证构建](qa/desktop-builds/README.md)全通过：208 项 Vitest、34 项脚本测试，Swift 两架构均 0 失败，Windows 各十组安装检查，以及两种共享 Mac App 下载后的架构/签名/校验和核对。历史计数保留，不与最新计数混淆。
 
 ## 接手时的输出要求
 
