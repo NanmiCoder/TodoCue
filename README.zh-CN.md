@@ -136,6 +136,10 @@ DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的�
 
 跨平台迁移预览已加入源码：`npm run desktop:dev` 可在隔离数据上对照共享界面；Windows x64/ARM64 的当前用户安装包由 preview workflow 构建。Windows 实机与完整视觉验收仍待完成，正式 macOS 版继续使用现有原生客户端。见 [预览运行与构建](apps/desktop/README.md)、[实施/验收状态](docs/desktop-migration.md)及 [继续开发交接](docs/desktop-handoff.md)。
 
+最新预览已回归 macOS 刘海/面板输入、粘贴、回车与保存中继续输入，按原版校准表单、附件、详情和日历；Windows x64/ARM64 构建与七组真实安装包冒烟通过。[实测记录、对照截图与预览下载](docs/qa/desktop-p1-ui/README.md)明确区分这些结果与真实鼠标、候选窗口、Windows GUI 和逐帧等未验证项。
+
+[独立审查修复](docs/qa/desktop-review-fixes/README.md)补齐CLI目录/端口恢复、日历选择、普通回车、提醒和原生焦点。Windows两架构十组安装包回归均通过；实机验收与正式macOS切换仍待完成。
+
 ## 许可证
 
 [MIT](LICENSE) © 2026 NanmiCoder。欢迎使用、修改和贡献。

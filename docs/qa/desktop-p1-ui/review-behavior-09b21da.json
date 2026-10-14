@@ -1,0 +1,66 @@
+{
+  "returnCases": {
+    "writes": [
+      {
+        "url": "/__runtime/v1/tasks",
+        "body": "{\"title\":\"REVIEW plain Return should not save\",\"notes\":null,\"project\":null,\"priority\":\"none\",\"estimateMinutes\":null,\"scheduledDate\":null,\"scheduledAt\":null,\"dueDate\":null,\"dueAt\":null,\"reminderAt\":null,\"timezone\":\"Asia/Shanghai\"}"
+      },
+      {
+        "url": "/__runtime/v1/tasks",
+        "body": "{\"title\":\"REVIEW project Enter should not save\",\"notes\":null,\"project\":\"Review project\",\"priority\":\"none\",\"estimateMinutes\":null,\"scheduledDate\":null,\"scheduledAt\":null,\"dueDate\":null,\"dueAt\":null,\"reminderAt\":null,\"timezone\":\"Asia/Shanghai\"}"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "t_4xq8a8rxhsq4xh",
+        "title": "REVIEW plain Return should not save",
+        "project": null,
+        "scheduledDate": null
+      },
+      {
+        "id": "t_2e8hyh6x5q2ee7",
+        "title": "REVIEW project Enter should not save",
+        "project": "Review project",
+        "scheduledDate": null
+      }
+    ]
+  },
+  "gallery": {
+    "gallery": {
+      "width": 255,
+      "height": 126.1171875
+    },
+    "grid": {
+      "width": 86.6171875,
+      "height": 126.1171875
+    },
+    "tile": {
+      "width": 86.6171875,
+      "height": 126.1171875
+    },
+    "alignItems": "center"
+  },
+  "pinBefore": "false",
+  "pinAfter": "false",
+  "pinCollapsedAfterLeave": true,
+  "calendarBefore": {
+    "month": "Oct 2026",
+    "selected": [
+      "2026-10-14"
+    ],
+    "agenda": "Today 1",
+    "placeholder": "Add to today…"
+  },
+  "calendarAfter": {
+    "month": "Nov 2026",
+    "selected": [],
+    "agenda": "Today 1",
+    "placeholder": "Add to today…"
+  },
+  "calendarCreated": [
+    {
+      "id": "t_xf2eyc6312phee",
+      "scheduledDate": "2026-10-14"
+    }
+  ]
+}

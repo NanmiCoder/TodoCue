@@ -1,0 +1,51 @@
+{
+  "cases": [
+    {
+      "theme": "light",
+      "width": 300,
+      "root": 300,
+      "gallery": 215,
+      "grid": 215
+    },
+    {
+      "theme": "dark",
+      "width": 300,
+      "root": 300,
+      "gallery": 215,
+      "grid": 215
+    },
+    {
+      "theme": "light",
+      "width": 340,
+      "root": 340,
+      "gallery": 255,
+      "grid": 255
+    },
+    {
+      "theme": "dark",
+      "width": 340,
+      "root": 340,
+      "gallery": 255,
+      "grid": 255
+    },
+    {
+      "theme": "light",
+      "width": 600,
+      "root": 600,
+      "gallery": 515,
+      "grid": 515
+    },
+    {
+      "theme": "dark",
+      "width": 600,
+      "root": 600,
+      "gallery": 515,
+      "grid": 515
+    }
+  ],
+  "single": {
+    "gallery": 255,
+    "grid": 255,
+    "image": 255
+  }
+}

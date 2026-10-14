@@ -24,7 +24,8 @@ export async function windowsInstall(paths: RuntimePaths, spec: WindowsRuntimeSp
   const { stdout } = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value"], { windowsHide: true });
   const sid = stdout.trim();
   fs.mkdirSync(paths.home, { recursive: true });
-  await exec("icacls.exe", [paths.home, "/inheritance:r", "/grant:r", `${sid}:(OI)(CI)F`], { windowsHide: true });
+  // icacls requires * for a numeric SID; without it the SID is treated as an account name.
+  await exec("icacls.exe", [paths.home, "/inheritance:r", "/grant:r", `*${sid}:(OI)(CI)F`], { windowsHide: true });
   const file = path.join(paths.home, "runtime-task.xml");
   fs.writeFileSync(file, "\uFEFF" + taskXml(spec, sid), "utf16le");
   const registered = await taskRegistered(paths);
@@ -87,6 +88,11 @@ export async function windowsProductIntegration(root: string, action: "stop" | "
       await windowsStop(paths);
     } else if (action === "start" && owned && value.resumeAfterUpgrade) {
       await windowsStart(paths);
+      const deadline = Date.now() + 15000;
+      while (!await isRuntimeAlive(paths)) {
+        if (Date.now() >= deadline) throw new Error(`Windows runtime did not recover; see ${paths.logs}`);
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
       saveWindowsHome({ ...value, resumeAfterUpgrade: false });
     } else if (action === "uninstall") {
       if (owned) await windowsUninstall(paths);

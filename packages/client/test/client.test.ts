@@ -29,7 +29,8 @@ describe("portable client", () => {
     const stream = client.events(event => { events.push(event.type); if (event.type === "runtime.started") started(); }, { signal: abort.signal }).catch(error => { if (!abort.signal.aborted) throw error; });
     try {
       await connected;
-      const { task } = await client.createTask({ title: "Native parity", scheduledDate: "2026-10-13" }, { idempotencyKey: "create-once" });
+      const { today } = await client.context();
+      const { task } = await client.createTask({ title: "Native parity", scheduledDate: today }, { idempotencyKey: "create-once" });
       expect((await client.board()).today.remaining).toBe(1);
       await client.completeTask(task.id, { expectedVersion: task.version });
       expect((await client.board()).today.completed[0]?.id).toBe(task.id);

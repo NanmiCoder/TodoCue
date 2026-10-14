@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useLayoutEffect } from "react";
+import { useReducedMotion } from "./useReducedMotion.js";
+import { useEffect, useRef, useState, useLayoutEffect, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   MAX_ATTACHMENT_BYTES,
@@ -11,15 +12,19 @@ import {
 } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { DatePicker } from "./DatePicker.js";
-import { dateOf, shiftDate } from "./dates.js";
+import { dateOf, dayLabel, shiftDate, weekdayLabels } from "./dates.js";
 import { Icon, type IconName } from "./icons.js";
 import { draftPayload, newDraft, type TaskDraft } from "./drafts.js";
 import { motionTokens } from "./tokens.js";
+import { isCompositionKey } from "./quickAdd.js";
+import { useTextAreaSize } from "./useTextAreaSize.js";
+import { AttachmentGallery, AttachmentPreview, type FilePreview } from "./Attachments.js";
 
 export function Composer({
   task,
   initial,
   language,
+  today,
   online,
   onChange,
   onSaved,
@@ -27,10 +32,12 @@ export function Composer({
   task?: Task;
   initial: TaskDraft;
   language: string;
+  today: string;
   online: boolean;
   onChange: (draft: TaskDraft) => void;
   onSaved: (task: Task, submitted: TaskDraft) => void;
 }) {
+  const reduced = useReducedMotion();
   const [draft, setDraft] = useState(initial);
   const current = useRef(initial);
   const mounted = useRef(true);
@@ -40,12 +47,18 @@ export function Composer({
   const [popupPosition, setPopupPosition] = useState({ left: 20, top: 200 });
   const [projects, setProjects] = useState<string[]>([]);
   const [popover, setPopover] = useState<string | null>(null);
+  const [propertyText, setPropertyText] = useState("");
+  const [viewing, setViewing] = useState<FilePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
+  const savePending = useRef(false);
   const [dragged, setDragged] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const titleInput = useRef<HTMLTextAreaElement>(null);
+  const notesInput = useRef<HTMLTextAreaElement>(null);
+  useTextAreaSize(titleInput, draft.title, 2, 4);
+  useTextAreaSize(notesInput, draft.notes);
   useEffect(() => {
     titleInput.current?.focus();
   }, []);
@@ -67,8 +80,9 @@ export function Composer({
   }, [online]);
   useEffect(() => {
     if (!popover) return;
+    setPropertyText(popover === "project" ? current.current.project : popover === "estimate" ? current.current.estimate : "");
     const dismiss = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !isCompositionKey(event)) {
         event.preventDefault();
         event.stopPropagation();
         setPopover(null);
@@ -101,6 +115,16 @@ export function Composer({
     if (mounted.current) setDraft(next);
     onChange(next);
     if (!conflict && mounted.current) setError(null);
+  }
+  function confirmProperty() {
+    if (popover === "project") {
+      if (!propertyText.trim()) return;
+      update({ project: propertyText.trim() });
+    } else if (popover === "estimate") {
+      if (!propertyText.trim() || !Number.isInteger(Number(propertyText)) || Number(propertyText) < 0) return;
+      update({ estimate: propertyText });
+    }
+    setPopover(null);
   }
   async function files(files: FileList | File[]) {
     setReading((count) => count + 1);
@@ -161,7 +185,8 @@ export function Composer({
     }
   }
   async function save() {
-    if (busy || reading || !online) return;
+    if (savePending.current || reading || !online) return;
+    savePending.current = true;
     setBusy(true);
     setError(null);
     const submitted = current.current;
@@ -184,6 +209,7 @@ export function Composer({
         setError(value.message ?? String(error));
       }
     } finally {
+      savePending.current = false;
       if (mounted.current) setBusy(false);
     }
   }
@@ -193,21 +219,21 @@ export function Composer({
       icon: "calendar",
       title:
         draft.scheduledMode === "none"
-          ? label("计划", "Plan")
-          : draft.scheduledDate,
+          ? draft.dueMode !== "none" ? `${label("截止", "Due")} ${dayLabel(draft.dueDate, language, today)}` : draft.reminder ? `${label("提醒", "Reminder")} ${draft.reminder.slice(11, 16)}` : label("日期", "Date")
+          : `${dayLabel(draft.scheduledDate, language, today)}${draft.scheduledMode === "time" ? ` ${draft.scheduledTime.slice(0, 5)}` : ""}`,
     },
     {
       key: "project",
       icon: "folder",
       title: draft.project || label("项目", "Project"),
     },
-    { key: "priority", icon: "flag", title: label("优先级", "Priority") },
+    { key: "priority", icon: draft.priority === "none" ? "flag" : "priority", title: draft.priority === "none" ? label("优先级", "Priority") : label({high:"高",medium:"中",low:"低"}[draft.priority], {high:"High",medium:"Medium",low:"Low"}[draft.priority]) },
     {
       key: "estimate",
       icon: "clock",
       title: draft.estimate
-        ? `${draft.estimate} ${label("分钟", "min")}`
-        : label("耗时", "Estimate"),
+        ? `${draft.estimate}m`
+        : label("预估", "Estimate"),
     },
     {
       key: "repeat",
@@ -220,6 +246,14 @@ export function Composer({
             : label("每周", "Weekly"),
     },
   ];
+  const keptAttachments = task?.attachments.filter(file => !draft.removed.includes(file.id)) ?? [];
+  const attachmentCount = keptAttachments.length + draft.uploads.length;
+  const activeChip = (key: string) => key === "schedule" ? draft.scheduledMode !== "none" || draft.dueMode !== "none" || !!draft.reminder
+    : key === "project" ? !!draft.project : key === "priority" ? draft.priority !== "none" : key === "estimate" ? !!draft.estimate : draft.repeat !== "none";
+  const clearChip: Record<string, Partial<TaskDraft>> = {
+    schedule: { scheduledMode: "none", dueMode: "none", reminder: "" },
+    project: { project: "" }, priority: { priority: "none" }, estimate: { estimate: "" }, repeat: { repeat: "none" },
+  };
   return (
     <form
       className="tile frost composer-page"
@@ -241,12 +275,18 @@ export function Composer({
       }}
       onKeyDown={(event) => {
         if (
+          !event.defaultPrevented &&
           (event.metaKey || event.ctrlKey) &&
           event.key === "Enter" &&
-          !event.nativeEvent.isComposing
+          !isCompositionKey(event.nativeEvent)
         ) {
           event.preventDefault();
           void save();
+        } else if (!event.defaultPrevented && event.key === "Enter" &&
+          !isCompositionKey(event.nativeEvent) && (event.target as Element).closest(".composer-popover input")) {
+          // A property input must never implicitly submit the task form.
+          event.preventDefault();
+          confirmProperty();
         }
       }}
     >
@@ -276,14 +316,16 @@ export function Composer({
               if (
                 event.key === "Enter" &&
                 !event.shiftKey &&
-                !event.nativeEvent.isComposing
+                !event.altKey && !event.metaKey && !event.ctrlKey &&
+                !isCompositionKey(event.nativeEvent)
               ) {
                 event.preventDefault();
-                void save();
+                event.currentTarget.blur();
               }
             }}
           />
           <textarea
+            ref={notesInput}
             rows={2}
             placeholder={label(
               "添加备注、链接或详细想法...",
@@ -296,22 +338,15 @@ export function Composer({
           <div className="composer-divider" />
           <div className="attribute-chips">
             {chips
-              .filter((chip) => !(chip.key === "repeat" && !!task?.seriesId))
+              .filter((chip) => !(chip.key === "schedule" && draft.repeat !== "none"))
               .map((chip) => (
+                <div key={chip.key} className={`attribute-chip ${activeChip(chip.key) ? "active" : ""}`}
+                  style={chip.key === "priority" ? { "--chip-tint": draft.priority === "high" ? "#f36a6a" : draft.priority === "low" ? "#5792d7" : "var(--orange)" } as CSSProperties : undefined}>
                 <button
                   type="button"
-                  className={
-                    popover === chip.key ||
-                    (chip.key === "schedule" &&
-                      draft.scheduledMode !== "none") ||
-                    (chip.key === "project" && !!draft.project) ||
-                    (chip.key === "priority" && draft.priority !== "none") ||
-                    (chip.key === "estimate" && !!draft.estimate) ||
-                    (chip.key === "repeat" && draft.repeat !== "none")
-                      ? "active"
-                      : ""
-                  }
-                  key={chip.key}
+                  data-attribute={chip.key}
+                  aria-expanded={popover === chip.key}
+                  disabled={chip.key === "repeat" && !!task}
                   ref={(node) => {
                     if (node) anchors.current.set(chip.key, node);
                     else anchors.current.delete(chip.key);
@@ -323,10 +358,14 @@ export function Composer({
                   <Icon name={chip.icon} size={12} />
                   {chip.title}
                 </button>
+                {activeChip(chip.key) && <button type="button" className="attribute-clear" disabled={chip.key === "repeat" && !!task}
+                  aria-label={label(`清除${{schedule:"日期",project:"项目",priority:"优先级",estimate:"预估",repeat:"重复"}[chip.key]}`, `Clear ${chip.key}`)}
+                  onClick={() => { setPopover(null); update(clearChip[chip.key]!); }}><Icon name="close" size={9} /></button>}
+                </div>
               ))}
-            <button type="button" onClick={() => fileInput.current?.click()}>
+            <button type="button" className={attachmentCount ? "active" : ""} aria-label={label("添加附件", "Add attachments")} disabled={reading > 0} onClick={() => fileInput.current?.click()}>
               <Icon name="paperclip" size={12} />
-              {label("附件", "Attachments")}
+              {attachmentCount || label("附件", "Attachments")}
             </button>
           </div>
           <AnimatePresence>
@@ -345,10 +384,10 @@ export function Composer({
                   className="composer-popover frost"
                   style={popupPosition}
                   key={popover}
-                  initial={{ opacity: 0, scale: 0.96, y: 4 }}
+                  initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 4 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  transition={motionTokens.snap}
+                  transition={reduced ? { duration: 0.12 } : motionTokens.snap}
                 >
                   {popover === "schedule" && (
                     <>
@@ -424,9 +463,9 @@ export function Composer({
                     <label className="field-row">
                       {label("项目", "Project")}
                       <input
-                        value={draft.project}
+                        value={propertyText}
                         onChange={(event) =>
-                          update({ project: event.target.value })
+                          setPropertyText(event.target.value)
                         }
                       />
                     </label>
@@ -436,10 +475,10 @@ export function Composer({
                       {projects
                         .filter(
                           (project) =>
-                            !draft.project ||
+                            !propertyText ||
                             project
                               .toLowerCase()
-                              .includes(draft.project.toLowerCase()),
+                              .includes(propertyText.toLowerCase()),
                         )
                         .map((project) => (
                           <button
@@ -463,9 +502,9 @@ export function Composer({
                         type="number"
                         min="0"
                         step="1"
-                        value={draft.estimate}
+                        value={propertyText}
                         onChange={(event) =>
-                          update({ estimate: event.target.value })
+                          setPropertyText(event.target.value)
                         }
                       />
                       {label("分钟", "minutes")}
@@ -535,6 +574,8 @@ export function Composer({
                               <button
                                 type="button"
                                 key={index}
+                                aria-label={weekdayLabels(language, 1, true)[index]}
+                                aria-pressed={draft.weekdays.includes(index + 1)}
                                 className={
                                   draft.weekdays.includes(index + 1)
                                     ? "selected"
@@ -587,7 +628,7 @@ export function Composer({
                   <button
                     type="button"
                     className="text-button popover-done"
-                    onClick={() => setPopover(null)}
+                    onClick={confirmProperty}
                   >
                     {label("完成", "Done")}
                   </button>
@@ -605,27 +646,16 @@ export function Composer({
               event.target.value = "";
             }}
           />
-          {task?.attachments.length || draft.uploads.length ? (
+          {attachmentCount > 0 ? (
             <div className="attachment-drawer">
-              {task?.attachments
-                .filter((file) => !draft.removed.includes(file.id))
-                .map((file) => (
-                  <div key={file.id}>
-                    <Icon name="paperclip" />
-                    <span>{file.name}</span>
-                    <button
-                      type="button"
-                      aria-label={`${label("移除", "Remove")} ${file.name}`}
-                      onClick={() =>
-                        update({ removed: [...draft.removed, file.id] })
-                      }
-                    >
-                      <Icon name="close" size={12} />
-                    </button>
-                  </div>
-                ))}
+              <h3><Icon name="paperclip" />{label("图片与附件", "Images & files")}<span>{attachmentCount} / 20</span></h3>
+              {task && <AttachmentGallery taskId={task.id} files={keptAttachments} online={online} language={language}
+                onOpen={setViewing} onError={setError} onRemove={file => update({ removed: [...draft.removed, file.id] })} />}
+              <div className="pending-attachments">
               {draft.uploads.map((file, index) => (
-                <div key={index}>
+                <div className="pending-attachment" key={index}>
+                  <button type="button" className="pending-preview" aria-label={label(`预览待上传附件 ${file.name}`, `Preview pending attachment ${file.name}`)}
+                    onClick={() => setViewing({ file: { name: file.name, mediaType: file.mediaType ?? "application/octet-stream" }, data: file.dataBase64 })}>
                   {file.mediaType?.startsWith("image/") ? (
                     <img
                       src={`data:${file.mediaType};base64,${file.dataBase64}`}
@@ -634,9 +664,12 @@ export function Composer({
                   ) : (
                     <Icon name="paperclip" />
                   )}
+                  </button>
+                  <div>
                   <span>{file.name}</span>
                   <button
                     type="button"
+                    aria-label={label(`移除 ${file.name}`, `Remove ${file.name}`)}
                     onClick={() =>
                       update({
                         uploads: draft.uploads.filter((_, i) => index !== i),
@@ -645,8 +678,10 @@ export function Composer({
                   >
                     <Icon name="close" size={12} />
                   </button>
+                  </div>
                 </div>
               ))}
+              </div>
             </div>
           ) : null}
           {draft.repeat !== "none" && (
@@ -724,6 +759,7 @@ export function Composer({
                 : label("添加任务", "Add task")}
         </button>
       </footer>
+      {viewing && <AttachmentPreview preview={viewing} language={language} onClose={() => setViewing(null)} />}
     </form>
   );
 }

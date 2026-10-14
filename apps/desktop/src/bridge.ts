@@ -125,6 +125,9 @@ export function saveSettings(settings: DesktopSettings) {
 export async function openPanel() {
   if (native) await invoke("panel_show");
 }
+export async function focusPanel() {
+  if (native) await invoke("panel_focus");
+}
 export async function openTaskComposer() {
   if (native) await invoke("panel_new_task");
   else

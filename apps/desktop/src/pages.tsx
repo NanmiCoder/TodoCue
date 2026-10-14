@@ -1,12 +1,15 @@
+import { useReducedMotion } from "./useReducedMotion.js";
 import {
   useEffect,
   useState,
   useRef,
   useLayoutEffect,
+  forwardRef,
+  type ReactNode,
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import type {
   Task,
   Series,
@@ -24,9 +27,18 @@ import {
   reschedule,
   landsAfterDeadline,
   shiftDate,
+  calendarFirstWeekday,
+  calendarDays,
+  weekdayLabels,
+  calendarTitle,
+  calendarBucket,
+  stepCalendar,
+  taskOverdue,
 } from "./dates.js";
-import { motionTokens } from "./tokens.js";
+import { motionTokens, spring } from "./tokens.js";
 import { LatestRequest } from "./model.js";
+import { isCompositionKey } from "./quickAdd.js";
+import { useTextAreaSize } from "./useTextAreaSize.js";
 
 interface PageProps {
   language: string;
@@ -62,7 +74,26 @@ export function CalendarPage({
   onQuickDate: (date: string) => void;
 }) {
   const { span, anchor, selected, collapsed } = state;
+  const reduced = useReducedMotion();
+  const previousAnchor = useRef(anchor);
+  const direction = anchor >= previousAnchor.current ? 1 : -1;
+  useEffect(() => { previousAnchor.current = anchor; }, [anchor]);
   const pageElement = useRef<HTMLDivElement>(null);
+  const navigator = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const nav = navigator.current;
+    if (!nav) return;
+    const measure = () => {
+      const title = nav.querySelector<HTMLElement>(".month-label > span");
+      if (!title) return;
+      title.style.fontSize = "13px";
+      if (title.scrollWidth > title.clientWidth) title.style.fontSize = `${Math.max(9.1, 13 * title.clientWidth / title.scrollWidth)}px`;
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [anchor, span, language]);
   const [available, setAvailable] = useState(440);
   useLayoutEffect(() => {
     const node = pageElement.current;
@@ -74,7 +105,7 @@ export function CalendarPage({
     return () => observer.disconnect();
   }, []);
   const setSpan = (span: CalendarState["span"]) =>
-    setState((current) => ({ ...current, span }));
+    setState((current) => ({ ...current, span, anchor: current.selected, collapsed: false }));
   const setAnchor = (anchor: string) =>
     setState((current) => ({ ...current, anchor }));
   const setSelected = (selected: string) =>
@@ -84,36 +115,20 @@ export function CalendarPage({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState<Record<string, boolean>>({});
   const [confirm, setConfirm] = useState<{ task: Task; date: string } | null>(
     null,
   );
   const zh = language !== "en";
-  const monthStart = anchor.slice(0, 7) + "-01";
-  const weekday = (new Date(`${monthStart}T12:00:00Z`).getUTCDay() + 6) % 7;
-  const weekDay = (new Date(`${anchor}T12:00:00Z`).getUTCDay() + 6) % 7;
-  const from = shiftDate(
-    span === "month" ? monthStart : anchor,
-    -(span === "month" ? weekday : weekDay),
-  );
-  const monthDays = new Date(
-    Number(anchor.slice(0, 4)),
-    Number(anchor.slice(5, 7)),
-    0,
-  ).getDate();
-  const days = Array.from(
-    { length: span === "month" ? Math.ceil((monthDays + weekday) / 7) * 7 : 7 },
-    (_, i) => shiftDate(from, i),
-  );
+  const firstDay = calendarFirstWeekday(language, globalThis.navigator.language);
+  const days = calendarDays(span, anchor, firstDay);
+  const from = days[0]!;
   const to = days.at(-1)!;
   const rowCount = days.length / 7;
   const autoCollapsed = available - 120 < rowCount * 28;
   const shownCollapsed = collapsed || autoCollapsed;
-  const selectedWeekday =
-    (new Date(`${selected}T12:00:00Z`).getUTCDay() + 6) % 7;
   const gridDays = shownCollapsed
-    ? Array.from({ length: 7 }, (_, i) =>
-        shiftDate(selected, i - selectedWeekday),
-      )
+    ? calendarDays("week", selected, firstDay)
     : days;
   const cellHeight = Math.min(
     34,
@@ -166,22 +181,22 @@ export function CalendarPage({
     })),
   );
   const planned = (day: string) =>
-    visible.filter((task) => planDate(task) === day);
+    calendarBucket(visible, day).planned;
+  const history = (day: string) => calendarBucket(visible, day).history;
   const deadlines = (day: string) =>
-    activeTasks.filter(
-      (task) =>
-        planDate(task) !== day &&
-        (task.dueDate ??
-          (task.dueAt ? dateOf(task.dueAt, task.timezone) : null)) === day,
-    );
+    calendarBucket(visible, day).deadlines;
   const bucket = (day: string) => [...planned(day), ...deadlines(day)];
+  const showsHistory = (day: string) => historyExpanded[day] ?? (bucket(day).length === 0 && !ghosts.some(ghost => ghost.date === day));
+  const marks = (day: string) => [
+    ...deadlines(day).map(task => ({ key: `due:${task.id}`, kind: "deadline" })),
+    ...planned(day).map(task => ({ key: task.id, kind: "todo" })),
+    ...history(day).map(task => ({ key: task.id, kind: "done" })),
+    ...ghosts.filter(ghost => ghost.date === day).map((_, index) => ({ key: `ghost:${index}`, kind: "ghost" })),
+  ];
   function page(direction: number) {
-    if (span === "week") setAnchor(shiftDate(anchor, 7 * direction));
-    else {
-      const date = new Date(`${monthStart}T12:00:00Z`);
-      date.setUTCMonth(date.getUTCMonth() + direction);
-      setAnchor(date.toISOString().slice(0, 10));
-    }
+    const next = stepCalendar(state, direction, firstDay);
+    setState(current => ({ ...current, ...next }));
+    onQuickDate(next.selected);
   }
   async function move(task: Task, date: string, allow = false) {
     if (!online) return;
@@ -199,80 +214,65 @@ export function CalendarPage({
   }
   return (
     <div className="calendar-page" ref={pageElement}>
-      <section className="tile frost calendar-grid">
-        <div className="calendar-nav">
-          <div className="segment">
+      <motion.section className="tile frost calendar-grid" layout={!reduced} transition={reduced ? { duration: 0.12 } : motionTokens.snap}>
+        <div className="calendar-nav" ref={navigator}>
+          <div className="segment" role="group" aria-label={zh ? "日历视图切换" : "Calendar view"}>
             <button
               className={span === "month" ? "selected" : ""}
+              aria-pressed={span === "month"}
               onClick={() => setSpan("month")}
             >
-              {zh ? "月" : "Month"}
+              {zh ? "按月" : "Month"}
             </button>
             <button
               className={span === "week" ? "selected" : ""}
+              aria-pressed={span === "week"}
               onClick={() => setSpan("week")}
             >
-              {zh ? "周" : "Week"}
+              {zh ? "按周" : "Week"}
             </button>
           </div>
+          <span className="calendar-nav-space" />
+          {span === "month" && !autoCollapsed && <button className="icon-button" onClick={setCollapsed}
+            aria-label={zh ? (shownCollapsed ? "展开月历" : "收起月历") : (shownCollapsed ? "Expand month" : "Collapse month")}>
+            <Icon name="chevron" size={12} style={{ transform: shownCollapsed ? "rotate(90deg)" : "rotate(-90deg)" }} />
+          </button>}
           <button
             className="icon-button"
             onClick={() => page(-1)}
-            aria-label={zh ? "上一页" : "Previous"}
+            aria-label={zh ? (span === "month" ? "上个月" : "上一周") : (span === "month" ? "Previous month" : "Previous week")}
           >
             <Icon name="back" size={12} />
           </button>
-          <button className="month-label" onClick={() => setCollapsed()}>
-            {new Intl.DateTimeFormat(language, {
-              year: "numeric",
-              month: "short",
-            }).format(new Date(`${anchor}T12:00:00`))}
-            <Icon
-              name="chevron"
-              size={10}
-              style={{ transform: collapsed ? undefined : "rotate(90deg)" }}
-            />
+          <button className="month-label" aria-label={zh ? "回到今天" : "Go to today"} onClick={() => {
+            setAnchor(today); setSelected(today); onQuickDate(today);
+          }}>
+            <span>{calendarTitle(span, anchor, language, firstDay, today)}</span>
+            {!(today >= from && today <= to) && <i aria-hidden="true" className="calendar-today-dot" />}
           </button>
           <button
             className="icon-button"
             onClick={() => page(1)}
-            aria-label={zh ? "下一页" : "Next"}
+            aria-label={zh ? (span === "month" ? "下个月" : "下一周") : (span === "month" ? "Next month" : "Next week")}
           >
             <Icon name="chevron" size={12} />
-          </button>
-          <button
-            className="text-button"
-            onClick={() => {
-              setAnchor(today);
-              setSelected(today);
-              onQuickDate(today);
-            }}
-          >
-            {zh ? "今天" : "Today"}
           </button>
         </div>
         {span === "month" && (
           <>
             <div className="weekday-labels">
-              {(zh
-                ? ["一", "二", "三", "四", "五", "六", "日"]
-                : ["M", "T", "W", "T", "F", "S", "S"]
-              ).map((day, i) => (
+              {weekdayLabels(language, firstDay).map((day, i) => (
                 <span key={i}>{day}</span>
               ))}
             </div>
-            <motion.div
-              className="month-days"
-              key={from}
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={motionTokens.snap}
-            >
+            <div className="calendar-month-stage">
+            <AnimatePresence initial={false} mode="popLayout" custom={direction}>
+            <CalendarSwap className="month-days" key={`${from}:${shownCollapsed}`} direction={direction}>
               {gridDays.map((day) => (
                 <button
                   style={{ height: cellHeight }}
                   key={day}
-                  className={`${selected === day ? "selected" : ""} ${day.slice(0, 7) !== anchor.slice(0, 7) ? "other-month" : ""} ${day === today ? "is-today" : ""}`}
+                  className={`${selected === day ? "selected" : ""} ${day.slice(0, 7) !== anchor.slice(0, 7) ? "other-month" : ""} ${day === today ? "is-today" : ""} ${bucket(day).some(task => taskOverdue(task, today)) ? "has-overdue" : ""}`}
                   onClick={() => {
                     setSelected(day);
                     onQuickDate(day);
@@ -292,32 +292,42 @@ export function CalendarPage({
                     if (task) void move(task, day);
                   }}
                   aria-label={day}
+                  aria-pressed={selected === day}
+                  aria-description={`${dayLabel(day, language, today)} · ${planned(day).length} ${zh ? "待办" : "planned"} · ${deadlines(day).length} ${zh ? "截止" : "due"} · ${history(day).length} ${zh ? "历史" : "completed"}`}
                 >
-                  <span>{Number(day.slice(-2))}</span>
+                  <span className="calendar-date">
+                    {selected === day && <motion.i className="calendar-selection" layoutId={reduced ? undefined : `calendar-selection:${from}`} transition={reduced ? { duration: 0.12 } : motionTokens.snap} />}
+                    <span>{Number(day.slice(-2))}</span>
+                  </span>
                   <div className="day-dots">
-                    {bucket(day)
+                    {marks(day)
                       .slice(0, 3)
-                      .map((task) => (
+                      .map((mark, index) => (
                         <i
-                          key={task.id}
-                          className={task.status === "done" ? "done" : ""}
+                          key={mark.key}
+                          className={`${mark.kind} ${marks(day).length > 3 && index === 2 ? "overflow" : ""}`}
                         />
                       ))}
-                    {ghosts.some((ghost) => ghost.date === day) && (
-                      <i className="ghost" />
-                    )}
                   </div>
                 </button>
               ))}
-            </motion.div>
+            </CalendarSwap>
+            </AnimatePresence>
+            </div>
           </>
         )}
-      </section>
+      </motion.section>
       <section className="tile graphite calendar-agenda" aria-busy={loading}>
+        <AnimatePresence initial={false} mode="popLayout" custom={direction}>
+        <CalendarSwap className="calendar-agenda-days" key={span === "week" ? `week:${from}` : `day:${selected}`} direction={direction} distance={span === "week" ? 24 : 0}>
         {(span === "week" ? days : [selected]).map((day) => (
           <section
-            className="day-agenda"
+            className={`day-agenda ${day === selected ? "selected" : ""}`}
             key={day}
+            onClick={(event) => {
+              if ((event.target as Element).closest("button, input, a, summary")) return;
+              setSelected(day); onQuickDate(day);
+            }}
             onDragOver={(event) => {
               if (online) event.preventDefault();
             }}
@@ -331,10 +341,11 @@ export function CalendarPage({
               if (task) void move(task, day);
             }}
           >
-            <h3>
-              {dayLabel(day, language, today)} <span>{day}</span>
+            <h3 className={day === today ? "is-today" : ""}>
+              <button type="button" aria-pressed={day === selected} onClick={() => { setSelected(day); onQuickDate(day); }}>{dayLabel(day, language, today)}</button> {planned(day).length > 0 && <span>{planned(day).length}</span>}
             </h3>
             {bucket(day).length === 0 &&
+              history(day).length === 0 &&
               !ghosts.some((ghost) => ghost.date === day) && (
                 <p className="muted">
                   {zh ? "这天没有安排" : "Nothing planned"}
@@ -374,6 +385,7 @@ export function CalendarPage({
                   <TaskRow
                     key={`due:${task.id}`}
                     task={task}
+                    today={today}
                     disabled={!online}
                     onOpen={onOpen}
                     onComplete={onComplete}
@@ -390,8 +402,21 @@ export function CalendarPage({
                   <span>{zh ? "待生成" : "Not generated"}</span>
                 </div>
               ))}
+            {history(day).length > 0 && <div className="calendar-history">
+              <button type="button" className="calendar-history-toggle" aria-expanded={showsHistory(day)}
+                aria-label={zh ? `${showsHistory(day) ? "收起" : "展开"}已完成 ${day}` : `${showsHistory(day) ? "Collapse" : "Expand"} completed ${day}`}
+                onClick={() => setHistoryExpanded(current => ({ ...current, [day]: !showsHistory(day) }))}>
+                <Icon name="chevron" size={10} style={{ transform: showsHistory(day) ? "rotate(90deg)" : undefined }} />
+                {zh ? "已完成" : "Completed"} <span>{history(day).length}</span>
+              </button>
+              {showsHistory(day) && history(day).map(task => <TaskRow key={task.id} task={task} today={today}
+                disabled={!online || task.status !== "done"} onOpen={onOpen}
+                onComplete={async task => { const result = await onComplete(task); if (result !== false) setRevision(value => value + 1); return result; }} />)}
+            </div>}
           </section>
         ))}
+        </CalendarSwap>
+        </AnimatePresence>
       </section>
       {confirm && (
         <div className="confirmation frost" role="alertdialog">
@@ -416,6 +441,17 @@ export function CalendarPage({
     </div>
   );
 }
+
+const CalendarSwap = forwardRef<HTMLDivElement, { children: ReactNode; className: string; direction: number; distance?: number }>(function CalendarSwap({ children, className, direction, distance = 24 }, ref) {
+  const present = useIsPresent();
+  const reduced = useReducedMotion();
+  return <motion.div ref={ref} className={className} inert={!present} aria-hidden={!present} custom={direction}
+    variants={{ enter: (direction: number) => ({ x: reduced ? 0 : direction * distance, opacity: 0 }) }}
+    initial="enter" animate={{ x: 0, opacity: 1 }}
+    exit={{ opacity: 0, transition: { duration: 0.1, ease: "easeIn" } }}
+    transition={reduced ? { duration: 0.12 } : { x: spring(0.34, 0.9), opacity: { duration: 0.14, ease: "easeOut" } }}
+  >{children}</motion.div>;
+});
 
 export function CompletedPage({
   language,
@@ -711,6 +747,8 @@ export function PeriodicForm({
   const zh = language !== "en";
   const [draft, setDraft] = useState(initial);
   const current = useRef(initial);
+  const titleInput = useRef<HTMLTextAreaElement>(null);
+  useTextAreaSize(titleInput, draft.config.title, 2, 4);
   const mounted = useRef(true);
   const [preview, setPreview] = useState<{
     summary: string;
@@ -754,8 +792,10 @@ export function PeriodicForm({
   const [conflict, setConflict] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const savePending = useRef(false);
   async function save() {
-    if (busy || !online || conflict) return;
+    if (savePending.current || !online || conflict) return;
+    savePending.current = true;
     const submitted = current.current;
     setBusy(true);
     setError(null);
@@ -779,6 +819,7 @@ export function PeriodicForm({
         setConflict((error as { code?: string }).code === "VERSION_CONFLICT");
       }
     } finally {
+      savePending.current = false;
       if (mounted.current) setBusy(false);
     }
   }
@@ -789,7 +830,7 @@ export function PeriodicForm({
         if (
           (event.metaKey || event.ctrlKey) &&
           event.key === "Enter" &&
-          !event.nativeEvent.isComposing
+          !isCompositionKey(event.nativeEvent)
         ) {
           event.preventDefault();
           void save();
@@ -828,6 +869,7 @@ export function PeriodicForm({
         </div>
         <div className="surface-card">
           <textarea
+            ref={titleInput}
             className="title-input"
             aria-label={zh ? "提醒标题" : "Reminder title"}
             rows={2}
@@ -860,6 +902,8 @@ export function PeriodicForm({
             ).map((day, index) => (
               <button
                 key={index}
+                aria-label={weekdayLabels(language, 1, true)[index]}
+                aria-pressed={config.weekdays?.includes(index + 1) ?? false}
                 className={
                   config.weekdays?.includes(index + 1) ? "selected" : ""
                 }

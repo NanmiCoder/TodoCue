@@ -1,5 +1,32 @@
 import type { Task, UpdateTaskInput, Series } from "@todocue/shared";
-import { DateTime } from "luxon";
+import { DateTime, Info } from "luxon";
+
+// Match CalendarRange: Chinese starts Monday; English follows the user's region.
+// Keep ISO weekdays (Monday = 1) separate from JavaScript's Sunday = 0.
+export function calendarFirstWeekday(language: string, region: string): number {
+  return language === "en" ? Info.getStartOfWeek({ locale: region }) : 1;
+}
+export function calendarDays(span: "month" | "week", anchor: string, firstDay: number): string[] {
+  const start = span === "month" ? `${anchor.slice(0, 7)}-01` : anchor;
+  const weekday = new Date(`${start}T12:00:00Z`).getUTCDay() || 7;
+  const offset = (weekday - firstDay + 7) % 7;
+  const length = span === "week" ? 7 : Math.ceil((offset + DateTime.fromISO(start).daysInMonth!) / 7) * 7;
+  return Array.from({ length }, (_, index) => shiftDate(start, index - offset));
+}
+export function weekdayLabels(language: string, firstDay = 1, full = false): string[] {
+  const labels = language === "en"
+    ? (full ? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"])
+    : (full ? ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"] : ["一", "二", "三", "四", "五", "六", "日"]);
+  return Array.from({ length: 7 }, (_, index) => labels[(index + firstDay - 1) % 7]!);
+}
+export function calendarTitle(span: "month" | "week", anchor: string, language: string, firstDay: number, today: string): string {
+  const date = (day: string) => new Date(`${day}T12:00:00Z`);
+  if (span === "month") return new Intl.DateTimeFormat(language, { year: "numeric", month: "short", timeZone: "UTC" }).format(date(anchor));
+  const days = calendarDays("week", anchor, firstDay);
+  const year = days.every(day => day.slice(0, 4) === today.slice(0, 4)) ? undefined : "numeric";
+  const formatter = new Intl.DateTimeFormat(language, { year, month: "short", day: "numeric", timeZone: "UTC" });
+  return `${formatter.format(date(days[0]!))} – ${formatter.format(date(days[6]!))}`;
+}
 export function dateOf(instant: string, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -19,10 +46,36 @@ export function planDate(task: Task): string | null {
     (task.dueAt ? dateOf(task.dueAt, task.timezone) : null)
   );
 }
+export function calendarBucket(tasks: Task[], day: string) {
+  const planned = tasks.filter(task => task.status === "todo" && planDate(task) === day);
+  const history = tasks.filter(task => task.status !== "todo" && planDate(task) === day);
+  const deadlines = tasks.filter(task => task.status === "todo" && planDate(task) !== day &&
+    (task.dueDate ?? (task.dueAt ? dateOf(task.dueAt, task.timezone) : null)) === day);
+  return { planned, history, deadlines };
+}
 export function shiftDate(date: string, days: number): string {
   const value = new Date(`${date}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+}
+export function stepCalendar(state: { span: "month" | "week"; anchor: string; selected: string }, steps: number, firstDay: number) {
+  if (state.span === "week") {
+    const anchor = shiftDate(state.anchor, steps * 7);
+    const weekday = new Date(`${state.selected}T12:00:00Z`).getUTCDay();
+    const selected = calendarDays("week", anchor, firstDay).find(day => new Date(`${day}T12:00:00Z`).getUTCDay() === weekday)!;
+    return { anchor, selected };
+  }
+  const month = new Date(`${state.anchor.slice(0, 7)}-01T12:00:00Z`);
+  month.setUTCMonth(month.getUTCMonth() + steps);
+  const last = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
+  month.setUTCDate(Math.min(Number(state.anchor.slice(-2)), last));
+  const anchor = month.toISOString().slice(0, 10);
+  return { anchor, selected: anchor };
+}
+export function taskOverdue(task: Task, today: string, now = Date.now()): boolean {
+  return task.status === "todo" && (task.dueAt
+    ? Date.parse(task.dueAt) < now
+    : !!task.dueDate && task.dueDate < today);
 }
 export function dayLabel(date: string, language: string, today?: string) {
   if (!date) return language === "en" ? "Unscheduled" : "未安排";

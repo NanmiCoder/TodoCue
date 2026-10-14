@@ -8,6 +8,9 @@ on:
       - packages/cli/**
       - packages/server/**
       - scripts/package-windows.mjs
+      - scripts/windows-bundler.mjs
+      - scripts/tests/windows-bundler.test.mjs
+      - scripts/smoke-windows-install.mjs
       - scripts/stage-runtime.mjs
       - package-lock.json
       - .github/workflows/desktop-preview.yml
@@ -32,16 +35,43 @@ jobs:
           node-version: '26.7.0'
           cache: npm
       - run: rustup update stable
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: rust-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: desktop-rust-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml') }}
+          restore-keys: desktop-rust-v2-${{ runner.os }}-${{ runner.arch }}-
       - run: npm ci --ignore-scripts
       - run: npm run desktop:build
       - run: npm run check
       - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+        id: rust-check
       - run: npm run windows:preview
+      - name: Installed preview runtime smoke
+        run: node scripts/smoke-windows-install.mjs
+        env:
+          TODOCUE_INSTALL_SMOKE_REPORT: ${{ runner.temp }}/todocue-install-smoke.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: todocue-windows-${{ matrix.arch }}-install-smoke
+          path: ${{ runner.temp }}/todocue-install-smoke.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: todocue-windows-${{ matrix.arch }}-preview
           path: apps/desktop/src-tauri/target/*/release/bundle/nsis/*
           if-no-files-found: error
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.rust-check.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
   macos:
     runs-on: macos-26
     timeout-minutes: 30
@@ -52,5 +82,23 @@ jobs:
           node-version: '26.7.0'
           cache: npm
       - run: rustup update stable
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: rust-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: desktop-rust-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml') }}
+          restore-keys: desktop-rust-v2-${{ runner.os }}-${{ runner.arch }}-
       - run: npm ci --ignore-scripts
       - run: npm run desktop:check
+        id: rust-check
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.rust-check.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}

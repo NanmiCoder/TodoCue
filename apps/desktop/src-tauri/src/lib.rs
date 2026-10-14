@@ -124,6 +124,7 @@ fn parse_target(argument: &str) -> Option<Target> {
     }
 }
 fn route_target(app: &tauri::AppHandle, target: Target) {
+    let focus_input = matches!(target, Target::NewTask);
     let desktop = app.state::<Desktop>();
     let mut routing = desktop.routing.lock().unwrap();
     if routing.ready {
@@ -132,7 +133,7 @@ fn route_target(app: &tauri::AppHandle, target: Target) {
         routing.pending = Some(target);
     }
     drop(routing);
-    let _ = panel_show(app.clone(), desktop);
+    let _ = panel_present(app.clone(), desktop, focus_input);
 }
 fn notch_outside(app: &tauri::AppHandle) {
     if app
@@ -339,15 +340,37 @@ fn fit_panel(window: &WebviewWindow, settings: &Settings, align: bool) -> Result
 }
 #[tauri::command]
 fn panel_show(app: tauri::AppHandle, desktop: State<'_, Desktop>) -> Result<(), String> {
+    panel_present(app, desktop, false)
+}
+fn panel_present(
+    app: tauri::AppHandle,
+    desktop: State<'_, Desktop>,
+    focus_input: bool,
+) -> Result<(), String> {
     let _ = app.emit_to("notch", "notch:collapse", ());
     let window = app.get_webview_window("panel").ok_or("Panel unavailable")?;
     fit_panel(&window, &desktop.settings.lock().unwrap(), true)?;
-    window.show().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())
+    if focus_input {
+        platform::allow_activation(&window)?;
+        window.set_focusable(true).map_err(|e| e.to_string())?;
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+        window.as_ref().set_focus().map_err(|e| e.to_string())
+    } else {
+        platform::show_without_activation(&window)
+    }
 }
 #[tauri::command]
 fn panel_hide(window: WebviewWindow) -> Result<(), String> {
     window.hide().map_err(|e| e.to_string())
+}
+#[tauri::command]
+fn panel_focus(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app.get_webview_window("panel").ok_or("Panel unavailable")?;
+    platform::allow_activation(&window)?;
+    window.set_focusable(true).map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())?;
+    window.as_ref().set_focus().map_err(|e| e.to_string())
 }
 #[tauri::command]
 fn panel_drag(window: WebviewWindow) -> Result<(), String> {
@@ -464,12 +487,33 @@ async fn notch_present(
         return Ok(false);
     }
     let previous = desktop.notch.lock().unwrap().clone();
+    let release_keyboard = cfg!(target_os = "macos")
+        && !state.expanded
+        && previous.expanded
+        && window.is_focused().unwrap_or(false);
     window
-        .set_focusable(state.pinned)
+        .set_focusable(state.expanded)
         .map_err(|e| e.to_string())?;
-    window.show().map_err(|e| e.to_string())?;
+    if release_keyboard {
+        platform::release_notch_keyboard(&window)?;
+    } else {
+        window.show().map_err(|e| e.to_string())?;
+    }
+    // On Windows clear NOACTIVATE before requesting focus. Hover alone never activates.
+    let current_size = window
+        .inner_size()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
+    platform::configure(
+        &window,
+        state.pinned,
+        current_size.width,
+        current_size.height,
+    )?;
     if state.pinned && !previous.pinned {
         window.set_focus().map_err(|e| e.to_string())?;
+        // The native key window and the renderer's first responder are separate on macOS.
+        window.as_ref().set_focus().map_err(|e| e.to_string())?;
     }
     let changed = previous.width != state.width || previous.height != state.height;
     *desktop.notch.lock().unwrap() = state.clone();
@@ -485,7 +529,7 @@ async fn notch_present(
                 return Ok(false);
             }
             let elapsed = start.elapsed().as_secs_f64();
-            let finished = state.reduced_motion || elapsed >= 0.36;
+            let finished = state.reduced_motion || release_keyboard || elapsed >= 0.36;
             let progress = if finished {
                 1.0
             } else {
@@ -532,6 +576,9 @@ async fn notch_present(
         size.width,
         size.height,
     )?;
+    if release_keyboard {
+        window.show().map_err(|e| e.to_string())?;
+    }
     Ok(window.is_visible().unwrap_or(false)
         && size.width >= state.width - 1.0
         && size.height >= state.height - 1.0)
@@ -628,10 +675,12 @@ pub fn run() {
             }
             windows_home::launch_home(&args, launch_home.clone(), &root, &dir)
         })();
-        let launch_home = result.unwrap_or_else(|error| {
-            eprintln!("TodoCue route: {error}");
-            std::process::exit(2)
-        });
+        let launch_home = result
+            .and_then(|home| windows_home::resolve_home(&home))
+            .unwrap_or_else(|error| {
+                eprintln!("TodoCue route: {error}");
+                std::process::exit(2)
+            });
         let id = windows_home::home_id(&launch_home);
         // Each data directory has its own warm-instance route. Opening a toast
         // from another directory cannot reveal the wrong task or discard a draft.
@@ -682,6 +731,7 @@ pub fn run() {
             settings_load,
             settings_save,
             panel_show,
+            panel_focus,
             panel_hide,
             panel_drag,
             panel_resize_macos,
@@ -761,7 +811,7 @@ pub fn run() {
             platform::glass(&panel).map_err(std::io::Error::other)?;
             fit_panel(&panel, &settings, true).map_err(std::io::Error::other)?;
             if !std::env::args().any(|arg| arg == "--background") {
-                panel.show()?;
+                platform::show_without_activation(&panel).map_err(std::io::Error::other)?;
             }
             let notch = WebviewWindowBuilder::new(
                 app,
@@ -800,13 +850,10 @@ pub fn run() {
             tauri::tray::TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => {
-                        if let Some(window) = app.get_webview_window("panel") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+                        let _ = panel_show(app.clone(), app.state::<Desktop>());
                     }
                     "quit" => app.exit(0),
                     _ => {}
@@ -909,6 +956,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == "notch" && matches!(event, tauri::WindowEvent::Focused(true)) {
+                let _ = window.emit("notch:focus", ());
+            }
             #[cfg(not(target_os = "macos"))]
             if window.label() == "notch" && matches!(event, tauri::WindowEvent::Focused(false)) {
                 if let (Ok(pointer), Ok(origin), Ok(size)) = (

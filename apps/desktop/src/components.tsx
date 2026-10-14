@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "./useReducedMotion.js";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent } from "motion/react";
 import type { Task } from "@todocue/shared";
 import { motionTokens } from "./tokens.js";
 import { Icon } from "./icons.js";
@@ -20,54 +21,100 @@ export function Mark() {
     </svg>
   );
 }
+export function Numeral({ value }: { value: number }) {
+  const reduced = useReducedMotion();
+  const previous = useRef(value);
+  const direction = value >= previous.current ? 1 : -1;
+  useEffect(() => { previous.current = value; }, [value]);
+  return (
+    <span className="numeral">
+      <span className="sr-only">{value}</span>
+      {String(value).split("").map((digit, index) => (
+        <span className="numeral-digit" aria-hidden="true" key={String(value).length - index}>
+          <AnimatePresence initial={false} custom={direction}>
+            <motion.span key={digit} custom={direction}
+              variants={{
+                enter: (direction: number) => ({ y: reduced ? 0 : `${direction * 45}%`, opacity: 0 }),
+                exit: (direction: number) => ({ y: reduced ? 0 : `${-direction * 45}%`, opacity: 0 }),
+              }}
+              initial="enter" animate={{ y: 0, opacity: 1 }} exit="exit"
+              transition={reduced ? { duration: 0.12 } : motionTokens.settle}
+            >{digit}</motion.span>
+          </AnimatePresence>
+        </span>
+      ))}
+    </span>
+  );
+}
 export function Gauge({
   completed,
   total,
+  showsLabel = true,
+  diameter = 84,
+  ready = true,
 }: {
   completed: number;
   total: number;
+  showsLabel?: boolean;
+  diameter?: number;
+  ready?: boolean;
 }) {
   const reduced = useReducedMotion();
-  const previous = useRef(completed);
+  const previous = useRef<number | null>(ready ? completed : null);
   const [pulse, setPulse] = useState(0);
   useEffect(() => {
-    if (completed === previous.current + 1) setPulse((value) => value + 1);
+    if (!ready) { previous.current = null; return; }
+    if (previous.current !== null && completed === previous.current + 1) setPulse((value) => value + 1);
     previous.current = completed;
-  }, [completed]);
+  }, [completed, ready]);
   const progress = Math.min(1, completed / Math.max(total, 1));
+  const progressValue = useMotionValue(progress);
+  const [shownProgress, setShownProgress] = useState(progress);
+  useMotionValueEvent(progressValue, "change", setShownProgress);
+  useEffect(() => {
+    if (reduced || !ready) { progressValue.set(progress); return; }
+    const playback = animate(progressValue, progress, motionTokens.settle);
+    return () => playback.stop();
+  }, [progress, reduced, ready, progressValue]);
+  const faceProgress = Math.max(0, Math.min(1, shownProgress));
+  const center = diameter / 2;
+  const radius = center - 4;
+  const dots = Math.max(24, Math.floor(diameter / 2.3));
   return (
     <svg
-      viewBox="0 0 84 84"
+      viewBox={`0 0 ${diameter} ${diameter}`}
+      style={{ width: diameter, height: diameter }}
       className="gauge"
       role="img"
       aria-label={`${completed}/${total}`}
     >
-      {Array.from({ length: 36 }, (_, i) => {
-        const angle = (i / 36) * Math.PI * 2 - Math.PI / 2;
+      {Array.from({ length: dots }, (_, i) => {
+        const angle = (i / dots) * Math.PI * 2 - Math.PI / 2;
         return (
           <circle
             key={i}
-            cx={42 + Math.cos(angle) * 38}
-            cy={42 + Math.sin(angle) * 38}
-            r={i / 36 < progress ? 1.5 : 1.1}
-            fill={i / 36 < progress ? "#F26A2E" : "var(--muted)"}
-            opacity={i / 36 < progress ? 1 : 0.55}
+            cx={center + Math.cos(angle) * radius}
+            cy={center + Math.sin(angle) * radius}
+            r={i / dots < faceProgress ? 1.5 : 1.1}
+            fill={i / dots < faceProgress ? "#F26A2E" : "var(--muted)"}
+            opacity={i / dots < faceProgress ? 1 : 0.55}
           />
         );
       })}
       <circle
-        cx="42"
-        cy="42"
-        r="30"
+        cx={center}
+        cy={center}
+        r={Math.max(0, radius - 8)}
         fill="none"
         stroke="currentColor"
         strokeWidth=".5"
         opacity=".07"
       />
-      {progress > 0 && (
+      {faceProgress > 0 && (
         <circle
-          cx={42 + 38 * Math.sin(progress * 2 * Math.PI)}
-          cy={42 - 38 * Math.cos(progress * 2 * Math.PI)}
+          className="gauge-tip"
+          cx={center + radius * Math.sin(faceProgress * 2 * Math.PI)}
+          cy={center - radius * Math.cos(faceProgress * 2 * Math.PI)}
           r="3"
           fill="#F26A2E"
         />
@@ -75,8 +122,8 @@ export function Gauge({
       {pulse > 0 && !reduced && (
         <motion.circle
           key={pulse}
-          cx={42 + 38 * Math.sin(progress * 2 * Math.PI)}
-          cy={42 - 38 * Math.cos(progress * 2 * Math.PI)}
+          cx={center + radius * Math.sin(progress * 2 * Math.PI)}
+          cy={center - radius * Math.cos(progress * 2 * Math.PI)}
           r="3"
           fill="none"
           stroke="#F26A2E"
@@ -85,17 +132,18 @@ export function Gauge({
           transition={{ duration: 0.7 }}
         />
       )}
-      <motion.text
-        x="42"
-        y="47"
+      {showsLabel && <motion.text
+        x={center}
+        y={center + diameter * 0.06}
         textAnchor="middle"
+        style={{ fontSize: diameter * 0.16 }}
         key={completed}
         initial={reduced ? false : { opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={motionTokens.settle}
+        transition={reduced ? { duration: 0.12 } : motionTokens.settle}
       >
         {total ? `${completed}/${total}` : "0"}
-      </motion.text>
+      </motion.text>}
     </svg>
   );
 }
@@ -110,7 +158,9 @@ export function TaskRow({
   dragging = false,
   showProject = true,
   today,
+  trailingActions,
 }: {
+  trailingActions?: ReactNode;
   dragging?: boolean;
   showProject?: boolean;
   today?: string;
@@ -161,8 +211,8 @@ export function TaskRow({
       className={`task-row ${completing || completingExternal ? "completing" : ""} ${dragging ? "drag-placeholder" : ""} ${task.status === "done" ? "is-completed" : ""}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
-      transition={motionTokens.list}
+      exit={{ opacity: 0, scale: reduced ? 1 : 0.96, transition: { duration: 0.12 } }}
+      transition={reduced ? { duration: 0.12 } : motionTokens.list}
     >
       {onDrag && (
         <button
@@ -197,7 +247,7 @@ export function TaskRow({
               ? [1, 0.82, 1.16, 1]
               : 1,
         }}
-        transition={{ duration: 0.54, times: [0, 0.148, 0.444, 1] }}
+        transition={{ duration: reduced ? 0.12 : 0.42, times: [0, 0.148, 0.444, 1] }}
       >
         <svg viewBox="0 0 20 20">
           <motion.path
@@ -244,7 +294,12 @@ export function TaskRow({
           omitTodayTime
         />
       </button>
-      {time && <span className="task-time">{time}</span>}
+      {trailingActions ? (
+        <div className="task-trailing">
+          <span className="task-time">{time}</span>
+          <div className="task-row-actions">{trailingActions}</div>
+        </div>
+      ) : time && <span className="task-time">{time}</span>}
     </motion.div>
   );
 }

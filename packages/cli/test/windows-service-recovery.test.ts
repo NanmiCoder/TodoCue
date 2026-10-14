@@ -9,6 +9,7 @@ vi.mock("node:child_process", async importOriginal => {
   const execFile = Object.assign(vi.fn(), { [Symbol.for("nodejs.util.promisify.custom")]: async (command: string, args: string[]) => {
     commands.calls.push([command, ...args]);
     if (command === "powershell.exe") return { stdout: "S-1-5-21-123-456-1001\n", stderr: "" };
+    if (command === "icacls.exe" && !args.at(-1)?.startsWith("*S-1-")) throw new Error("No mapping between account names and security IDs was done");
     if (command === "schtasks.exe" && args.includes("/Create")) { if (commands.failCreate) throw new Error("Registration refused"); commands.registered = true; }
     if (command === "schtasks.exe" && args.includes("/Query") && !commands.registered) throw new Error("Task missing");
     return { stdout: "Success", stderr: "" };
@@ -32,6 +33,7 @@ describe("Windows installation recovery", () => {
     expect((await windowsStatus(paths)).installed).toBe(true);
     commands.registered = false; expect((await windowsStatus(paths)).installed).toBe(false);
     expect(commands.calls.filter(call => call.includes("/Create"))).toHaveLength(2);
+    expect(commands.calls.find(call => call[0] === "icacls.exe")?.at(-1)).toBe("*S-1-5-21-123-456-1001:(OI)(CI)F");
   });
   it("keeps an in-use shim and updates its runtime pointer, while identical shims need no copy", () => {
     const dir = temporary(), packaged = path.join(dir, "packaged.exe"), cli = path.join(dir, "todocue.exe");

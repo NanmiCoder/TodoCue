@@ -11,8 +11,8 @@ const runtimeFile = 'packages/shared/src/index.ts';
 const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const runtimeVersion = /export const RUNTIME_VERSION = "([^"]+)";/;
 const nativeFiles = directory => ['apps/desktop/src-tauri/tauri.conf.json', 'apps/desktop/src-tauri/Cargo.toml', 'apps/desktop/src-tauri/Cargo.lock'].filter(file => fs.existsSync(path.join(directory, file)));
-const cargoVersion = /(^\[package\]\n(?:(?!\n\[)[\s\S])*?\nversion = ")([^"]+)(")/m;
-const cargoLockVersion = /(\[\[package\]\]\nname = "todocue-desktop"\nversion = ")([^"]+)(")/;
+const cargoVersion = /(^\[package\]\r?\n(?:(?!^\[)[\s\S])*?^version = ")([^"]+)(")/m;
+const cargoLockVersion = /(\[\[package\]\]\r?\nname = "todocue-desktop"\r?\nversion = ")([^"]+)(")/;
 const json = (directory, file) => JSON.parse(fs.readFileSync(path.join(directory, file), 'utf8'));
 const git = (directory, args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
 

@@ -77,6 +77,7 @@ export function newDraft(
   task?: Task,
   date = new Date().toISOString().slice(0, 10),
   title = "",
+  planned = true,
 ): TaskDraft {
   const timezone =
     task?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -97,7 +98,7 @@ export function newDraft(
         : task.scheduledDate
           ? "date"
           : "none"
-      : "date",
+      : planned ? "date" : "none",
     scheduledDate: task?.scheduledDate ?? (schedule.slice(0, 10) || date),
     scheduledTime: schedule.slice(11) || "09:00:00",
     dueMode: task?.dueAt ? "time" : task?.dueDate ? "date" : "none",
@@ -112,6 +113,14 @@ export function newDraft(
     uploads: [],
     removed: [],
   };
+}
+
+/** Expanding typed quick input starts a separate task; empty input can continue a draft. */
+export function composerDraft(saved: TaskDraft | undefined, date: string, title?: string, fromQuickAdd = false, calendar = false): TaskDraft {
+  if (fromQuickAdd && title?.trim()) return newDraft(undefined, date, title);
+  const draft = saved ?? newDraft(undefined, date, "", false);
+  if (fromQuickAdd && calendar) return { ...draft, scheduledMode: "date", scheduledDate: date, key: crypto.randomUUID() };
+  return draft;
 }
 export function draftPayload(
   draft: TaskDraft,

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "./useReducedMotion.js";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
-  useReducedMotion,
   useIsPresent,
 } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
@@ -12,6 +12,7 @@ import { TodoCueError } from "@todocue/shared";
 import {
   client,
   hidePanel,
+  focusPanel,
   loadSettings,
   native,
   saveSettings,
@@ -20,10 +21,10 @@ import {
   defaults,
 } from "./bridge.js";
 import { translate } from "./i18n.js";
-import { Gauge, Mark, TaskRow } from "./components.js";
+import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
 import { Detail } from "./Detail.js";
-import { afterSave, newDraft, type TaskDraft } from "./drafts.js";
+import { afterSave, composerDraft, newDraft, type TaskDraft } from "./drafts.js";
 import { Icon } from "./icons.js";
 import { TaskMetadata } from "./metadata.js";
 import {
@@ -41,6 +42,7 @@ import type { PeriodicReminder } from "@todocue/shared";
 import { motionTokens, spring } from "./tokens.js";
 import { useRuntime } from "./useRuntime.js";
 import { ResizeEdge } from "./ResizeEdge.js";
+import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
 
 type Route =
   | "list"
@@ -106,10 +108,16 @@ export function Panel() {
   const [conflict, setConflict] = useState(false);
   const [undo, setUndo] = useState<Task | null>(null);
   const drafts = useRef(new Map<string, TaskDraft>());
-  const quickOperation = useRef<{ signature: string; key: string } | null>(
-    null,
-  );
+  const quickRequest = useRef(new QuickAddRequest());
+  const quickFocusRevision = useRef(0);
   const quickInput = useRef<HTMLInputElement>(null);
+  const pendingQuickFocus = useRef(false);
+  const [quickFocusTick, setQuickFocusTick] = useState(0);
+  useLayoutEffect(() => {
+    if (!pendingQuickFocus.current) return;
+    pendingQuickFocus.current = false;
+    if (route === "list" && !quickInput.current?.closest("[inert]")) quickInput.current?.focus();
+  }, [route, quickFocusTick]);
   const t = translate(settings.language);
   const reduced = useReducedMotion();
   useEffect(() => {
@@ -206,11 +214,11 @@ export function Panel() {
     };
   }, []);
   useEffect(() => {
-    if (!pendingTarget || !connection.online) return;
+    if (!pendingTarget || (!connection.online && pendingTarget.kind !== "new_task")) return;
     let stopped = false;
     void (async () => {
       if (pendingTarget.kind === "new_task") {
-        edit();
+        edit(undefined, undefined, false, false);
       } else if (pendingTarget.kind === "task" && pendingTarget.id) {
         const { task } = await client.getTask(pendingTarget.id);
         if (!stopped) {
@@ -243,7 +251,7 @@ export function Panel() {
   }, [pendingTarget, connection.online, eventRevision]);
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || isCompositionKey(event)) return;
       if (event.key === "Escape") {
         if (menuOpen) setMenuOpen(false);
         else if (route !== "list") back();
@@ -264,10 +272,12 @@ export function Panel() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
+        void focusPanel().catch(error => setError(String(error)));
+        pendingQuickFocus.current = true;
+        setQuickFocusTick(value => value + 1);
         if (route !== "list") {
           navigate("list");
         }
-        quickInput.current?.focus();
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r") {
         event.preventDefault();
@@ -355,22 +365,20 @@ export function Panel() {
       stopped = true;
     };
   }, [eventRevision, liveBoard, selected?.id, route, connection.online]);
-  function edit(task?: Task, title?: string) {
+  function edit(task?: Task, title?: string, fromQuickAdd = false, focus = true) {
+    if (focus) void focusPanel().catch(error => setError(String(error)));
     navigate("form");
     setFormSession(crypto.randomUUID());
     setSelected(task);
-    setDraft(
-      drafts.current.get(task?.id ?? "new") ??
-        newDraft(
-          task,
-          route === "calendar" ? calendarState.selected : board?.context.today,
-          title ?? quick,
-        ),
-    );
+    const date = (route === "calendar" ? calendarState.selected : board?.context.today) ?? new Date().toISOString().slice(0, 10);
+    setDraft(task ? drafts.current.get(task.id) ?? newDraft(task, date)
+      : composerDraft(drafts.current.get("new"), date, title, fromQuickAdd, route === "calendar"));
+    if (fromQuickAdd && title?.trim()) { setQuick(""); quickRequest.current.edited(); }
     setConflict(false);
     setError(null);
   }
   function editPeriodic(rule?: PeriodicReminder) {
+    void focusPanel().catch(error => setError(String(error)));
     navigate("periodicForm");
     setFormSession(crypto.randomUUID());
     setPeriodicSelected(rule);
@@ -473,7 +481,17 @@ export function Panel() {
     }
   }
   return (
-    <main className="panel-shell">
+    <main className="panel-shell"
+      onPointerDownCapture={(event) => {
+        if (native && navigator.userAgent.includes("Windows") &&
+          (event.target as Element).closest("input, textarea, button, select, summary, [contenteditable=true]"))
+          void focusPanel().catch(error => setError(String(error)));
+        if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
+      }}
+      onFocusCapture={(event) => {
+        if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
+      }}
+    >
       {native && (
         <>
           <ResizeEdge
@@ -554,7 +572,7 @@ export function Panel() {
           </button>
         </div>
       )}
-      <header className="tile graphite panel-header">
+      <header className="tile graphite panel-header" data-route={route}>
         <div className="brand">
           {route === "list" ? (
             <Mark />
@@ -629,7 +647,7 @@ export function Panel() {
                     {view === tab && (
                       <motion.span
                         className="dot-active"
-                        layoutId="selected-view"
+                        layoutId={reduced ? undefined : "selected-view"}
                         transition={motionTokens.snap}
                       />
                     )}
@@ -654,18 +672,7 @@ export function Panel() {
               </div>
             </nav>
             <div className="instrument">
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  className="numeral"
-                  key={`${view}:${count}`}
-                  initial={{ y: reduced ? 0 : 12, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: reduced ? 0 : -12, opacity: 0 }}
-                  transition={motionTokens.settle}
-                >
-                  {count}
-                </motion.span>
-              </AnimatePresence>
+              <Numeral value={count} />
               <div className="instrument-caption">
                 <strong>
                   {settings.language === "en"
@@ -1095,23 +1102,29 @@ export function Panel() {
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (!quick.trim() || saving || !connection.online) return;
+                    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+                    const focusRevision = quickFocusRevision.current;
+                    const ownsFocus = document.activeElement === quickInput.current ||
+                      document.activeElement === submitter || (!!submitter && document.activeElement === document.body);
                     const title = quick,
-                      payload = { title, scheduledDate: addDate },
-                      signature = JSON.stringify(payload);
-                    if (quickOperation.current?.signature !== signature)
-                      quickOperation.current = {
-                        signature,
-                        key: crypto.randomUUID(),
-                      };
-                    const operation = quickOperation.current;
+                      payload = { title, scheduledDate: addDate };
+                    const operation = quickRequest.current.begin(payload);
+                    if (!operation) return;
+                    // Disabling the submit button can move focus to BODY before the response.
+                    if (ownsFocus) quickInput.current?.focus();
                     void run(async () => {
-                      await client.createTask(payload, {
-                        idempotencyKey: operation.key,
-                      });
-                      if (quickOperation.current?.key === operation.key)
-                        quickOperation.current = null;
-                      setQuick((current) => (current === title ? "" : current));
-                      quickInput.current?.focus();
+                      try {
+                        await client.createTask(payload, { idempotencyKey: operation.key });
+                        const restoreFocus = ownsFocus && activePage.current.route === route && quickFocusRevision.current === focusRevision && (
+                          document.activeElement === quickInput.current || document.activeElement === submitter ||
+                          document.activeElement === document.body
+                        );
+                        if (quickRequest.current.commit(operation)) setQuick("");
+                        if (restoreFocus) requestAnimationFrame(() => {
+                          if (activePage.current.route === route && quickFocusRevision.current === focusRevision)
+                            quickInput.current?.focus();
+                        });
+                      } finally { quickRequest.current.settle(); }
                     });
                   }}
                 >
@@ -1129,7 +1142,7 @@ export function Panel() {
                       <AnimatePresence mode="popLayout" initial={false}>
                         <motion.span
                           key={quick.trim() ? "send" : "plus"}
-                          initial={{ opacity: 0, scale: 0.4 }}
+                          initial={{ opacity: 0, scale: reduced ? 1 : 0.4 }}
                           animate={{
                             opacity: 1,
                             scale: 1,
@@ -1138,8 +1151,8 @@ export function Panel() {
                                 ? 90
                                 : 0,
                           }}
-                          exit={{ opacity: 0, scale: 0.4 }}
-                          transition={motionTokens.snap}
+                          exit={{ opacity: 0, scale: reduced ? 1 : 0.4 }}
+                          transition={reduced ? { duration: 0.12 } : motionTokens.snap}
                         >
                           <Icon name={quick.trim() ? "up" : "plus"} size={20} />
                         </motion.span>
@@ -1150,10 +1163,11 @@ export function Panel() {
                       value={quick}
                       onFocus={() => setQuickFocused(true)}
                       onBlur={() => setQuickFocused(false)}
+                      onInput={() => quickRequest.current.edited()}
                       onChange={(event) => setQuick(event.target.value)}
                       onKeyDown={(event) => {
                         if (
-                          event.nativeEvent.isComposing &&
+                          isCompositionKey(event.nativeEvent) &&
                           event.key === "Enter"
                         )
                           event.preventDefault();
@@ -1176,7 +1190,7 @@ export function Panel() {
                       <button
                         className="icon-button"
                         type="button"
-                        onClick={() => edit()}
+                        onClick={() => edit(undefined, quick, true)}
                         aria-label={t("details")}
                       >
                         <Icon name="edit" />
@@ -1187,10 +1201,10 @@ export function Panel() {
                     {(quickFocused || quick.trim()) && (
                       <motion.div
                         className="quick-details"
-                        initial={{ opacity: 0, height: 0 }}
+                        initial={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={motionTokens.snap}
+                        exit={reduced ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                        transition={reduced ? { duration: 0.12 } : motionTokens.snap}
                       >
                         <span>
                           <Icon name="calendar" size={12} />
@@ -1205,7 +1219,7 @@ export function Panel() {
                         <button
                           className="text-button"
                           type="button"
-                          onClick={() => edit(undefined, quick)}
+                          onClick={() => edit(undefined, quick, true)}
                         >
                           {t("details")}
                         </button>
@@ -1328,6 +1342,7 @@ export function Panel() {
                 initial={draft}
                 language={settings.language}
                 online={connection.online}
+                today={board?.context.today ?? calendarState.anchor}
                 onChange={(value) => {
                   const key = selected?.id ?? "new";
                   drafts.current.set(key, value);
@@ -1453,7 +1468,11 @@ export function Panel() {
                     : "全局快捷键"}
                   <button
                     className="shortcut-recorder pill secondary"
-                    onClick={() => setRecording((value) => !value)}
+                    onClick={(event) => {
+                      event.currentTarget.focus();
+                      void focusPanel().catch(error => setError(String(error)));
+                      setRecording((value) => !value);
+                    }}
                     onKeyDown={(event) => {
                       if (!recording) return;
                       event.preventDefault();
@@ -1610,6 +1629,7 @@ function RouteSurface({
     <motion.div
       className="page-content"
       inert={!present}
+      aria-hidden={!present}
       style={{ zIndex: depth }}
       initial={{ y: reduced ? 0 : 14, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}

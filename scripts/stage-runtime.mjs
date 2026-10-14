@@ -2,6 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const runtimePackages = ["shared", "client", "engine", "server", "cli"];
+/** NSIS omits npm's Windows workspace junctions. Use ordinary entrypoints while
+ * retaining the packages/ module URLs used to locate the runtime and helpers. */
+export function materializeWorkspaceLinks(destination) {
+  for (const name of runtimePackages) {
+    const source = path.join(destination, "packages", name);
+    const target = path.join(destination, "node_modules", "@todocue", name);
+    fs.rmSync(target, { recursive: true, force: true });
+    fs.cpSync(source, target, { recursive: true });
+    fs.writeFileSync(path.join(target, "dist/index.js"), `export * from "../../../../packages/${name}/dist/index.js";\n`);
+  }
+}
 /** Stage just the locked runtime, without pulling React/Tauri into the background service. */
 export function stageRuntime(root, destination) {
   fs.mkdirSync(destination, { recursive: true });

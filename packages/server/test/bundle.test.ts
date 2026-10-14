@@ -16,8 +16,21 @@ describe("standalone app layout", () => {
       fs.writeFileSync(path.join(app, "Contents/Info.plist"), "bundle");
       fs.writeFileSync(helper, "helper");
       expect(appBundle(runtime)).toBe(app);
-      expect(packagedHelper(appBundle(runtime))).toBe(helper);
+      expect(packagedHelper(appBundle(runtime), runtime, "darwin")).toBe(helper);
       expect(appBundle(path.join(root, "checkout"))).toBeNull();
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+  it("locates the Windows helper beside a relocated runtime, including paths with spaces", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "todocue-windows-bundle-"));
+    try {
+      const installation = path.join(root, "TodoCue Preview with spaces");
+      const runtime = path.join(installation, "runtime");
+      const helper = path.join(installation, "TodoCueNotifier.exe");
+      fs.mkdirSync(runtime, { recursive: true });
+      expect(packagedHelper(null, runtime, "win32")).toBeNull();
+      fs.writeFileSync(helper, "helper");
+      expect(packagedHelper(null, runtime, "win32")).toBe(helper);
+      expect(appBundle(runtime)).toBeNull();
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 });
