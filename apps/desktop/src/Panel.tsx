@@ -557,7 +557,7 @@ export function Panel() {
           </button>
         </div>
       )}
-      <header className="tile graphite panel-header">
+      <header className="tile graphite panel-header" data-route={route}>
         <div className="brand">
           {route === "list" ? (
             <Mark />
@@ -1325,6 +1325,7 @@ export function Panel() {
                 initial={draft}
                 language={settings.language}
                 online={connection.online}
+                today={board?.context.today ?? calendarState.anchor}
                 onChange={(value) => {
                   const key = selected?.id ?? "new";
                   drafts.current.set(key, value);

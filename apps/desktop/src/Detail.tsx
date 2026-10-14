@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from "react";
 import { useIsPresent } from "motion/react";
-import type { Attachment, Reminder, Series, Task } from "@todocue/shared";
+import type { Reminder, Series, Task } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { Icon, type IconName } from "./icons.js";
 import { dayLabel, reschedule, shiftDate } from "./dates.js";
 import { estimateLabel, timeLabel } from "./metadata.js";
+import { AttachmentGallery, AttachmentPreview, type FilePreview } from "./Attachments.js";
 
 export function Detail({
   task,
@@ -49,10 +50,7 @@ export function Detail({
   const [confirm, setConfirm] = useState<"delete" | "stop" | null>(null);
   const [series, setSeries] = useState<Series | null>(null);
   const [reminder, setReminder] = useState<Reminder | null>(null);
-  const [viewing, setViewing] = useState<{
-    file: Attachment;
-    data: string;
-  } | null>(null);
+  const [viewing, setViewing] = useState<FilePreview | null>(null);
   const disabled = !online || busy || working;
   const instant = (value: string | null) =>
     value ? timeLabel(value, task.timezone, language, today) : null;
@@ -144,8 +142,8 @@ export function Detail({
             )}
             {task.completedAt && ` · ${instant(task.completedAt)}`}
             {task.priority !== "none" && (
-              <span>
-                <Icon name="flag" size={12} /> {text("优先级", "Priority")}{" "}
+              <span className={`priority-${task.priority}`}>
+                <Icon name="priority" size={12} /> {text("优先级", "Priority")}{" "}
                 {text(
                   { high: "高", medium: "中", low: "低", none: "无" }[
                     task.priority
@@ -179,18 +177,7 @@ export function Detail({
               )}
             </p>
           ) : (
-            <div className="attachment-gallery">
-              {task.attachments.map((file) => (
-                <AttachmentTile
-                  key={file.id}
-                  taskId={task.id}
-                  file={file}
-                  online={online}
-                  onOpen={(data) => setViewing({ file, data })}
-                  onError={onError}
-                />
-              ))}
-            </div>
+            <AttachmentGallery taskId={task.id} files={task.attachments} online={online} language={language} onOpen={setViewing} onError={onError} />
           )}
         </div>
         <div className="surface-card">
@@ -431,102 +418,7 @@ export function Detail({
           </button>
         </div>
       )}
-      {viewing && (
-        <div
-          className="file-preview frost"
-          role="dialog"
-          aria-label={viewing.file.name}
-        >
-          <div>
-            <h3>{viewing.file.name}</h3>
-            <button
-              className="icon-button"
-              onClick={() => setViewing(null)}
-              aria-label={text("关闭预览", "Close preview")}
-            >
-              <Icon name="close" />
-            </button>
-          </div>
-          {viewing.file.mediaType.startsWith("image/") ? (
-            <img
-              src={`data:${viewing.file.mediaType};base64,${viewing.data}`}
-              alt={viewing.file.name}
-            />
-          ) : (
-            <p className="muted">
-              {text("下载后打开此文件", "Download to open this file")}
-            </p>
-          )}
-          <button
-            className="pill"
-            onClick={() => download(viewing.file, viewing.data)}
-          >
-            {text("下载文件", "Download file")}
-          </button>
-        </div>
-      )}
+      {viewing && <AttachmentPreview preview={viewing} language={language} onClose={() => setViewing(null)} />}
     </section>
   );
-}
-function AttachmentTile({
-  taskId,
-  file,
-  online,
-  onOpen,
-  onError,
-}: {
-  taskId: string;
-  file: Attachment;
-  online: boolean;
-  onOpen: (data: string) => void;
-  onError: (error: string) => void;
-}) {
-  const [data, setData] = useState<string | null>(null);
-  useEffect(() => {
-    if (!online || !file.mediaType.startsWith("image/")) return;
-    let stopped = false;
-    void client
-      .getAttachment(taskId, file.id)
-      .then((result) => {
-        if (!stopped) setData(result.dataBase64);
-      })
-      .catch((error) => {
-        if (!stopped) onError(String(error));
-      });
-    return () => {
-      stopped = true;
-    };
-  }, [taskId, file.id, online]);
-  return (
-    <button
-      disabled={!online && !data}
-      onClick={() =>
-        data
-          ? onOpen(data)
-          : void client
-              .getAttachment(taskId, file.id)
-              .then((result) => onOpen(result.dataBase64))
-              .catch((error) => onError(String(error)))
-      }
-    >
-      {data ? (
-        <img src={`data:${file.mediaType};base64,${data}`} alt={file.name} />
-      ) : (
-        <Icon name="paperclip" size={22} />
-      )}
-      <span>{file.name}</span>
-      <small>{Math.ceil(file.size / 1024)} KB</small>
-    </button>
-  );
-}
-function download(file: Attachment, data: string) {
-  const bytes = Uint8Array.from(atob(data), (character) =>
-    character.charCodeAt(0),
-  );
-  const url = URL.createObjectURL(new Blob([bytes], { type: file.mediaType }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = file.name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

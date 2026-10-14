@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useLayoutEffect } from "react";
+import { useEffect, useRef, useState, useLayoutEffect, type CSSProperties } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   MAX_ATTACHMENT_BYTES,
@@ -11,17 +11,19 @@ import {
 } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { DatePicker } from "./DatePicker.js";
-import { dateOf, shiftDate, weekdayLabels } from "./dates.js";
+import { dateOf, dayLabel, shiftDate, weekdayLabels } from "./dates.js";
 import { Icon, type IconName } from "./icons.js";
 import { draftPayload, newDraft, type TaskDraft } from "./drafts.js";
 import { motionTokens } from "./tokens.js";
 import { isCompositionKey } from "./quickAdd.js";
 import { useTextAreaSize } from "./useTextAreaSize.js";
+import { AttachmentGallery, AttachmentPreview, type FilePreview } from "./Attachments.js";
 
 export function Composer({
   task,
   initial,
   language,
+  today,
   online,
   onChange,
   onSaved,
@@ -29,6 +31,7 @@ export function Composer({
   task?: Task;
   initial: TaskDraft;
   language: string;
+  today: string;
   online: boolean;
   onChange: (draft: TaskDraft) => void;
   onSaved: (task: Task, submitted: TaskDraft) => void;
@@ -43,6 +46,7 @@ export function Composer({
   const [popupPosition, setPopupPosition] = useState({ left: 20, top: 200 });
   const [projects, setProjects] = useState<string[]>([]);
   const [popover, setPopover] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<FilePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -202,21 +206,21 @@ export function Composer({
       icon: "calendar",
       title:
         draft.scheduledMode === "none"
-          ? label("计划", "Plan")
-          : draft.scheduledDate,
+          ? draft.dueMode !== "none" ? `${label("截止", "Due")} ${dayLabel(draft.dueDate, language, today)}` : draft.reminder ? `${label("提醒", "Reminder")} ${draft.reminder.slice(11, 16)}` : label("日期", "Date")
+          : `${dayLabel(draft.scheduledDate, language, today)}${draft.scheduledMode === "time" ? ` ${draft.scheduledTime.slice(0, 5)}` : ""}`,
     },
     {
       key: "project",
       icon: "folder",
       title: draft.project || label("项目", "Project"),
     },
-    { key: "priority", icon: "flag", title: label("优先级", "Priority") },
+    { key: "priority", icon: draft.priority === "none" ? "flag" : "priority", title: draft.priority === "none" ? label("优先级", "Priority") : label({high:"高",medium:"中",low:"低"}[draft.priority], {high:"High",medium:"Medium",low:"Low"}[draft.priority]) },
     {
       key: "estimate",
       icon: "clock",
       title: draft.estimate
-        ? `${draft.estimate} ${label("分钟", "min")}`
-        : label("耗时", "Estimate"),
+        ? `${draft.estimate}m`
+        : label("预估", "Estimate"),
     },
     {
       key: "repeat",
@@ -229,6 +233,14 @@ export function Composer({
             : label("每周", "Weekly"),
     },
   ];
+  const keptAttachments = task?.attachments.filter(file => !draft.removed.includes(file.id)) ?? [];
+  const attachmentCount = keptAttachments.length + draft.uploads.length;
+  const activeChip = (key: string) => key === "schedule" ? draft.scheduledMode !== "none" || draft.dueMode !== "none" || !!draft.reminder
+    : key === "project" ? !!draft.project : key === "priority" ? draft.priority !== "none" : key === "estimate" ? !!draft.estimate : draft.repeat !== "none";
+  const clearChip: Record<string, Partial<TaskDraft>> = {
+    schedule: { scheduledMode: "none", dueMode: "none", reminder: "" },
+    project: { project: "" }, priority: { priority: "none" }, estimate: { estimate: "" }, repeat: { repeat: "none" },
+  };
   return (
     <form
       className="tile frost composer-page"
@@ -307,22 +319,15 @@ export function Composer({
           <div className="composer-divider" />
           <div className="attribute-chips">
             {chips
-              .filter((chip) => !(chip.key === "repeat" && !!task?.seriesId))
+              .filter((chip) => !(chip.key === "schedule" && draft.repeat !== "none"))
               .map((chip) => (
+                <div key={chip.key} className={`attribute-chip ${activeChip(chip.key) ? "active" : ""}`}
+                  style={chip.key === "priority" ? { "--chip-tint": draft.priority === "high" ? "#f36a6a" : draft.priority === "low" ? "#5792d7" : "var(--orange)" } as CSSProperties : undefined}>
                 <button
                   type="button"
-                  className={
-                    popover === chip.key ||
-                    (chip.key === "schedule" &&
-                      draft.scheduledMode !== "none") ||
-                    (chip.key === "project" && !!draft.project) ||
-                    (chip.key === "priority" && draft.priority !== "none") ||
-                    (chip.key === "estimate" && !!draft.estimate) ||
-                    (chip.key === "repeat" && draft.repeat !== "none")
-                      ? "active"
-                      : ""
-                  }
-                  key={chip.key}
+                  data-attribute={chip.key}
+                  aria-expanded={popover === chip.key}
+                  disabled={chip.key === "repeat" && !!task}
                   ref={(node) => {
                     if (node) anchors.current.set(chip.key, node);
                     else anchors.current.delete(chip.key);
@@ -334,10 +339,14 @@ export function Composer({
                   <Icon name={chip.icon} size={12} />
                   {chip.title}
                 </button>
+                {activeChip(chip.key) && <button type="button" className="attribute-clear" disabled={chip.key === "repeat" && !!task}
+                  aria-label={label(`清除${{schedule:"日期",project:"项目",priority:"优先级",estimate:"预估",repeat:"重复"}[chip.key]}`, `Clear ${chip.key}`)}
+                  onClick={() => { setPopover(null); update(clearChip[chip.key]!); }}><Icon name="close" size={9} /></button>}
+                </div>
               ))}
-            <button type="button" onClick={() => fileInput.current?.click()}>
+            <button type="button" className={attachmentCount ? "active" : ""} aria-label={label("添加附件", "Add attachments")} disabled={reading > 0} onClick={() => fileInput.current?.click()}>
               <Icon name="paperclip" size={12} />
-              {label("附件", "Attachments")}
+              {attachmentCount || label("附件", "Attachments")}
             </button>
           </div>
           <AnimatePresence>
@@ -618,27 +627,16 @@ export function Composer({
               event.target.value = "";
             }}
           />
-          {task?.attachments.length || draft.uploads.length ? (
+          {attachmentCount > 0 ? (
             <div className="attachment-drawer">
-              {task?.attachments
-                .filter((file) => !draft.removed.includes(file.id))
-                .map((file) => (
-                  <div key={file.id}>
-                    <Icon name="paperclip" />
-                    <span>{file.name}</span>
-                    <button
-                      type="button"
-                      aria-label={`${label("移除", "Remove")} ${file.name}`}
-                      onClick={() =>
-                        update({ removed: [...draft.removed, file.id] })
-                      }
-                    >
-                      <Icon name="close" size={12} />
-                    </button>
-                  </div>
-                ))}
+              <h3><Icon name="paperclip" />{label("图片与附件", "Images & files")}<span>{attachmentCount} / 20</span></h3>
+              {task && <AttachmentGallery taskId={task.id} files={keptAttachments} online={online} language={language}
+                onOpen={setViewing} onError={setError} onRemove={file => update({ removed: [...draft.removed, file.id] })} />}
+              <div className="pending-attachments">
               {draft.uploads.map((file, index) => (
-                <div key={index}>
+                <div className="pending-attachment" key={index}>
+                  <button type="button" className="pending-preview" aria-label={label(`预览待上传附件 ${file.name}`, `Preview pending attachment ${file.name}`)}
+                    onClick={() => setViewing({ file: { name: file.name, mediaType: file.mediaType ?? "application/octet-stream" }, data: file.dataBase64 })}>
                   {file.mediaType?.startsWith("image/") ? (
                     <img
                       src={`data:${file.mediaType};base64,${file.dataBase64}`}
@@ -647,6 +645,8 @@ export function Composer({
                   ) : (
                     <Icon name="paperclip" />
                   )}
+                  </button>
+                  <div>
                   <span>{file.name}</span>
                   <button
                     type="button"
@@ -659,8 +659,10 @@ export function Composer({
                   >
                     <Icon name="close" size={12} />
                   </button>
+                  </div>
                 </div>
               ))}
+              </div>
             </div>
           ) : null}
           {draft.repeat !== "none" && (
@@ -738,6 +740,7 @@ export function Composer({
                 : label("添加任务", "Add task")}
         </button>
       </footer>
+      {viewing && <AttachmentPreview preview={viewing} language={language} onClose={() => setViewing(null)} />}
     </form>
   );
 }
