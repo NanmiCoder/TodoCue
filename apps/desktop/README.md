@@ -54,3 +54,5 @@ swift test --package-path apps/macos
 ```
 
 [交接任务与继续开发说明](../../docs/desktop-handoff.md)列出当前最优先的刘海焦点问题、未完成任务、工作树启动方式和验收条件。[实施与验收记录](../../docs/desktop-migration.md)包含已验证的真实入口、原生对照参数、Windows 实机清单与尚未完成的 macOS 迁移。Tauri 的[窗口与安装说明](https://v2.tauri.app/distribute/windows-installer/)作为平台配置参考，不能替代实机验收。
+
+本轮原生输入/粘贴/回车、退出 AX 控件及快速添加并发草稿已修正并回归，见 [刘海修复与原版画面对照](../../docs/qa/desktop-native-ui-fixes/README.md)。真实鼠标外部点击、输入法候选窗口、Windows 实机和完整视觉验收仍待完成。本机只有 Command Line Tools，已构建对照 App，但 `swift test` 缺 `XCTest`；需要完整 Xcode 重跑。

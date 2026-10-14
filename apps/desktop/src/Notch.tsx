@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import type { PeriodicReminder, RuntimeEvent } from "@todocue/shared";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -31,6 +31,7 @@ import { reschedule, shiftDate } from "./dates.js";
 import { translate } from "./i18n.js";
 import { useRuntime } from "./useRuntime.js";
 import { dial, motionTokens } from "./tokens.js";
+import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
 
 export function Notch() {
   const stack = useRef(new CueStack());
@@ -42,9 +43,10 @@ export function Notch() {
   const [quick, setQuick] = useState("");
   const [saving, setSaving] = useState(false);
   const quickInput = useRef<HTMLInputElement>(null);
-  const quickOperation = useRef<{ signature: string; key: string } | null>(
-    null,
-  );
+  const quickRequest = useRef(new QuickAddRequest());
+  const pendingFocus = useRef(false);
+  const quickFocusRevision = useRef(0);
+  const actionBusy = useRef(false);
   const busyCues = useRef(new Set<string>());
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
   const [featured, setFeatured] = useState(false);
@@ -55,6 +57,7 @@ export function Notch() {
   const content = useRef<HTMLDivElement>(null);
   const hovering = useRef(false),
     deferred = useRef<Cue[]>([]);
+  const rearmAfterLeave = useRef(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -77,14 +80,34 @@ export function Notch() {
     foreground: document.visibilityState === "visible",
   };
   const t = translate(settings.language);
-  function collapseOutside() {
-    if (!shouldCollapseQuickLook("outside", { ...interaction.current, editing: false })) return;
+  function closeQuickLook(fold = false) {
     clearTimeout(hoverTimer.current);
     clearTimeout(leaveTimer.current);
-    hovering.current = false;
+    pendingFocus.current = false;
+    quickFocusRevision.current++;
+    rearmAfterLeave.current = hovering.current;
+    interaction.current = { expanded: false, pinned: false };
     quickInput.current?.blur();
     setExpanded(false);
     setPinned(false);
+    if (fold) setFolded(true);
+  }
+  function focusQuickAdd() {
+    pendingFocus.current = true;
+    interaction.current = { expanded: true, pinned: true };
+    clearTimeout(leaveTimer.current);
+    setExpanded(true);
+    setPinned(true);
+    // Already presented: no new resize effect is needed to return to the field.
+    if (expanded && pinned) {
+      quickInput.current?.focus();
+      pendingFocus.current = false;
+    }
+  }
+  function collapseOutside() {
+    if (!shouldCollapseQuickLook("outside", { ...interaction.current, editing: false })) return;
+    closeQuickLook();
+    hovering.current = false;
     if (deferred.current.length) {
       setFeaturedKey(deferred.current.at(-1)!.key);
       setFeatured(true);
@@ -97,8 +120,15 @@ export function Notch() {
   useEffect(() => {
     if (native) return;
     const blur = () => outside.current();
+    const click = (event: PointerEvent) => {
+      if (event.target instanceof Node && !document.querySelector(".notch")?.contains(event.target)) outside.current();
+    };
     window.addEventListener("blur", blur);
-    return () => window.removeEventListener("blur", blur);
+    document.addEventListener("pointerdown", click);
+    return () => {
+      window.removeEventListener("blur", blur);
+      document.removeEventListener("pointerdown", click);
+    };
   }, []);
   useEffect(() => {
     let ended = false;
@@ -245,11 +275,12 @@ export function Notch() {
           setSettings(event.payload),
         ),
         listen("notch:collapse", () => {
-          setExpanded(false);
-          setPinned(false);
-          setFolded(true);
+          closeQuickLook(true);
         }),
         listen("notch:outside", () => outside.current()),
+        listen("notch:focus", () => {
+          if (interaction.current.expanded && pendingFocus.current) quickInput.current?.focus();
+        }),
       ]).then((stops) => {
         const dispose = () => stops.forEach((stop) => stop());
         if (ended) dispose();
@@ -310,9 +341,12 @@ export function Notch() {
     return () => clearTimeout(timer);
   }, [featured, featuredKey, cues.find((cue) => cue.key === featuredKey)?.id]);
   const stackShown = cues.length > 0 && !folded && !expanded;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = content.current;
     if (!node) return;
+    let active = true;
+    // Keyboard input must work while the shell is growing, before it reaches full size.
+    if (expanded && pendingFocus.current) quickInput.current?.focus();
     const resize = () => {
       const width = expanded ? 560 : stackShown ? 460 : 273;
       const height =
@@ -323,22 +357,25 @@ export function Notch() {
         expanded,
         pinned,
         stack: stackShown,
-      }).catch((error) => setError(String(error)));
+      }).then((presented) => {
+        // AX/DOM elements can exist before the native window has grown around them.
+        if (active && presented && interaction.current.expanded && pendingFocus.current) {
+          pendingFocus.current = false;
+          if (document.activeElement !== quickInput.current) quickInput.current?.focus();
+        }
+      }).catch((error) => { if (active) setError(String(error)); });
     };
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => { active = false; observer.disconnect(); };
   }, [expanded, pinned, stackShown, featured, cues, settings, bandHeight]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        if (quick) setQuick("");
-        else {
-          setExpanded(false);
-          setPinned(false);
-          setFolded(true);
-        }
+      if (event.key === "Escape" && !isCompositionKey(event)) {
+        event.preventDefault();
+        if (quick) { quickRequest.current.edited(); setQuick(""); }
+        else closeQuickLook(true);
       }
     };
     window.addEventListener("keydown", key);
@@ -397,7 +434,8 @@ export function Notch() {
       .filter((item) => item.task.id !== next?.id)
       .slice(0, 5) ?? [];
   async function taskAction(action: () => Promise<unknown>) {
-    if (!runtime.connection.online || saving) return;
+    if (!runtime.connection.online || actionBusy.current) return;
+    actionBusy.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -406,6 +444,7 @@ export function Notch() {
     } catch (error) {
       setError(String(error));
     } finally {
+      actionBusy.current = false;
       setSaving(false);
     }
   }
@@ -416,11 +455,11 @@ export function Notch() {
         borderBottomLeftRadius: expanded || stackShown ? 24 : 10,
         borderBottomRightRadius: expanded || stackShown ? 24 : 10,
       }}
-      transition={motionTokens.expand}
+      transition={reduced ? { duration: 0.12 } : motionTokens.expand}
       onMouseEnter={() => {
         hovering.current = true;
         clearTimeout(leaveTimer.current);
-        if (!expanded && !stackShown)
+        if (!expanded && !stackShown && !rearmAfterLeave.current)
           hoverTimer.current = setTimeout(
             () => setExpanded(true),
             dial.hoverDelay,
@@ -428,6 +467,7 @@ export function Notch() {
       }}
       onMouseLeave={() => {
         hovering.current = false;
+        rearmAfterLeave.current = false;
         clearTimeout(hoverTimer.current);
         if (deferred.current.length) {
           setFeaturedKey(deferred.current.at(-1)!.key);
@@ -441,7 +481,7 @@ export function Notch() {
           });
         }
         leaveTimer.current = setTimeout(() => {
-          if (shouldCollapseQuickLook("leave", { ...interaction.current, editing: document.activeElement === quickInput.current })) setExpanded(false);
+          if (shouldCollapseQuickLook("leave", { ...interaction.current, editing: document.activeElement === quickInput.current })) closeQuickLook();
         }, dial.leaveDelay);
       }}
     >
@@ -452,11 +492,7 @@ export function Notch() {
         <button
           className="notch-band"
           style={{ height: bandHeight }}
-          onClick={() => {
-            setExpanded(true);
-            setPinned(true);
-            requestAnimationFrame(() => quickInput.current?.focus());
-          }}
+          onClick={focusQuickAdd}
           aria-label={t("showPanel")}
         >
           <span className="notch-wing">
@@ -470,17 +506,21 @@ export function Notch() {
         </button>
         <AnimatePresence initial={false}>
           {(expanded || stackShown) && (
-            <motion.section
-              className="notch-content"
-              key={expanded ? "quick" : "stack"}
-              initial={{
-                opacity: 0,
-                scale: reduced ? 1 : 0.97,
-                y: reduced ? 0 : -8,
+            <NotchSurface
+              bandHeight={bandHeight}
+              reduced={!!reduced}
+              onPin={(target) => {
+                if (target instanceof Element && !target.closest(".notch-quick-field")) {
+                  pendingFocus.current = false;
+                  quickFocusRevision.current++;
+                }
+                if (expanded) {
+                  clearTimeout(leaveTimer.current);
+                  interaction.current.pinned = true;
+                  setPinned(true);
+                }
               }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ ...motionTokens.settle, delay: reduced ? 0 : 0.06 }}
+              key={expanded ? "quick" : "stack"}
             >
               {expanded ? (
                 <>
@@ -500,13 +540,21 @@ export function Notch() {
                           }).format(new Date(runtime.board.context.now))}
                       </span>
                     </div>
+                    <div className="notch-progress">
                     <Gauge
+                      showsLabel={false}
+                      diameter={24}
+                      ready={!!runtime.board}
                       completed={runtime.board?.today.completed.length ?? 0}
                       total={
                         (runtime.board?.today.remaining ?? 0) +
                         (runtime.board?.today.completed.length ?? 0)
                       }
                     />
+                    <span>{runtime.board?.today.remaining
+                      ? settings.language === "en" ? `${runtime.board.today.remaining} left` : `还剩 ${runtime.board.today.remaining} 件`
+                      : settings.language === "en" ? "All clear" : (runtime.board?.today.completed.length ? "已清空" : "暂无待办")}</span>
+                    </div>
                     <button
                       className="icon-button"
                       onClick={() => void openTaskComposer()}
@@ -516,25 +564,19 @@ export function Notch() {
                     </button>
                     <button
                       className={`icon-button ${pinned ? "accent" : ""}`}
-                      onClick={() => setPinned((value) => !value)}
+                      onClick={() => {
+                        const value = !pinned;
+                        interaction.current.pinned = value;
+                        setPinned(value);
+                      }}
+                      aria-pressed={pinned}
                       aria-label={
                         settings.language === "en"
                           ? "Pin quick look"
-                          : "固定快览"
+                          : pinned ? "取消固定快览" : "固定快览"
                       }
                     >
                       <Icon name="pin" />
-                    </button>
-                    <button
-                      className="icon-button"
-                      onClick={() => {
-                        setExpanded(false);
-                        setPinned(false);
-                        setFolded(true);
-                      }}
-                      aria-label={t("hide")}
-                    >
-                      <Icon name="close" />
                     </button>
                   </div>
                   {!runtime.connection.online && (
@@ -568,6 +610,10 @@ export function Notch() {
                       <div className="next-heading">
                         <span className="eyebrow">NEXT</span>
                         <span>{t("next")}</span>
+                        <span className="notch-next-reason">{runtime.board?.next.next?.group === "overdue" ? t("overdue")
+                          : runtime.board?.next.next?.group === "due_today" ? t("must")
+                          : runtime.board?.next.next?.group === "scheduled_reached" ? settings.language === "en" ? "Planned time reached" : "已到计划时间"
+                          : settings.language === "en" ? "Unscheduled" : "未安排"}</span>
                       </div>
                       <button
                         className="next-title"
@@ -612,8 +658,8 @@ export function Notch() {
                             )
                           }
                         >
-                          <Icon name="bell" />
-                          {t("snooze")}
+                          <span className="quiet-disc"><Icon name="snooze" size={10} /></span>
+                          {settings.language === "en" ? "Remind in 10 minutes" : "10 分钟后提醒"}
                         </button>
                         <button
                           className="pill secondary"
@@ -630,6 +676,7 @@ export function Notch() {
                             )
                           }
                         >
+                          <span className="quiet-disc"><Icon name="tomorrow" size={10} /></span>
                           {settings.language === "en" ? "Tomorrow" : "明天"}
                         </button>
                         <button
@@ -672,6 +719,18 @@ export function Notch() {
                                   }
                                 }}
                                 onOpen={(task) => void revealTask(task.id)}
+                                trailingActions={<>
+                                  <button className="icon-button" disabled={!runtime.connection.online || saving}
+                                    aria-label={`${t("snooze")} ${task.title}`}
+                                    onClick={() => void taskAction(() => client.snoozeTask(task.id, { expectedVersion: task.version, minutes: 10 }))}>
+                                    <Icon name="snooze" size={13} />
+                                  </button>
+                                  <button className="icon-button" disabled={!runtime.connection.online || saving}
+                                    aria-label={`${settings.language === "en" ? "Move to tomorrow" : "改期到明天"} ${task.title}`}
+                                    onClick={() => void taskAction(() => client.updateTask(task.id, reschedule(task, shiftDate(runtime.board!.context.today, 1))))}>
+                                    <Icon name="tomorrow" size={13} />
+                                  </button>
+                                </>}
                               />
                             ))}
                           </section>
@@ -680,16 +739,17 @@ export function Notch() {
                     })}
                   </div>
                   {!next && rows.length === 0 && (
-                    <p className="notch-empty">
-                      {settings.language === "en"
-                        ? "Nothing left to carry today."
-                        : "今天的事情，都已妥当。"}
-                    </p>
+                    <div className="notch-empty">
+                      <span className="orange-disc"><Icon name={runtime.board?.today.completed.length ? "check" : "plus"} size={15} /></span>
+                      <div><strong>{settings.language === "en" ? (runtime.board?.today.completed.length ? "All clear today" : "Nothing planned today")
+                        : (runtime.board?.today.completed.length ? "今天已清空" : "今天还没有安排")}</strong>
+                        <p>{settings.language === "en" ? "Add a task below, then press Enter." : "在下方记一件事，回车就加到今天。"}</p></div>
+                    </div>
                   )}
                   {(runtime.board?.today.items.length ?? 0) >
                     rows.length + (next ? 1 : 0) && (
                     <button
-                      className="text-button"
+                      className="text-button notch-more"
                       onClick={() => void openPanel()}
                     >
                       {settings.language === "en"
@@ -699,32 +759,36 @@ export function Notch() {
                   )}
                   <form
                     className="notch-quick-add"
+                    aria-busy={saving}
                     onSubmit={(event) => {
                       event.preventDefault();
-                      if (!quick.trim() || saving || !runtime.connection.online)
+                      if (!quick.trim() || actionBusy.current || !runtime.connection.online)
                         return;
+                      const submitter = (event.nativeEvent as SubmitEvent).submitter;
+                      const focusRevision = quickFocusRevision.current;
+                      const ownsFocus = document.activeElement === quickInput.current ||
+                        document.activeElement === submitter || (!!submitter && document.activeElement === document.body);
                       const title = quick,
                         payload = {
                           title,
                           scheduledDate: runtime.board?.context.today,
-                        },
-                        signature = JSON.stringify(payload);
-                      if (quickOperation.current?.signature !== signature)
-                        quickOperation.current = {
-                          signature,
-                          key: crypto.randomUUID(),
                         };
-                      const operation = quickOperation.current!;
+                      const operation = quickRequest.current.begin(payload);
+                      if (!operation) return;
                       void taskAction(async () => {
-                        await client.createTask(payload, {
-                          idempotencyKey: operation.key,
-                        });
-                        if (quickOperation.current?.key === operation.key)
-                          quickOperation.current = null;
-                        setQuick((current) =>
-                          current === title ? "" : current,
-                        );
-                        quickInput.current?.focus();
+                        try {
+                          await client.createTask(payload, { idempotencyKey: operation.key });
+                          const restoreFocus = ownsFocus && interaction.current.expanded && quickFocusRevision.current === focusRevision && (
+                            document.activeElement === quickInput.current || document.activeElement === submitter ||
+                            document.activeElement === document.body
+                          );
+                          if (quickRequest.current.commit(operation)) setQuick("");
+                          // Saving must not reclaim focus after an outside click or another control.
+                          if (restoreFocus) requestAnimationFrame(() => {
+                            if (interaction.current.expanded && quickFocusRevision.current === focusRevision)
+                              quickInput.current?.focus();
+                          });
+                        } finally { quickRequest.current.settle(); }
                       });
                     }}
                   >
@@ -733,10 +797,7 @@ export function Notch() {
                       className="orange-disc"
                       type="button"
                       disabled={!runtime.connection.online || saving}
-                      onClick={() => {
-                        setPinned(true);
-                        quickInput.current?.focus();
-                      }}
+                      onClick={focusQuickAdd}
                       aria-label={settings.language === "en" ? "Focus quick add" : "输入任务"}
                     >
                       <Icon name="plus" />
@@ -744,11 +805,15 @@ export function Notch() {
                     <input
                       ref={quickInput}
                       value={quick}
+                      onInput={() => quickRequest.current.edited()}
                       onChange={(event) => setQuick(event.target.value)}
-                      onFocus={() => setPinned(true)}
+                      onFocus={() => {
+                        if (!pinned) pendingFocus.current = true;
+                        setPinned(true);
+                      }}
                       onKeyDown={(event) => {
                         if (
-                          event.nativeEvent.isComposing &&
+                          isCompositionKey(event.nativeEvent) &&
                           event.key === "Enter"
                         )
                           event.preventDefault();
@@ -765,14 +830,16 @@ export function Notch() {
                       }
                       disabled={!runtime.connection.online}
                     />
-                    {quick.trim() && <button type="submit" className="notch-quick-submit" disabled={!runtime.connection.online || saving} aria-label={settings.language === "en" ? "Create task" : "创建任务"}><Icon name="up" size={12} /></button>}
+                    {saving ? <span className="quick-saving" role="status" aria-label={settings.language === "en" ? "Saving" : "正在保存"} />
+                      : quick.trim() && <button type="submit" className="notch-quick-submit" disabled={!runtime.connection.online} aria-label={settings.language === "en" ? "Create task" : "创建任务"}><Icon name="up" size={12} /></button>}
                     </div>
                     <button
-                      className="text-button"
+                      className="pill secondary notch-open-all"
                       type="button"
                       onClick={() => void openPanel()}
                     >
-                      {t("showPanel")} <Icon name="open" size={11} />
+                      <span className="quiet-disc"><Icon name="open" size={10} /></span>
+                      {settings.language === "en" ? "View all" : "查看全部"}
                     </button>
                   </form>
                 </>
@@ -820,12 +887,34 @@ export function Notch() {
                   {error}
                 </p>
               )}
-            </motion.section>
+            </NotchSurface>
           )}
         </AnimatePresence>
       </div>
     </motion.main>
   );
+}
+
+/** Exiting controls must leave the focus/AX tree before the native shell clips them. */
+function NotchSurface({ children, bandHeight, reduced, onPin }: {
+  children: ReactNode;
+  bandHeight: number;
+  reduced: boolean;
+  onPin: (target: EventTarget) => void;
+}) {
+  const present = useIsPresent();
+  return <motion.section
+    className="notch-content"
+    inert={!present}
+    aria-hidden={!present}
+    style={{ maxHeight: dial.notchMaxHeight - bandHeight, pointerEvents: present ? "auto" : "none" }}
+    onPointerDownCapture={(event) => { if (present) onPin(event.target); }}
+    onFocusCapture={(event) => { if (present) onPin(event.target); }}
+    initial={{ opacity: 0, scale: reduced ? 1 : 0.97, y: reduced ? 0 : -8 }}
+    animate={{ opacity: 1, scale: 1, y: 0 }}
+    exit={{ opacity: 0, transition: { duration: 0.12, delay: 0 } }}
+    transition={{ ...(reduced ? { duration: 0.12 } : motionTokens.settle), delay: reduced ? 0 : 0.06 }}
+  >{children}</motion.section>;
 }
 
 function CueCard({
@@ -846,9 +935,11 @@ function CueCard({
   onAnswer: (action: "complete" | "snooze" | "pause_today") => void;
 }) {
   const t = translate(language);
+  const reduced = useReducedMotion();
   return (
     <motion.article
-      layout
+      layout={!reduced}
+      transition={reduced ? { duration: 0.12 } : motionTokens.list}
       className={`cue ${featured ? "cue-featured" : ""} ${completing ? "completing" : ""}`}
       data-cue-id={cue.id}
     >

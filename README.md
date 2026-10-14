@@ -136,6 +136,8 @@ Use `npm run dev:serve` for development and `TODOCUE_HOME` to isolate developmen
 
 A cross-platform migration preview is now in the source tree. Use `npm run desktop:dev` with isolated data to inspect the shared UI; the preview workflow builds Windows x64/ARM64 installers. Windows device and full visual acceptance are pending, and the production macOS client remains native. See [preview setup](apps/desktop/README.md), [migration/QA status](docs/desktop-migration.md), and [development handoff](docs/desktop-handoff.md).
 
+The latest preview verifies macOS notch typing, paste and Enter creation, and aligns the notch with the SwiftUI reference. [Evidence and comparison screenshots](docs/qa/desktop-native-ui-fixes/README.md) distinguish those checks from pending physical mouse, IME and Windows acceptance.
+
 ## License
 
 [MIT](LICENSE) © 2026 NanmiCoder. Contributions welcome.

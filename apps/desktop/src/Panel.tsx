@@ -41,6 +41,7 @@ import type { PeriodicReminder } from "@todocue/shared";
 import { motionTokens, spring } from "./tokens.js";
 import { useRuntime } from "./useRuntime.js";
 import { ResizeEdge } from "./ResizeEdge.js";
+import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
 
 type Route =
   | "list"
@@ -106,9 +107,8 @@ export function Panel() {
   const [conflict, setConflict] = useState(false);
   const [undo, setUndo] = useState<Task | null>(null);
   const drafts = useRef(new Map<string, TaskDraft>());
-  const quickOperation = useRef<{ signature: string; key: string } | null>(
-    null,
-  );
+  const quickRequest = useRef(new QuickAddRequest());
+  const quickFocusRevision = useRef(0);
   const quickInput = useRef<HTMLInputElement>(null);
   const t = translate(settings.language);
   const reduced = useReducedMotion();
@@ -243,7 +243,7 @@ export function Panel() {
   }, [pendingTarget, connection.online, eventRevision]);
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || isCompositionKey(event)) return;
       if (event.key === "Escape") {
         if (menuOpen) setMenuOpen(false);
         else if (route !== "list") back();
@@ -473,7 +473,14 @@ export function Panel() {
     }
   }
   return (
-    <main className="panel-shell">
+    <main className="panel-shell"
+      onPointerDownCapture={(event) => {
+        if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
+      }}
+      onFocusCapture={(event) => {
+        if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
+      }}
+    >
       {native && (
         <>
           <ResizeEdge
@@ -661,7 +668,7 @@ export function Panel() {
                   initial={{ y: reduced ? 0 : 12, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: reduced ? 0 : -12, opacity: 0 }}
-                  transition={motionTokens.settle}
+                  transition={reduced ? { duration: 0.12 } : motionTokens.settle}
                 >
                   {count}
                 </motion.span>
@@ -1095,23 +1102,27 @@ export function Panel() {
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (!quick.trim() || saving || !connection.online) return;
+                    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+                    const focusRevision = quickFocusRevision.current;
+                    const ownsFocus = document.activeElement === quickInput.current ||
+                      document.activeElement === submitter || (!!submitter && document.activeElement === document.body);
                     const title = quick,
-                      payload = { title, scheduledDate: addDate },
-                      signature = JSON.stringify(payload);
-                    if (quickOperation.current?.signature !== signature)
-                      quickOperation.current = {
-                        signature,
-                        key: crypto.randomUUID(),
-                      };
-                    const operation = quickOperation.current;
+                      payload = { title, scheduledDate: addDate };
+                    const operation = quickRequest.current.begin(payload);
+                    if (!operation) return;
                     void run(async () => {
-                      await client.createTask(payload, {
-                        idempotencyKey: operation.key,
-                      });
-                      if (quickOperation.current?.key === operation.key)
-                        quickOperation.current = null;
-                      setQuick((current) => (current === title ? "" : current));
-                      quickInput.current?.focus();
+                      try {
+                        await client.createTask(payload, { idempotencyKey: operation.key });
+                        const restoreFocus = ownsFocus && activePage.current.route === route && quickFocusRevision.current === focusRevision && (
+                          document.activeElement === quickInput.current || document.activeElement === submitter ||
+                          document.activeElement === document.body
+                        );
+                        if (quickRequest.current.commit(operation)) setQuick("");
+                        if (restoreFocus) requestAnimationFrame(() => {
+                          if (activePage.current.route === route && quickFocusRevision.current === focusRevision)
+                            quickInput.current?.focus();
+                        });
+                      } finally { quickRequest.current.settle(); }
                     });
                   }}
                 >
@@ -1150,10 +1161,11 @@ export function Panel() {
                       value={quick}
                       onFocus={() => setQuickFocused(true)}
                       onBlur={() => setQuickFocused(false)}
+                      onInput={() => quickRequest.current.edited()}
                       onChange={(event) => setQuick(event.target.value)}
                       onKeyDown={(event) => {
                         if (
-                          event.nativeEvent.isComposing &&
+                          isCompositionKey(event.nativeEvent) &&
                           event.key === "Enter"
                         )
                           event.preventDefault();

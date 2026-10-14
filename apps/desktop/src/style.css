@@ -463,6 +463,10 @@ body[data-surface="notch"] {
   overflow: hidden;
   color: #fff;
 }
+.notch:not(.notch-open) .notch-content { pointer-events: none; }
+.notch > div { display: grid; grid-template-columns: minmax(0, 1fr); }
+.notch-band { grid-area: 1 / 1; }
+.notch-content { grid-area: 2 / 1; }
 .notch-band {
   height: 24px;
   display: flex;
@@ -2064,7 +2068,7 @@ body[data-dragging="true"] {
   color: var(--orange);
   flex-shrink: 0;
 }
-.notch-quick-header > div {
+.notch-quick-header > div:not(.notch-progress) {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -2079,8 +2083,8 @@ body[data-dragging="true"] {
   color: #ffffff8c;
 }
 .notch-quick-header .gauge {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   margin: 0;
 }
 .notch-quick-header .icon-button {
@@ -2090,6 +2094,12 @@ body[data-dragging="true"] {
 .notch-quick-header .accent {
   color: var(--orange);
 }
+.notch-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.notch-progress span { font-size: 12px; font-weight: 500; white-space: nowrap; }
 .notch-next {
   border-radius: 22px;
   padding: 14px;
@@ -2106,6 +2116,8 @@ body[data-dragging="true"] {
   letter-spacing: -0.3px;
   margin-bottom: 8px;
 }
+.notch-next-reason { margin-left: auto; font-size: 11px; color: #ffffff99; }
+.notch-next:hover { background: #ffffff1a; }
 .notch-next-actions {
   display: flex;
   gap: 8px;
@@ -2114,11 +2126,25 @@ body[data-dragging="true"] {
 }
 .notch-next-actions .pill {
   margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  padding-right: 14px;
 }
+.notch-next-actions .pill:not(.secondary) { font-weight: 600; }
+.quiet-disc {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff17;
+}
+.notch .pill.secondary { padding: 3px 14px 3px 5px; min-height: 32px; gap: 8px; border-color: #ffffff33; }
 .notch-next-actions > .icon-button {
   margin-left: auto;
   color: var(--orange);
-  background: none;
+  background: #ffffff12;
 }
 .notch-next-actions .secondary {
   color: #ddd;
@@ -2138,14 +2164,46 @@ body[data-dragging="true"] {
   -webkit-line-clamp: 1;
 }
 .notch .task-row {
-  padding: 7px 5px;
+  padding: 2px 4px;
+  min-height: 0;
+  align-items: center;
 }
+.notch .task-row .check { margin: 0; }
+.notch-today-rows section { display: grid; gap: 2px; }
+.notch-more { padding: 6px 8px; font-size: 12px; font-weight: 500; color: #ffffff99; }
+.notch .task-text { padding: 0; }
+.notch .task-title { line-height: 1.25; }
+.notch .task-meta { line-height: 1.2; margin-top: 2px; }
+.task-trailing {
+  position: relative;
+  width: 60px;
+  min-width: 60px;
+  align-self: stretch;
+}
+.task-trailing .task-time { position: absolute; right: 0; top: 6px; transition: opacity 160ms ease; }
+.task-row-actions { position: absolute; right: 0; top: 0; display: flex; opacity: 0; transition: opacity 160ms ease; }
+.task-row:hover .task-row-actions,
+.task-row:focus-within .task-row-actions { opacity: 1; }
+.task-row:hover .task-trailing .task-time,
+.task-row:focus-within .task-trailing .task-time { opacity: 0; }
+.task-row-actions .icon-button { background: none; color: #ffffffb3; }
+.task-row-actions .icon-button:hover { background: #ffffff1f; }
+.quick-saving {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 2px solid #ffffff40;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: quick-saving 0.8s linear infinite;
+}
+@keyframes quick-saving { to { transform: rotate(360deg); } }
 .notch-quick-add {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 0;
-  margin-top: 4px;
+  margin-top: 14px;
 }
 .notch-quick-field {
   display: flex;
@@ -2218,10 +2276,18 @@ body[data-dragging="true"] {
   color: #ffffff8c;
 }
 .notch-empty {
-  padding: 24px;
-  text-align: center;
-  font-size: 13px;
-  color: #ffffff80;
+  padding: 8px 4px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.notch-empty > .orange-disc { width: 36px; height: 36px; color: white; }
+.notch-empty strong { font-size: 14px; font-weight: 500; }
+.notch-empty p { font-size: 11px; color: #ffffff8c; margin-top: 2px; }
+.notch-open-all { white-space: nowrap; margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .notch-quick-field:focus-within .orange-disc { transform: none; }
+  .quick-saving { animation: none; }
 }
 .notch-notice {
   display: flex;

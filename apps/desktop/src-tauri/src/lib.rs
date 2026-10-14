@@ -465,9 +465,20 @@ async fn notch_present(
     }
     let previous = desktop.notch.lock().unwrap().clone();
     window
-        .set_focusable(state.pinned)
+        .set_focusable(state.expanded)
         .map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
+    // On Windows clear NOACTIVATE before requesting focus. Hover alone never activates.
+    let current_size = window
+        .inner_size()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
+    platform::configure(
+        &window,
+        state.pinned,
+        current_size.width,
+        current_size.height,
+    )?;
     if state.pinned && !previous.pinned {
         window.set_focus().map_err(|e| e.to_string())?;
     }
@@ -909,6 +920,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == "notch" && matches!(event, tauri::WindowEvent::Focused(true)) {
+                let _ = window.emit("notch:focus", ());
+            }
             #[cfg(not(target_os = "macos"))]
             if window.label() == "notch" && matches!(event, tauri::WindowEvent::Focused(false)) {
                 if let (Ok(pointer), Ok(origin), Ok(size)) = (
