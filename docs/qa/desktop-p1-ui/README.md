@@ -40,12 +40,12 @@
 
 | 页面 | SwiftUI 原版 | Tauri Preview |
 | --- | --- | --- |
-| 首页 | ![SwiftUI 首页](home-swiftui-macos.png) | ![Tauri 首页](home-tauri-macos.png) |
-| 表单 | ![SwiftUI 表单](form-swiftui-macos.png) | ![Tauri 表单](form-tauri-macos.png) |
-| 详情 | ![SwiftUI 详情](detail-swiftui-macos.png) | ![Tauri 详情](detail-tauri-macos.png) |
-| 日历 | ![SwiftUI 日历](calendar-swiftui-macos.png) | ![Tauri 日历](calendar-tauri-macos.png) |
+| 首页 | ![SwiftUI 首页](home-swiftui-macos.jpg) | ![Tauri 首页](home-tauri-macos.jpg) |
+| 表单 | ![SwiftUI 表单](form-swiftui-macos.jpg) | ![Tauri 表单](form-tauri-macos.jpg) |
+| 详情 | ![SwiftUI 详情](detail-swiftui-macos.jpg) | ![Tauri 详情](detail-tauri-macos.jpg) |
+| 日历 | ![SwiftUI 日历](calendar-swiftui-macos.jpg) | ![Tauri 日历](calendar-tauri-macos.jpg) |
 
-焦点证据：[面板立即继续输入](panel-immediate-input-macos.png)、[面板延迟响应后草稿](panel-pending-draft-macos.png)、[刘海延迟响应后草稿](notch-pending-draft-macos.png)。另有 [英文深色图片预览](attachment-preview-en-dark.png)。
+焦点证据：[面板立即继续输入](panel-immediate-input-macos.jpg)、[面板延迟响应后草稿](panel-pending-draft-macos.jpg)、[刘海延迟响应后草稿](notch-pending-draft-macos.jpg)。另有 [英文深色图片预览](attachment-preview-en-dark.png)。
 
 字体渲染、SF Symbols/SVG、系统玻璃和原生 Quick Look 与共享图片预览仍有平台差异；没有宣称逐像素相同。当前原生对照覆盖以上四页和 P0 刘海，不能代替所有主题/语言/状态的原生对照。
 
