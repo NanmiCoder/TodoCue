@@ -15,7 +15,11 @@ export interface DragProjection {
   y: number;
   width: number;
   height: number;
+  /** Where the lifted card is settling on release (the placeholder's corner), in viewport pixels. */
+  landing?: { x: number; y: number };
 }
+/** Release settle of the lifted card (Theme.dragSettleDuration). */
+export const dragSettleMs = 220;
 export function projectGroups(
   groups: TaskGroup[],
   drag: DragProjection | null,
@@ -181,15 +185,24 @@ export function useTaskDrag({
         cancel();
         return;
       }
+      // The card glides onto its slot while the write is in flight, as DragSettle does.
+      const landing = new Promise<void>((resolve) => {
+        const slot = document.querySelector<HTMLElement>(`.drag-placeholder[data-task-id="${CSS.escape(task.id)}"]`);
+        if (!slot || matchMedia("(prefers-reduced-motion: reduce)").matches) return resolve();
+        const rect = slot.getBoundingClientRect();
+        projection = { ...projection, landing: { x: rect.left, y: rect.top } };
+        setDrag(projection);
+        setTimeout(resolve, dragSettleMs);
+      });
       try {
-        await commit(task.id, {
+        await Promise.all([commit(task.id, {
           view,
           sourceGroup: group,
           targetGroup: projection.target,
           beforeId: projection.beforeId,
           expectedVersion: task.version,
           expectedRevision: snapshot.ordering.revision,
-        });
+        }), landing]);
       } catch (error) {
         onError(error instanceof Error ? error.message : String(error));
       } finally {

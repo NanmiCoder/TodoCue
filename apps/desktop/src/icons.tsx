@@ -21,7 +21,10 @@ export type IconName =
   | "flag"
   | "priority"
   | "chevron"
-  | "settings";
+  | "settings"
+  | "trash"
+  | "skip"
+  | "download";
 const paths: Record<IconName, string> = {
   calendar:
     "M6 3v4m12-4v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1M8 12h1m3 0h1m3 0h1m-9 4h1m3 0h1m3 0h1",
@@ -48,6 +51,9 @@ const paths: Record<IconName, string> = {
   chevron: "M9 5l7 7-7 7",
   settings:
     "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2",
+  trash: "M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v5M14 11v5",
+  skip: "M5 5l9 7-9 7V5M18 5v14",
+  download: "M12 4v11m-5-5 5 5 5-5M5 20h14",
 };
 export function Icon({
   name,
@@ -69,6 +75,7 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      className="icon"
       style={style}
     >
       <path d={paths[name]} />

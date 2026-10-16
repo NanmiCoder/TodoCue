@@ -1,4 +1,5 @@
 import type { Task, UpdateTaskInput, Series } from "@todocue/shared";
+import type { UndoAction } from "./toast.js";
 import { DateTime, Info } from "luxon";
 
 // Match CalendarRange: Chinese starts Monday; English follows the user's region.
@@ -77,13 +78,74 @@ export function taskOverdue(task: Task, today: string, now = Date.now()): boolea
     ? Date.parse(task.dueAt) < now
     : !!task.dueDate && task.dueDate < today);
 }
-export function dayLabel(date: string, language: string, today?: string) {
-  if (!date) return language === "en" ? "Unscheduled" : "未安排";
-  if (date === today) return language === "en" ? "Today" : "今天";
+/** Local calendar date of the machine, "YYYY-MM-DD". */
+export function localToday(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * Relative wording near today, otherwise "MMM d EEE" (zh: 10月19日周一, en: Mon, Oct 19), with the
+ * year whenever it is not the current one — the same rule as the native client's `TCDate.dateLabel`.
+ */
+export function dayLabel(date: string, language: string, today: string = localToday()) {
+  const en = language === "en";
+  if (!date) return en ? "Unscheduled" : "未安排";
+  if (date === today) return en ? "Today" : "今天";
+  if (DATE_PATTERN.test(today)) {
+    if (date === shiftDate(today, 1)) return en ? "Tomorrow" : "明天";
+    if (date === shiftDate(today, -1)) return en ? "Yesterday" : "昨天";
+  }
+  const value = new Date(`${date}T12:00:00Z`);
+  if (!DATE_PATTERN.test(date) || Number.isNaN(value.getTime())) return date;
   return new Intl.DateTimeFormat(language, {
+    year: date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
     month: "short",
     day: "numeric",
-  }).format(new Date(`${date}T12:00:00`));
+    weekday: "short",
+    timeZone: "UTC",
+  }).format(value);
+}
+/** Hour cycle follows the system region, not the UI language: zh/en choose words, the OS chooses 12/24h. */
+export function systemHour12(region: string | undefined = globalThis.navigator?.language): boolean {
+  try {
+    return new Intl.DateTimeFormat(region, { hour: "numeric" }).resolvedOptions().hour12 === true;
+  } catch {
+    return false;
+  }
+}
+export function clockTime(instant: string, timezone: string, language: string, hour12 = systemHour12()): string {
+  return new Intl.DateTimeFormat(language, {
+    timeZone: timezone,
+    hour: hour12 ? "numeric" : "2-digit",
+    minute: "2-digit",
+    hour12,
+  }).format(new Date(instant));
+}
+/**
+ * Label for an instant: today shows only the time, tomorrow "明天 HH:mm", anything else the
+ * month and day (and year when not this one) before the time.
+ */
+export function instantLabel(instant: string, timezone: string, language: string, today: string = localToday(), hour12?: boolean): string {
+  const en = language === "en";
+  const time = clockTime(instant, timezone, language, hour12);
+  const day = dateOf(instant, timezone);
+  if (day === today) return time;
+  if (DATE_PATTERN.test(today) && day === shiftDate(today, 1)) return `${en ? "Tomorrow" : "明天"} ${time}`;
+  const label = new Intl.DateTimeFormat(language, {
+    year: day.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${day}T12:00:00Z`));
+  return `${label} ${time}`;
+}
+/** "每日" / "每周 一、三" — weekly rules name their weekdays. */
+export function ruleLabel(rule: Series["rule"], language: string): string {
+  const en = language === "en";
+  if (rule.kind === "daily") return en ? "Daily" : "每日";
+  const names = en ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] : weekdayLabels(language, 1, false);
+  const days = [...rule.weekdays].sort((a, b) => a - b).map((day) => names[day - 1]).filter(Boolean);
+  return `${en ? "Weekly" : "每周"} ${days.join(en ? ", " : "、")}`;
 }
 export function reschedule(task: Task, date: string): UpdateTaskInput {
   if (!task.scheduledAt)
@@ -103,6 +165,45 @@ export function reschedule(task: Task, date: string): UpdateTaskInput {
     timezone: task.timezone,
   };
 }
+/**
+ * "Move to tomorrow" from a task's menu, ported from the native client's
+ * `TaskRescheduling.tomorrow`. Unlike `reschedule` (the calendar's drag semantics, which leave
+ * the deadline alone), this also moves a deadline that falls before tomorrow, so an overdue or
+ * due-today task actually leaves Today. Future deadlines are kept. Times of day are preserved
+ * and resolved once, in the task's own zone.
+ */
+export function rescheduleToTomorrow(task: Task, today: string): UpdateTaskInput {
+  const tomorrow = shiftDate(today, 1);
+  const zone = task.timezone;
+  const moved = (value: string): string => {
+    const time = DateTime.fromISO(value).setZone(zone).toFormat("HH:mm:ss.SSS");
+    const instant = DateTime.fromISO(`${tomorrow}T${time}`, { zone }).toUTC().toISO();
+    if (!instant) throw new Error("Invalid planned date");
+    return instant;
+  };
+  const patch: UpdateTaskInput = { expectedVersion: task.version };
+  if (task.scheduledAt) {
+    patch.scheduledAt = moved(task.scheduledAt);
+    patch.scheduledDate = null;
+    patch.timezone = zone;
+  } else {
+    patch.scheduledDate = tomorrow;
+    patch.scheduledAt = null;
+  }
+  const tomorrowStart = DateTime.fromISO(tomorrow, { zone }).toMillis();
+  if (task.dueAt) {
+    if (Date.parse(task.dueAt) < tomorrowStart) {
+      patch.dueAt = moved(task.dueAt);
+      patch.dueDate = null;
+      patch.timezone = zone;
+    }
+  } else if (task.dueDate && task.dueDate < tomorrow) {
+    patch.dueDate = tomorrow;
+    patch.dueAt = null;
+  }
+  return patch;
+}
+
 export function landsAfterDeadline(task: Task, date: string): boolean {
   const day = task.dueDate ?? (task.dueAt ? dateOf(task.dueAt, task.timezone) : null);
   if (!day) return false;
@@ -135,4 +236,18 @@ export function ghostDates(
       output.push(day);
   }
   return output;
+}
+
+/** What “undo” puts back after a reschedule: the plan, plus a deadline only if it was moved too. */
+export function rescheduleUndo(before: Task, after: Task): Extract<UndoAction, { kind: "reschedule" }> {
+  const dueMoved = before.dueDate !== after.dueDate || before.dueAt !== after.dueAt;
+  return {
+    kind: "reschedule",
+    taskId: before.id,
+    scheduledDate: before.scheduledDate,
+    scheduledAt: before.scheduledAt,
+    timezone: before.timezone,
+    ...(dueMoved ? { dueDate: before.dueDate, dueAt: before.dueAt } : {}),
+    expectedVersion: after.version,
+  };
 }

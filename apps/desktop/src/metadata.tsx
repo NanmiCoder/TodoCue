@@ -1,5 +1,5 @@
 import type { Task } from "@todocue/shared";
-import { dayLabel, dateOf, taskOverdue } from "./dates.js";
+import { dayLabel, dateOf, instantLabel, taskOverdue } from "./dates.js";
 import { Icon } from "./icons.js";
 
 export function timeLabel(
@@ -8,13 +8,7 @@ export function timeLabel(
   language: string,
   today?: string,
 ) {
-  const time = new Intl.DateTimeFormat(language, {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(instant));
-  return `${dayLabel(dateOf(instant, timezone), language, today)} ${time}`;
+  return instantLabel(instant, timezone, language, today);
 }
 export function estimateLabel(minutes: number, language: string) {
   if (minutes < 60) return `${minutes} ${language === "en" ? "min" : "分钟"}`;

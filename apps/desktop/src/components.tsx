@@ -1,11 +1,13 @@
 import { useReducedMotion } from "./useReducedMotion.js";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent } from "motion/react";
 import type { Task } from "@todocue/shared";
 import { motionTokens } from "./tokens.js";
+import { checkPress, pulse as pulseRing } from "./motionKit.js";
 import { Icon } from "./icons.js";
-import { dateOf } from "./dates.js";
+import { clockTime, dateOf } from "./dates.js";
 import { TaskMetadata } from "./metadata.js";
+import { menuTriggers, type MenuAnchor } from "./ContextMenu.js";
 
 export function Mark() {
   return (
@@ -22,15 +24,19 @@ export function Mark() {
   );
 }
 export function Numeral({ value }: { value: number }) {
-  const reduced = useReducedMotion();
   const previous = useRef(value);
   const direction = value >= previous.current ? 1 : -1;
   useEffect(() => { previous.current = value; }, [value]);
+  return <Rolling text={String(value)} direction={direction} />;
+}
+/** Characters roll vertically like numericText; tabular figures keep the columns still on any font. */
+export function Rolling({ text, direction, className = "" }: { text: string; direction: number; className?: string }) {
+  const reduced = useReducedMotion();
   return (
-    <span className="numeral">
-      <span className="sr-only">{value}</span>
-      {String(value).split("").map((digit, index) => (
-        <span className="numeral-digit" aria-hidden="true" key={String(value).length - index}>
+    <span className={`numeral ${className}`}>
+      <span className="sr-only">{text}</span>
+      {text.split("").map((digit, index) => (
+        <span className="numeral-digit" aria-hidden="true" key={text.length - index}>
           <AnimatePresence initial={false} custom={direction}>
             <motion.span key={digit} custom={direction}
               variants={{
@@ -68,6 +74,9 @@ export function Gauge({
     previous.current = completed;
   }, [completed, ready]);
   const progress = Math.min(1, completed / Math.max(total, 1));
+  const shownCompleted = useRef(completed);
+  const labelDirection = completed >= shownCompleted.current ? 1 : -1;
+  useEffect(() => { shownCompleted.current = completed; }, [completed]);
   const progressValue = useMotionValue(progress);
   const [shownProgress, setShownProgress] = useState(progress);
   useMotionValueEvent(progressValue, "change", setShownProgress);
@@ -127,27 +136,23 @@ export function Gauge({
           r="3"
           fill="none"
           stroke="#F26A2E"
-          initial={{ r: 3, opacity: 0.7 }}
-          animate={{ r: 12, opacity: 0 }}
-          transition={{ duration: 0.7 }}
+          initial={{ r: pulseRing.from, opacity: pulseRing.opacity }}
+          animate={{ r: pulseRing.to, opacity: 0 }}
+          transition={{ duration: pulseRing.duration, ease: "linear" }}
         />
       )}
-      {showsLabel && <motion.text
-        x={center}
-        y={center + diameter * 0.06}
-        textAnchor="middle"
-        style={{ fontSize: diameter * 0.16 }}
-        key={completed}
-        initial={reduced ? false : { opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={reduced ? { duration: 0.12 } : motionTokens.settle}
-      >
-        {total ? `${completed}/${total}` : "0"}
-      </motion.text>}
+      {showsLabel && (
+        <foreignObject x="0" y="0" width={diameter} height={diameter}>
+          <div className="gauge-label" style={{ fontSize: diameter * 0.16, paddingTop: diameter * 0.04 }}>
+            <Rolling text={total ? `${completed}/${total}` : "0"} direction={labelDirection} />
+          </div>
+        </foreignObject>
+      )}
     </svg>
   );
 }
 export function TaskRow({
+  ref,
   task,
   disabled,
   onComplete,
@@ -159,7 +164,12 @@ export function TaskRow({
   showProject = true,
   today,
   trailingActions,
+  onMenu,
 }: {
+  /** Opens the row's context menu (right-click, long-press, ContextMenu key, Shift+F10). */
+  onMenu?: (task: Task, anchor: MenuAnchor) => void;
+  /** Forwarded so AnimatePresence popLayout can lift a leaving row out of the flow. */
+  ref?: Ref<HTMLDivElement>;
   trailingActions?: ReactNode;
   dragging?: boolean;
   showProject?: boolean;
@@ -196,28 +206,32 @@ export function TaskRow({
   }
   const time =
     task.scheduledAt && dateOf(task.scheduledAt, task.timezone) === today
-      ? new Intl.DateTimeFormat(undefined, {
-          timeZone: task.timezone,
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).format(new Date(task.scheduledAt))
+      ? clockTime(task.scheduledAt, task.timezone, document.documentElement.lang)
       : null;
   return (
     <motion.div
+      ref={ref}
       data-task-id={task.id}
       data-group={group}
+      {...(onMenu ? menuTriggers((anchor) => onMenu(task, anchor)) : {})}
       layout={!reduced}
       className={`task-row ${completing || completingExternal ? "completing" : ""} ${dragging ? "drag-placeholder" : ""} ${task.status === "done" ? "is-completed" : ""}`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: reduced ? 1 : 0.96, transition: { duration: 0.12 } }}
-      transition={reduced ? { duration: 0.12 } : motionTokens.list}
+      // A row arrives from 6pt above and leaves 6% smaller towards its leading edge while the
+      // neighbours close ranks (critically damped, so the list never wobbles).
+      initial={{ opacity: 0, y: reduced ? 0 : -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: reduced ? 1 : 0.94 }}
+      style={{ originX: 0 }}
+      // While a row is being dragged the others yield on a short 0.2s curve (Theme.dragShift).
+      transition={reduced ? { duration: 0.12 } : document.body.dataset.dragging === "true"
+        ? { default: motionTokens.list, layout: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] } }
+        : motionTokens.list}
     >
       {onDrag && (
         <button
           className="drag-handle"
           aria-label={`${document.documentElement.lang === "en" ? "Move" : "拖动"} ${task.title}`}
+          title={document.documentElement.lang === "en" ? "Drag to reorder; across groups to change project or date" : "拖动调整执行顺序；跨分组可修改项目或计划日期"}
           disabled={disabled}
           onPointerDown={(event) => onDrag(task, event)}
         >
@@ -244,11 +258,26 @@ export function TaskRow({
         animate={{
           scale:
             (completing || completingExternal) && !reduced
-              ? [1, 0.82, 1.16, 1]
+              ? checkPress.values
               : 1,
         }}
-        transition={{ duration: reduced ? 0.12 : 0.42, times: [0, 0.148, 0.444, 1] }}
+        whileHover={
+          reduced || completing || completingExternal || task.status === "done"
+            ? undefined
+            : { scale: 1.06, transition: motionTokens.snap }
+        }
+        transition={reduced ? { duration: 0.12 } : { duration: checkPress.duration, times: checkPress.times, ease: ["easeOut", "easeOut", "easeInOut"] }}
       >
+        <motion.i
+          className="check-fill"
+          aria-hidden="true"
+          initial={false}
+          animate={{
+            scale: completing || completingExternal || task.status === "done" ? 1 : 0.2,
+            opacity: completing || completingExternal || task.status === "done" ? 1 : 0,
+          }}
+          transition={reduced ? { duration: 0.12 } : motionTokens.pop}
+        />
         <svg viewBox="0 0 20 20">
           <motion.path
             d="M5 10l3.5 3.5L15 6"
@@ -271,6 +300,7 @@ export function TaskRow({
             transition={{
               duration: reduced ? 0 : 0.22,
               delay: reduced ? 0 : 0.06,
+              ease: "easeOut",
               opacity: {
                 duration: 0.01,
                 delay:

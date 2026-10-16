@@ -1,3 +1,5 @@
+#[allow(unused_imports)]
+use crate::notch_geometry::{covers_screen, fullscreen_top_inset, Frame};
 use tauri::WebviewWindow;
 
 #[cfg(target_os = "macos")]
@@ -310,16 +312,294 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
             return false;
         }
         let monitor = info.rcMonitor;
-        (rect.left - monitor.left).abs() <= 2
-            && (rect.top - monitor.top).abs() <= 2
-            && (rect.right - monitor.right).abs() <= 2
-            && (rect.bottom - monitor.bottom).abs() <= 2
+        let frame = |left: i32, top: i32, right: i32, bottom: i32| Frame {
+            x: left as f64,
+            y: top as f64,
+            width: (right - left) as f64,
+            height: (bottom - top) as f64,
+        };
+        covers_screen(
+            frame(rect.left, rect.top, rect.right, rect.bottom),
+            frame(monitor.left, monitor.top, monitor.right, monitor.bottom),
+            0.0,
+        )
     }
 }
-#[cfg(not(windows))]
+
+/// macOS: the frontmost application owns an on-screen window covering the notch's screen
+/// (NotchController.shouldAutoExpand). Window bounds from CGWindowList and the monitor frame are
+/// both top-left-origin points. The monitor frame is the whole screen, menu bar and camera area
+/// included; a fullscreen window may start below the camera's safe area, whose height (not the work
+/// area's gap, which is 0 once the menu bar hides) is the room allowed at the top.
+#[cfg(target_os = "macos")]
+pub fn fullscreen(window: &WebviewWindow) -> bool {
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return false;
+    };
+    let scale = monitor.scale_factor();
+    let screen = Frame {
+        x: monitor.position().x as f64 / scale,
+        y: monitor.position().y as f64 / scale,
+        width: monitor.size().width as f64 / scale,
+        height: monitor.size().height as f64 / scale,
+    };
+    let windows = mac_windows::front_application_windows();
+    if windows.is_empty() {
+        return false;
+    }
+    let inset = fullscreen_top_inset(safe_area_top(window));
+    windows.into_iter().any(|frame| covers_screen(frame, screen, inset))
+}
+#[cfg(not(any(windows, target_os = "macos")))]
 pub fn fullscreen(_window: &WebviewWindow) -> bool {
     false
 }
+
+#[cfg(target_os = "macos")]
+mod mac_windows {
+    use crate::notch_geometry::Frame;
+    use objc2::{
+        msg_send,
+        rc::autoreleasepool,
+        runtime::{AnyClass, AnyObject},
+    };
+    use objc2_foundation::NSString;
+    use std::ffi::c_void;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> *const c_void;
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFRelease(object: *const c_void);
+    }
+    const ON_SCREEN_ONLY: u32 = 1;
+    const EXCLUDE_DESKTOP_ELEMENTS: u32 = 1 << 4;
+
+    unsafe fn number(dictionary: *mut AnyObject, key: &str) -> Option<f64> {
+        let key = NSString::from_str(key);
+        let value: *mut AnyObject = msg_send![dictionary, objectForKey: &*key];
+        if value.is_null() {
+            None
+        } else {
+            Some(msg_send![value, doubleValue])
+        }
+    }
+
+    /// Frames of every on-screen window owned by the frontmost application, unless that is us.
+    pub fn front_application_windows() -> Vec<Frame> {
+        autoreleasepool(|_| unsafe {
+            let Some(class) = AnyClass::get(c"NSWorkspace") else {
+                return Vec::new();
+            };
+            let workspace: *mut AnyObject = msg_send![class, sharedWorkspace];
+            if workspace.is_null() {
+                return Vec::new();
+            }
+            let application: *mut AnyObject = msg_send![workspace, frontmostApplication];
+            if application.is_null() {
+                return Vec::new();
+            }
+            let pid: i32 = msg_send![application, processIdentifier];
+            if pid == std::process::id() as i32 {
+                return Vec::new();
+            }
+            let list = CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | EXCLUDE_DESKTOP_ELEMENTS, 0);
+            if list.is_null() {
+                return Vec::new();
+            }
+            let array = list as *mut AnyObject;
+            let count: usize = msg_send![array, count];
+            let mut frames = Vec::new();
+            for index in 0..count {
+                let entry: *mut AnyObject = msg_send![array, objectAtIndex: index];
+                if entry.is_null() || number(entry, "kCGWindowOwnerPID") != Some(pid as f64) {
+                    continue;
+                }
+                let key = NSString::from_str("kCGWindowBounds");
+                let bounds: *mut AnyObject = msg_send![entry, objectForKey: &*key];
+                if bounds.is_null() {
+                    continue;
+                }
+                if let (Some(x), Some(y), Some(width), Some(height)) = (
+                    number(bounds, "X"),
+                    number(bounds, "Y"),
+                    number(bounds, "Width"),
+                    number(bounds, "Height"),
+                ) {
+                    frames.push(Frame { x, y, width, height });
+                }
+            }
+            CFRelease(list);
+            frames
+        })
+    }
+}
+
+/// Opacity of a window as a whole, glass included. macOS only; Windows fades the page with CSS
+/// because its transparent WebView2 window is not a layered window. Must run on the main thread.
+#[cfg(target_os = "macos")]
+pub fn set_alpha_now(window: &WebviewWindow, alpha: f64) {
+    if let Ok(raw) = window.ns_window() {
+        unsafe { (&*(raw as *const objc2_app_kit::NSWindow)).setAlphaValue(alpha) };
+    }
+}
+#[cfg(not(target_os = "macos"))]
+pub fn set_alpha_now(_window: &WebviewWindow, _alpha: f64) {}
+
+/// Run `read` on the main thread and wait for its answer. `None` if the main thread does not
+/// answer in time, so a busy or blocked one never stalls the caller for long.
+#[cfg(target_os = "macos")]
+fn on_main_thread<T: Send + 'static>(
+    window: &WebviewWindow,
+    read: impl FnOnce(&WebviewWindow) -> T + Send + 'static,
+) -> Option<T> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let target = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let _ = sender.send(read(&target));
+        })
+        .ok()?;
+    receiver.recv_timeout(std::time::Duration::from_millis(300)).ok()
+}
+
+/// Whether the window is in the Space the person is looking at. A window that is ordered in on
+/// another Space is "visible" but not here (macOS); elsewhere it always is.
+#[cfg(target_os = "macos")]
+pub fn on_active_space(window: &WebviewWindow) -> bool {
+    on_main_thread(window, |window| {
+        window
+            .ns_window()
+            .map(|raw| unsafe { (&*(raw as *const objc2_app_kit::NSWindow)).isOnActiveSpace() })
+            .unwrap_or(true)
+    })
+    .unwrap_or(true)
+}
+#[cfg(not(target_os = "macos"))]
+pub fn on_active_space(_window: &WebviewWindow) -> bool {
+    true
+}
+
+/// Height of the camera housing's safe area at the top of the window's screen; 0 without one.
+#[cfg(target_os = "macos")]
+fn safe_area_top(window: &WebviewWindow) -> f64 {
+    on_main_thread(window, |window| {
+        let Ok(raw) = window.ns_window() else {
+            return 0.0;
+        };
+        unsafe {
+            (&*(raw as *const objc2_app_kit::NSWindow))
+                .screen()
+                .map(|screen| screen.safeAreaInsets().top)
+                .unwrap_or(0.0)
+        }
+    })
+    .unwrap_or(0.0)
+}
+
+/// The panel follows you to the active Space and may sit over a fullscreen app, like the original.
+#[cfg(target_os = "macos")]
+pub fn panel_spaces(window: &WebviewWindow) -> Result<(), String> {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    let raw = window.ns_window().map_err(|e| e.to_string())?;
+    unsafe {
+        let native = &*(raw as *const NSWindow);
+        native.setCollectionBehavior(
+            NSWindowCollectionBehavior::MoveToActiveSpace
+                | NSWindowCollectionBehavior::FullScreenAuxiliary,
+        );
+    }
+    Ok(())
+}
+#[cfg(not(target_os = "macos"))]
+pub fn panel_spaces(_window: &WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
+/// The system "reduce motion" preference (macOS accessibility, Windows animation effects).
+#[cfg(target_os = "macos")]
+pub fn reduce_motion() -> bool {
+    use objc2::{
+        msg_send,
+        rc::autoreleasepool,
+        runtime::{AnyClass, AnyObject},
+    };
+    autoreleasepool(|_| unsafe {
+        let Some(class) = AnyClass::get(c"NSWorkspace") else {
+            return false;
+        };
+        let workspace: *mut AnyObject = msg_send![class, sharedWorkspace];
+        !workspace.is_null() && msg_send![workspace, accessibilityDisplayShouldReduceMotion]
+    })
+}
+#[cfg(windows)]
+pub fn reduce_motion() -> bool {
+    use windows::{
+        core::BOOL,
+        Win32::UI::WindowsAndMessaging::{
+            SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+        },
+    };
+    let mut enabled = BOOL(1);
+    let read = unsafe {
+        SystemParametersInfoW(
+            SPI_GETCLIENTAREAANIMATION,
+            0,
+            Some(&mut enabled as *mut BOOL as *mut std::ffi::c_void),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    read.is_ok() && !enabled.as_bool()
+}
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn reduce_motion() -> bool {
+    false
+}
+
+/// Windows keeps a window on the virtual desktop it was created on. Move it to the desktop the
+/// user is looking at (the foreground window's) so the hotkey, the tray and the notch show up
+/// where they are. Fire and forget; a no-op when it is already there.
+#[cfg(windows)]
+pub fn follow_virtual_desktop(window: &WebviewWindow) {
+    use windows::Win32::{
+        Foundation::HWND,
+        System::Com::{CoCreateInstance, CLSCTX_ALL},
+        UI::{
+            Shell::{IVirtualDesktopManager, VirtualDesktopManager},
+            WindowsAndMessaging::GetForegroundWindow,
+        },
+    };
+    let target = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        let Ok(hwnd) = target.hwnd() else { return };
+        let hwnd = HWND(hwnd.0 as *mut _);
+        unsafe {
+            let Ok(manager) =
+                CoCreateInstance::<_, IVirtualDesktopManager>(&VirtualDesktopManager, None, CLSCTX_ALL)
+            else {
+                return;
+            };
+            if manager
+                .IsWindowOnCurrentVirtualDesktop(hwnd)
+                .map(|here| here.as_bool())
+                .unwrap_or(true)
+            {
+                return;
+            }
+            let foreground = GetForegroundWindow();
+            if foreground.0.is_null() {
+                return;
+            }
+            if let Ok(desktop) = manager.GetWindowDesktopId(foreground) {
+                let _ = manager.MoveWindowToDesktop(hwnd, &desktop);
+            }
+        }
+    });
+}
+#[cfg(not(windows))]
+pub fn follow_virtual_desktop(_window: &WebviewWindow) {}
 
 #[cfg(target_os = "macos")]
 pub fn glass(window: &WebviewWindow) -> Result<(), String> {

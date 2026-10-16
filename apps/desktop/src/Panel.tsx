@@ -1,9 +1,10 @@
 import { useReducedMotion } from "./useReducedMotion.js";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
   useIsPresent,
+  type MotionValue,
 } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -11,18 +12,33 @@ import type { CreateTaskInput, Task, UpdateTaskInput } from "@todocue/shared";
 import { TodoCueError } from "@todocue/shared";
 import {
   client,
+  exportJson,
   hidePanel,
   focusPanel,
   loadSettings,
   native,
+  onPanelRevealed,
   saveSettings,
   startDrag,
   type DesktopSettings,
   defaults,
 } from "./bridge.js";
 import { translate } from "./i18n.js";
+import { failureOf, isNotFound } from "./errors.js";
+import { chord, platform } from "./platform.js";
+import { moveMessage, type UndoAction } from "./toast.js";
+import { createShortcutHandler, type ShortcutIntent, type ShortcutState } from "./shortcuts.js";
+import { afterTaskDeleted, removeTolerantly } from "./deletion.js";
+import { latestTask as latestOf } from "./taskLookup.js";
+import { returnFocusTarget } from "./menuModel.js";
+import { useToasts } from "./useToasts.js";
+import { EmptyState, emptyCopy, NotFoundPage, OfflineBanner } from "./states.js";
+import { SettingsPage } from "./SettingsPage.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
+import { useContextMenu, type MenuAnchor } from "./ContextMenu.js";
+import { deleteConfirmText, delegateCommands, taskMenuItems, type TaskMenuCommands } from "./taskMenu.js";
+import { taskCommands } from "./taskCommands.js";
 import { Detail } from "./Detail.js";
 import { afterSave, composerDraft, newDraft, type TaskDraft } from "./drafts.js";
 import { Icon } from "./icons.js";
@@ -37,12 +53,26 @@ import {
   type PeriodicDraft,
 } from "./pages.js";
 import { projectGroups, useTaskDrag } from "./drag.js";
-import { dayLabel, planDate } from "./dates.js";
+import { dayLabel, planDate, reschedule, rescheduleUndo, shiftDate } from "./dates.js";
 import type { PeriodicReminder } from "@todocue/shared";
 import { motionTokens, spring } from "./tokens.js";
+import { HeaderSwap, TabSwap, VerticalSwap, tabDirection, useReveal, watchReveal } from "./motionKit.js";
 import { useRuntime } from "./useRuntime.js";
 import { ResizeEdge } from "./ResizeEdge.js";
 import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
+
+/** Where the host or the tray asks the panel to go. */
+type TargetKind =
+  | "task"
+  | "task_edit"
+  | "task_delete"
+  | "periodic"
+  | "open"
+  | "new_task"
+  | "new_periodic"
+  | "periodic_list"
+  | "settings";
+const LOCAL_TARGETS: TargetKind[] = ["new_task", "new_periodic", "periodic_list", "settings"];
 
 type Route =
   | "list"
@@ -70,7 +100,7 @@ export function Panel() {
     { route: Route; task?: Task; periodic?: PeriodicReminder }[]
   >([]);
   const [pendingTarget, setPendingTarget] = useState<{
-    kind: "task" | "periodic" | "open" | "new_task";
+    kind: TargetKind;
     id?: string;
   } | null>(null);
   const [formSession, setFormSession] = useState("");
@@ -83,7 +113,9 @@ export function Panel() {
     collapsed: false,
   });
   const [completedQuery, setCompletedQuery] = useState("");
-  const [orderUndo, setOrderUndo] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const listScroll = useRef<HTMLDivElement>(null);
+  const [retrying, setRetrying] = useState(false);
   const [periodicDraft, setPeriodicDraft] = useState<PeriodicDraft>(() =>
     newPeriodicDraft(),
   );
@@ -95,7 +127,6 @@ export function Panel() {
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [panelPinned, setPanelPinned] = useState(false);
-  const [recording, setRecording] = useState(false);
   const [quickFocused, setQuickFocused] = useState(false);
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const [quick, setQuick] = useState("");
@@ -104,9 +135,20 @@ export function Panel() {
   const [finishing, setFinishing] = useState<Set<string>>(new Set());
   const finishingRef = useRef(new Set<string>());
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [undo, setUndo] = useState<Task | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
+  // Where focus goes back to when the delete confirmation is dismissed without deleting.
+  const deleteTrigger = useRef<HTMLElement | null>(null);
+  const contextMenu = useContextMenu();
+  const deleteCancel = useRef<HTMLButtonElement>(null);
+  // Deleting is permanent, so the safe answer is the one under the keyboard.
+  useEffect(() => { if (pendingDelete) deleteCancel.current?.focus(); }, [pendingDelete]);
+  const { toast, state: toastState, notify, dismiss, clearErrors } = useToasts();
+  // Anything that used to set a sticky error line now raises an error toast; null clears it.
+  const setError = useCallback(
+    (message: string | null) => (message ? notify({ message, kind: "error" }) : clearErrors()),
+    [notify, clearErrors],
+  );
   const drafts = useRef(new Map<string, TaskDraft>());
   const quickRequest = useRef(new QuickAddRequest());
   const quickFocusRevision = useRef(0);
@@ -120,6 +162,21 @@ export function Panel() {
   }, [route, quickFocusTick]);
   const t = translate(settings.language);
   const reduced = useReducedMotion();
+  const [revealTick, setRevealTick] = useState(0);
+  useEffect(() => watchReveal(() => setRevealTick((tick) => tick + 1), onPanelRevealed), []);
+  const headerReveal = useReveal(0, revealTick, !!reduced);
+  const nextReveal = useReveal(1, revealTick, !!reduced);
+  const listReveal = useReveal(2, revealTick, !!reduced);
+  const quickReveal = useReveal(3, revealTick, !!reduced);
+  const pageReveal = useReveal(1, revealTick, !!reduced);
+  // The lit dot's direction decides which side the new rows arrive from.
+  const previousView = useRef(view);
+  const viewDirection = tabDirection(previousView.current, view);
+  useEffect(() => {
+    previousView.current = view;
+    // Each tab starts at its top, as it did when every tab had its own scroller.
+    listScroll.current?.scrollTo({ top: 0 });
+  }, [view]);
   useEffect(() => {
     void loadSettings()
       .then(setSettings)
@@ -147,19 +204,26 @@ export function Panel() {
       !connection.online || saving || !!search.trim() || route !== "list",
     onError: setError,
     commit: async (id, input) => {
+      setMoving(true);
       try {
         const result = await client.moveTask(id, input, {
           idempotencyKey: crypto.randomUUID(),
         });
-        setOrderUndo(result.undoToken ?? null);
+        announceMove(input, result.undoToken);
       } catch (error) {
         if (
           (error as { code?: string }).code === "DEADLINE_CONFIRMATION_REQUIRED"
         ) {
-          setPendingMove({ id, input });
+          setPendingMove({
+            id,
+            input,
+            title: liveBoard?.all.find((task) => task.id === id)?.title ?? "",
+          });
           return;
         }
         throw error;
+      } finally {
+        setMoving(false);
       }
       await refresh();
       await new Promise((resolve) => setTimeout(resolve, 220));
@@ -168,7 +232,21 @@ export function Panel() {
   const [pendingMove, setPendingMove] = useState<{
     id: string;
     input: import("@todocue/shared").MoveTaskInput;
+    title: string;
   } | null>(null);
+  function announceMove(
+    input: import("@todocue/shared").MoveTaskInput,
+    token?: string | null,
+  ) {
+    notify({
+      message: moveMessage(
+        input,
+        settings.language,
+        dayLabel(input.targetGroup, settings.language, liveBoard?.context.today),
+      ),
+      undo: token ? { kind: "order", token } : undefined,
+    });
+  }
   const board = taskDrag.frozen ?? liveBoard;
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -183,7 +261,7 @@ export function Panel() {
     let dispose: (() => void) | undefined,
       stopped = false;
     const revealRoute = (target: {
-      kind: "task" | "periodic" | "open" | "new_task";
+      kind: TargetKind;
       id?: string;
     }) => setPendingTarget(target);
     if (native)
@@ -191,7 +269,7 @@ export function Panel() {
         const stops = await Promise.all([
           listen<string>("task:reveal", (event) => reveal(event.payload)),
           listen<{
-            kind: "task" | "periodic" | "open" | "new_task";
+            kind: TargetKind;
             id?: string;
           }>("route:reveal", (event) => revealRoute(event.payload)),
         ]);
@@ -201,7 +279,7 @@ export function Panel() {
         }
         dispose = () => stops.forEach((stop) => stop());
         const target = await invoke<{
-          kind: "task" | "periodic" | "open" | "new_task";
+          kind: TargetKind;
           id?: string;
         } | null>("route_ready");
         if (target && !stopped) revealRoute(target);
@@ -214,17 +292,34 @@ export function Panel() {
     };
   }, []);
   useEffect(() => {
-    if (!pendingTarget || (!connection.online && pendingTarget.kind !== "new_task")) return;
+    if (!pendingTarget || (!connection.online && !LOCAL_TARGETS.includes(pendingTarget.kind))) return;
     let stopped = false;
     void (async () => {
       if (pendingTarget.kind === "new_task") {
         edit(undefined, undefined, false, false);
+      } else if (pendingTarget.kind === "new_periodic") {
+        editPeriodic();
+      } else if (pendingTarget.kind === "periodic_list") {
+        navigate("periodic");
+      } else if (pendingTarget.kind === "settings") {
+        navigate("settings");
       } else if (pendingTarget.kind === "task" && pendingTarget.id) {
         const { task } = await client.getTask(pendingTarget.id);
         if (!stopped) {
           history.current = [{ route: "list" }];
           setSelected(task);
           setRoute("detail");
+        }
+      } else if (pendingTarget.kind === "task_edit" && pendingTarget.id) {
+        // The notch menu's "Edit…": the panel opens on the task's form.
+        const { task } = await client.getTask(pendingTarget.id);
+        if (!stopped) edit(task);
+      } else if (pendingTarget.kind === "task_delete" && pendingTarget.id) {
+        // "Delete…": the panel opens and asks first, as the original does.
+        const { task } = await client.getTask(pendingTarget.id);
+        if (!stopped) {
+          deleteTrigger.current = null;
+          setPendingDelete(task);
         }
       } else if (pendingTarget.kind === "periodic" && pendingTarget.id) {
         const { reminder } = await client.getPeriodicReminder(pendingTarget.id);
@@ -249,75 +344,77 @@ export function Panel() {
       stopped = true;
     };
   }, [pendingTarget, connection.online, eventRevision]);
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isCompositionKey(event)) return;
-      if (event.key === "Escape") {
-        if (menuOpen) setMenuOpen(false);
-        else if (route !== "list") back();
-        else if (search) setSearch("");
-        else if (!panelPinned) void hidePanel();
-      }
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "k"
-      ) {
-        event.preventDefault();
-        navigate(route === "calendar" ? "list" : "calendar");
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
-        event.preventDefault();
-        edit();
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        void focusPanel().catch(error => setError(String(error)));
+  // Window-level shortcuts. The listener is installed once and reads the panel's state when a key
+  // is pressed, so what it acts on is never the render it was installed in (a toast raised inside
+  // `run()` used to be undone against that render's `saving`, which was still true).
+  const shortcutState = useRef<Omit<ShortcutState, "toast">>(null!);
+  shortcutState.current = {
+    route,
+    menuOpen,
+    pendingDelete: !!pendingDelete,
+    pendingMove: !!pendingMove,
+    search,
+    panelPinned,
+    canWrite: connection.online && !saving && !taskDrag.drag,
+  };
+  const performShortcut = useRef<(intent: ShortcutIntent) => void>(() => {});
+  performShortcut.current = perform;
+  function perform(intent: ShortcutIntent) {
+    switch (intent.kind) {
+      case "closeMenu": setMenuOpen(false); break;
+      case "cancelDelete": closeDelete(); break;
+      case "cancelMove": setPendingMove(null); break;
+      case "back": back(); break;
+      case "clearSearch": setSearch(""); break;
+      case "hide": void hidePanel(); break;
+      case "toggleCalendar": navigate(route === "calendar" ? "list" : "calendar"); break;
+      case "undo": void undoAction(intent.action); break;
+      case "newTask": edit(); break;
+      case "focusSearch":
+        void focusPanel().catch((error) => setError(String(error)));
         pendingQuickFocus.current = true;
-        setQuickFocusTick(value => value + 1);
-        if (route !== "list") {
-          navigate("list");
-        }
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r") {
-        event.preventDefault();
-        void refresh();
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
-        event.preventDefault();
-        navigate("settings");
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === "[") {
-        event.preventDefault();
-        back();
-      }
+        setQuickFocusTick((value) => value + 1);
+        if (route !== "list") navigate("list");
+        break;
+      case "refresh": void refresh(); break;
+      case "settings": navigate("settings"); break;
+    }
+  }
+  useEffect(() => {
+    const handle = createShortcutHandler(
+      () => ({ ...shortcutState.current, toast: toastState.current }),
+      (intent) => performShortcut.current(intent),
+    );
+    const handler = (event: KeyboardEvent) => {
+      if (isCompositionKey(event)) return;
+      handle(event);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [
-    route,
-    panelPinned,
-    menuOpen,
-    search,
-    quick,
-    calendarState.selected,
-    liveBoard?.context.today,
-    selected?.id,
-    settings.language,
-  ]);
+  }, []);
+  // Native `<details>` menus stay open until toggled again; close them on an outside press or a choice.
+  useEffect(() => {
+    const close = (event: Event) => {
+      const target = event.target as Element | null;
+      for (const menu of document.querySelectorAll<HTMLDetailsElement>("details.action-menu[open]")) {
+        if (!menu.contains(target)) menu.open = false;
+        else if (event.type === "click" && target?.closest(".action-menu > div button")) menu.open = false;
+      }
+    };
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("click", close, true);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("click", close, true);
+    };
+  }, []);
   useEffect(() => {
     document.documentElement.lang = settings.language;
   }, [settings.language]);
   useEffect(() => {
-    if (!undo) return;
-    const timer = setTimeout(() => setUndo(null), 10000);
-    return () => clearTimeout(timer);
-  }, [undo]);
-  useEffect(() => {
-    if (!orderUndo) return;
-    const timer = setTimeout(() => setOrderUndo(null), 10000);
-    return () => clearTimeout(timer);
-  }, [orderUndo]);
+    // Offline already has its own banner with a retry button; only report failures while connected.
+    if (runtimeError && connection.online) notify({ message: runtimeError, kind: "error" });
+  }, [runtimeError, connection.online, notify]);
   function navigate(next: Route) {
     if (next !== route)
       history.current.push({
@@ -360,7 +457,15 @@ export function Panel() {
                 : current,
             );
         })
-        .catch(() => {});
+        .catch((error) => {
+          // Deleted elsewhere while its page was open: leave the page and drop its draft.
+          if (stopped || !isNotFound(error)) return;
+          drafts.current.delete(selected.id);
+          if (activePage.current.route === "detail") {
+            notify({ message: settings.language === "en" ? "That task was deleted" : "这个任务已被删除" });
+            back();
+          }
+        });
     return () => {
       stopped = true;
     };
@@ -387,20 +492,51 @@ export function Panel() {
         newPeriodicDraft(rule, settings.language),
     );
   }
+  /** One place that turns a failed write into a toast; a version conflict also refreshes the board. */
+  function fail(error: unknown) {
+    const failure = failureOf(error, settings.language);
+    notify({ message: failure.message, kind: "error" });
+    if (failure.reload) {
+      setConflict(true);
+      void refresh();
+    }
+  }
   async function run(action: () => Promise<unknown>) {
-    if (!connection.online || saving) return;
+    if (!connection.online || saving) return false;
     setSaving(true);
     setError(null);
     try {
       await action();
       await refresh();
+      return true;
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
-      if (error instanceof TodoCueError && error.code === "VERSION_CONFLICT")
-        setConflict(true);
+      fail(error);
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+  async function undoAction(action: UndoAction) {
+    // An undo that cannot run yet keeps its toast, so it can still be used a moment later.
+    if (!connection.online || saving) return;
+    dismiss();
+    await run(async () => {
+      if (action.kind === "reopen")
+        await client.reopenTask(action.taskId, { expectedVersion: action.version });
+      else if (action.kind === "order")
+        await client.undoOrder({
+          token: action.token,
+          expectedRevision: boardRef.current!.ordering.revision,
+        });
+      else
+        await client.updateTask(action.taskId, {
+          expectedVersion: action.expectedVersion,
+          scheduledDate: action.scheduledDate,
+          scheduledAt: action.scheduledAt,
+          ...("dueDate" in action ? { dueDate: action.dueDate, dueAt: action.dueAt } : {}),
+          ...(action.scheduledAt || action.dueAt ? { timezone: action.timezone } : {}),
+        });
+    });
   }
   const listTasks = (view === "upcoming" ? board?.upcoming : board?.all) ?? [];
   const matching = listTasks.filter(
@@ -468,22 +604,115 @@ export function Panel() {
       const result = await (task.status === "done"
         ? client.reopenTask(task.id, { expectedVersion: task.version })
         : client.completeTask(task.id, { expectedVersion: task.version }));
-      setUndo(task.status === "done" ? null : result.task);
+      if (task.status !== "done")
+        notify({
+          message: settings.language === "en" ? `Completed “${result.task.title}”` : `已完成「${result.task.title}」`,
+          undo: { kind: "reopen", taskId: result.task.id, version: result.task.version },
+        });
       if (selected?.id === task.id) setSelected(result.task);
       await refresh();
       return true;
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      fail(error);
       return false;
     } finally {
       finishingRef.current.delete(task.id);
       setFinishing(new Set(finishingRef.current));
     }
   }
+  // The row menu. A menu's items are built when it opens and it can stay open while the board
+  // refreshes, so its commands go through `menuCommandsRef` (always this render's) and each one
+  // looks the task up again in the live board: they write against the current version.
+  const latestTask = (task: Task) => latestOf(liveBoard, task);
+  const planToday = liveBoard?.context.today ?? calendarState.anchor;
+  const menuCommands: TaskMenuCommands = {
+    complete: (task) => void complete(latestTask(task), false),
+    reopen: (task) => void run(() => taskCommands.reopen(latestTask(task))),
+    snooze: (task) =>
+      void run(async () => {
+        await taskCommands.snooze(latestTask(task));
+        notify({ message: settings.language === "en" ? "Reminding you in 10 minutes" : "将在 10 分钟后提醒" });
+      }),
+    tomorrow: (task) =>
+      void run(async () => {
+        const before = latestTask(task);
+        const { task: after } = await taskCommands.tomorrow(before, planToday);
+        notify({
+          message: settings.language === "en" ? "Moved to tomorrow" : "已改期到明天",
+          undo: rescheduleUndo(before, after),
+        });
+      }),
+    edit: (task) => edit(latestTask(task)),
+    cancel: (task) => void run(() => taskCommands.cancel(latestTask(task))),
+    skip: (task) => void run(() => taskCommands.skip(latestTask(task))),
+    requestDelete: (task) => requestDelete(latestTask(task)),
+  };
+  const menuCommandsRef = useRef(menuCommands);
+  menuCommandsRef.current = menuCommands;
+  const [stableMenuCommands] = useState(() => delegateCommands(() => menuCommandsRef.current));
+  const menuReturnFocus = useRef<HTMLElement | null>(null);
+  function openTaskMenu(task: Task, anchor: MenuAnchor) {
+    // A pointer-opened menu has no focused row to give focus back to; use the row's own button.
+    const rowButton = document.querySelector<HTMLElement>(
+      `[data-task-id="${CSS.escape(task.id)}"] .task-text`,
+    );
+    const returnFocus = returnFocusTarget(anchor.returnFocus, rowButton, document.body);
+    menuReturnFocus.current = returnFocus;
+    contextMenu.open(
+      { ...anchor, returnFocus },
+      taskMenuItems(task, {
+        language: settings.language,
+        online: connection.online,
+        busy: saving || finishingRef.current.has(task.id),
+        commands: stableMenuCommands,
+      }),
+      task.title,
+    );
+  }
+  // A menu belongs to the page it was opened on, and its items were built for one connection state.
+  useEffect(() => contextMenu.close(), [route, connection.online]);
+  function requestDelete(task: Task) {
+    deleteTrigger.current = menuReturnFocus.current;
+    setPendingDelete(task);
+  }
+  /** Dismiss the delete confirmation without deleting, and hand focus back to where it came from. */
+  function closeDelete() {
+    setPendingDelete(null);
+    const target = returnFocusTarget(deleteTrigger.current, null, document.body);
+    deleteTrigger.current = null;
+    // Not deferred to a frame: the dialog is still mounted, and moving focus away from it is harmless.
+    target?.focus({ preventScroll: true });
+  }
+  async function confirmDelete(task: Task) {
+    await run(async () => {
+      const current = latestTask(task);
+      // Already gone elsewhere counts as deleted, as in the native client.
+      await removeTolerantly(() => taskCommands.remove(current));
+      setPendingDelete(null);
+      deleteTrigger.current = null;
+      notify({
+        message: settings.language === "en" ? `Deleted “${task.title}”` : `已删除「${task.title}」`,
+      });
+      // Its draft goes with it, and so does any page of it: detail, or the edit form it was opened on.
+      drafts.current.delete(task.id);
+      const { stack, leaveTo } = afterTaskDeleted(
+        { route, taskId: selected?.id },
+        history.current,
+        task.id,
+      );
+      history.current = stack;
+      if (leaveTo !== undefined) {
+        setRoute(leaveTo?.route ?? "list");
+        setSelected(leaveTo?.task);
+        setPeriodicSelected(leaveTo?.periodic);
+        setConflict(false);
+      } else if (selected?.id === task.id) setSelected(undefined);
+    });
+  }
   return (
     <main className="panel-shell"
       onPointerDownCapture={(event) => {
-        if (native && navigator.userAgent.includes("Windows") &&
+        if (native && platform === "windows" &&
           (event.target as Element).closest("input, textarea, button, select, summary, [contenteditable=true]"))
           void focusPanel().catch(error => setError(String(error)));
         if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
@@ -525,7 +754,7 @@ export function Panel() {
         <div
           aria-hidden="true"
           inert
-          className="drag-card graphite"
+          className={`drag-card graphite ${taskDrag.drag.landing ? "landing" : ""}`}
           style={{
             position: "fixed",
             left: taskDrag.drag.x,
@@ -533,6 +762,9 @@ export function Panel() {
             width: taskDrag.drag.width,
             pointerEvents: "none",
             zIndex: 40,
+            transform: taskDrag.drag.landing
+              ? `translate(${taskDrag.drag.landing.x - taskDrag.drag.x}px, ${taskDrag.drag.landing.y - taskDrag.drag.y}px)`
+              : undefined,
           }}
         >
           <TaskRow
@@ -543,6 +775,22 @@ export function Panel() {
           />
         </div>
       )}
+      {pendingDelete && (
+        <div className="confirmation frost" role="alertdialog" aria-label={deleteConfirmText(settings.language).title}>
+          <h3>{deleteConfirmText(settings.language).title}</h3>
+          <p>{deleteConfirmText(settings.language).body}</p>
+          <button
+            className="pill danger"
+            disabled={!connection.online || saving}
+            onClick={() => void confirmDelete(pendingDelete)}
+          >
+            {deleteConfirmText(settings.language).confirm}
+          </button>
+          <button className="text-button" ref={deleteCancel} onClick={closeDelete}>
+            {deleteConfirmText(settings.language).cancel}
+          </button>
+        </div>
+      )}
       {pendingMove && (
         <div className="confirmation frost" role="alertdialog">
           <h3>
@@ -550,15 +798,21 @@ export function Panel() {
               ? "Plan is past the deadline"
               : "计划晚于截止时间"}
           </h3>
+          <p>
+            {settings.language === "en"
+              ? `Moving “${pendingMove.title}” to ${dayLabel(pendingMove.input.targetGroup, settings.language, board?.context.today)} lands after its deadline. The deadline and reminder keep their values.`
+              : `将「${pendingMove.title}」改期到 ${dayLabel(pendingMove.input.targetGroup, settings.language, board?.context.today)}，会晚于原截止时间。截止日期和提醒时间将保持原值。`}
+          </p>
           <button
             className="pill"
             onClick={() =>
               void run(async () => {
-                await client.moveTask(
+                const result = await client.moveTask(
                   pendingMove.id,
                   { ...pendingMove.input, allowPastDeadline: true },
                   { idempotencyKey: crypto.randomUUID() },
                 );
+                announceMove(pendingMove.input, result.undoToken);
                 setPendingMove(null);
               })
             }
@@ -572,7 +826,7 @@ export function Panel() {
           </button>
         </div>
       )}
-      <header className="tile graphite panel-header" data-route={route}>
+      <motion.header className="tile graphite panel-header" data-route={route} style={headerReveal}>
         <div className="brand">
           {route === "list" ? (
             <Mark />
@@ -581,6 +835,7 @@ export function Panel() {
               className="icon-button back-button"
               onClick={back}
               aria-label={t("cancel")}
+              title={`${t("cancel")} (${chord("[")})`}
             >
               <Icon name="back" />
             </button>
@@ -603,6 +858,7 @@ export function Panel() {
               aria-label={
                 settings.language === "en" ? "Open calendar" : "打开日历"
               }
+              title={`${settings.language === "en" ? "Open calendar" : "打开日历"} (${chord("⇧K")})`}
             >
               <Icon name="calendar" />
             </button>
@@ -611,6 +867,12 @@ export function Panel() {
             className={`icon-button ${panelPinned ? "is-pinned" : ""}`}
             onClick={() => setPanelPinned((value) => !value)}
             aria-label={settings.language === "en" ? "Pin panel" : "固定面板"}
+            aria-pressed={panelPinned}
+            title={
+              panelPinned
+                ? settings.language === "en" ? "Unpin (allow Esc to hide)" : "取消固定（允许 Esc 收起）"
+                : settings.language === "en" ? "Pin the panel so Esc doesn’t hide it" : "固定面板，防止 Esc 误收起"
+            }
           >
             <Icon name="pin" />
           </button>
@@ -621,6 +883,7 @@ export function Panel() {
             aria-label={
               settings.language === "en" ? "More actions" : "更多操作"
             }
+            title={settings.language === "en" ? "More actions" : "更多操作"}
           >
             <Icon name="more" />
           </button>
@@ -628,12 +891,14 @@ export function Panel() {
             className="icon-button"
             onClick={() => void hidePanel()}
             aria-label={t("hide")}
+            title={settings.language === "en" ? "Hide the panel; tasks and reminders keep running" : "收起面板，任务与提醒继续运行"}
           >
             <Icon name="close" />
           </button>
         </div>
+        <AnimatePresence initial={false} mode="popLayout">
         {route === "list" ? (
-          <>
+          <HeaderSwap key="list" reduced={!!reduced}>
             <nav className="tabs" aria-label="任务视图切换">
               <div className="tab-dots">
                 {(["today", "upcoming", "all"] as const).map((tab) => (
@@ -696,9 +961,10 @@ export function Panel() {
                 </time>
               </div>
             </div>
-          </>
+          </HeaderSwap>
         ) : (
           route !== "detail" && (
+            <HeaderSwap key={route} reduced={!!reduced}>
             <h1 className="page-heading">
               {route === "settings"
                 ? settings.language === "en"
@@ -726,18 +992,29 @@ export function Panel() {
                             ? "A little thing to remember"
                             : "记下一件事"}
             </h1>
+            </HeaderSwap>
           )
         )}
+        </AnimatePresence>
         {!connection.online && (
-          <div className="offline-banner">{t("offline")}</div>
+          <OfflineBanner
+            language={settings.language}
+            message={connection.message}
+            retrying={retrying}
+            onRetry={() => {
+              setRetrying(true);
+              void refresh().finally(() => setRetrying(false));
+            }}
+          />
         )}
-      </header>
+      </motion.header>
       {menuOpen && (
         <div
           className="header-menu graphite"
           onMouseLeave={() => setMenuOpen(false)}
         >
           <button
+            disabled={!connection.online}
             onClick={() => {
               edit();
               setMenuOpen(false);
@@ -747,6 +1024,7 @@ export function Panel() {
             {t("newTask")}
           </button>
           <button
+            disabled={!connection.online}
             onClick={() => {
               editPeriodic();
               setMenuOpen(false);
@@ -793,18 +1071,19 @@ export function Panel() {
           </button>
           <button
             onClick={() => {
-              void client.export().then((bundle) => {
-                const url = URL.createObjectURL(
-                  new Blob([JSON.stringify(bundle, null, 2)], {
-                    type: "application/json",
-                  }),
-                );
-                const anchor = document.createElement("a");
-                anchor.href = url;
-                anchor.download = "todocue.json";
-                anchor.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              });
+              void client
+                .export()
+                .then((bundle) =>
+                  exportJson(
+                    `todocue-export-${new Date().toLocaleDateString("sv-SE")}.json`,
+                    JSON.stringify(bundle, null, 2),
+                  ),
+                )
+                .then((path) => {
+                  const name = path.split(/[\\/]/).pop() ?? path;
+                  notify({ message: settings.language === "en" ? `Exported to ${name}` : `已导出到 ${name}` });
+                })
+                .catch((failure) => setError(String(failure)));
               setMenuOpen(false);
             }}
           >
@@ -818,6 +1097,7 @@ export function Panel() {
             key={route}
             reduced={!!reduced}
             depth={history.current.length}
+            reveal={route === "list" ? undefined : pageReveal}
           >
             {(route === "list" || route === "calendar") && (
               <>
@@ -834,7 +1114,10 @@ export function Panel() {
                       new Date().toISOString().slice(0, 10)
                     }
                     onQuickDate={setQuickDate}
+                    onNotify={notify}
+                    onConflict={() => void refresh()}
                     onOpen={openTask}
+                    onMenu={openTaskMenu}
                     onComplete={async (task) => {
                       return complete(task, true);
                     }}
@@ -842,9 +1125,23 @@ export function Panel() {
                   />
                 )}
                 {route === "list" && (
-                  <div className="list-scroll">
+                  <motion.div layoutScroll className="list-scroll" ref={listScroll}>
+                    {moving && (
+                      <div className="list-hint" role="status">
+                        {settings.language === "en" ? "Saving the move…" : "正在保存移动…"}
+                      </div>
+                    )}
+                    <AnimatePresence initial={false} mode="popLayout">
                     {view === "today" && next && (
-                      <section className="tile frost next-card">
+                      <motion.section
+                        key="next-card"
+                        className="tile frost next-card"
+                        style={{ x: nextReveal.x, originY: 0 }}
+                        initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
+                        transition={reduced ? { duration: 0.12 } : motionTokens.list}
+                      >
                         <div className="next-heading">
                           <span className="eyebrow">NEXT</span>
                           <span>{t("next")}</span>
@@ -864,7 +1161,9 @@ export function Panel() {
                           </span>
                         </div>
                         <div className="next-body">
-                          <div>
+                          <div className="next-swap">
+                          <AnimatePresence initial={false} mode="popLayout">
+                          <VerticalSwap key={next.id} reduced={!!reduced}>
                             <button
                               className={`next-title ${finishing.has(next.id) ? "finishing-title" : ""}`}
                               onClick={() => openTask(next)}
@@ -899,15 +1198,21 @@ export function Panel() {
                                 <Icon name="open" />
                               </button>
                             </div>
+                          </VerticalSwap>
+                          </AnimatePresence>
                           </div>
                           <Gauge
                             completed={completed}
                             total={count + completed}
                           />
                         </div>
-                      </section>
+                      </motion.section>
                     )}
-                    <section
+                    </AnimatePresence>
+                    <motion.section
+                      layout="position"
+                      transition={reduced ? { duration: 0.12 } : motionTokens.list}
+                      style={listReveal}
                       className="tile graphite task-list"
                       aria-label={t(view)}
                     >
@@ -928,44 +1233,41 @@ export function Panel() {
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                           />
+                          {search && (
+                            <button
+                              type="button"
+                              className="search-clear"
+                              aria-label={settings.language === "en" ? "Clear search" : "清除搜索"}
+                              title={settings.language === "en" ? "Clear search" : "清除搜索"}
+                              onClick={() => setSearch("")}
+                            >
+                              <Icon name="close" size={10} />
+                            </button>
+                          )}
                         </div>
+                      )}
+                      <AnimatePresence initial={false} mode="popLayout">
+                      <TabSwap key={view} direction={viewDirection} reduced={!!reduced}>
+                      {view === "all" && search.trim() && (
+                        <p className="search-hint">
+                          {settings.language === "en"
+                            ? "Clear the search to reorder by dragging"
+                            : "清除搜索后可拖动调整顺序"}
+                        </p>
                       )}
                       {!board && connection.online ? (
                         <div className="skeleton" />
-                      ) : visibleCount === 0 ? (
-                        <div className="empty-state">
-                          <div className="empty-ring">
-                            <span className="orange-disc">
-                              <Icon
-                                name={completed > 0 ? "check" : "plus"}
-                                size={22}
-                              />
-                            </span>
-                          </div>
-                          <h2>
-                            {settings.language === "en"
-                              ? completed > 0
-                                ? "Today is clear"
-                                : "Start with one small thing"
-                              : completed > 0
-                                ? "今天已清空"
-                                : "从一件小事开始"}
-                          </h2>
-                          <p>
-                            {settings.language === "en"
-                              ? "Write it down, and let it go."
-                              : "记下来，就不用一直惦记。"}
-                          </p>
-                          <button
-                            className="pill"
-                            onClick={() => quickInput.current?.focus()}
-                          >
-                            <span className="orange-disc">
-                              <Icon name="plus" />
-                            </span>
-                            {t("newTask")}
-                          </button>
-                        </div>
+                      ) : visibleCount === 0 && !(view === "today" && next) ? (
+                        !board ? (
+                          <EmptyState
+                            icon="clock"
+                            title={settings.language === "en" ? "Tasks show up here once connected" : "连接后，任务会显示在这里"}
+                          />
+                        ) : (
+                          <EmptyState {...emptyCopy(view, !!search.trim(), completed, settings.language)}
+                            onAction={view !== "upcoming" && !search.trim() ? () => quickInput.current?.focus() : undefined}
+                          />
+                        )
                       ) : (
                         groups
                           .filter(
@@ -1002,7 +1304,10 @@ export function Panel() {
                                               expectedRevision:
                                                 board!.ordering.revision,
                                             });
-                                          setOrderUndo(result.undoToken);
+                                          notify({
+                                            message: settings.language === "en" ? "Order updated" : "已恢复自动排序",
+                                            undo: { kind: "order", token: result.undoToken },
+                                          });
                                         })
                                       }
                                       aria-label={
@@ -1010,13 +1315,14 @@ export function Panel() {
                                           ? `Restore automatic order in ${group.label}`
                                           : `${group.label}恢复自动排序`
                                       }
+                                      title={settings.language === "en" ? "Manual order · restore automatic" : "手动排序 · 恢复自动排序"}
                                     >
                                       <Icon name="repeat" size={10} />
                                     </button>
                                   )}
                                 </h3>
                               )}
-                              <AnimatePresence initial={false}>
+                              <AnimatePresence initial={false} mode="popLayout">
                                 {group.tasks.map((task) => (
                                   <TaskRow
                                     group={group.key}
@@ -1036,6 +1342,7 @@ export function Panel() {
                                       return complete(task, true);
                                     }}
                                     onOpen={openTask}
+                                    onMenu={openTaskMenu}
                                   />
                                 ))}
                               </AnimatePresence>
@@ -1081,6 +1388,7 @@ export function Panel() {
                                 : "查看全部"}
                             </button>
                           </div>
+                          <AnimatePresence initial={false} mode="popLayout">
                           {completedExpanded &&
                             board?.today.completed.map((task) => (
                               <TaskRow
@@ -1089,15 +1397,20 @@ export function Panel() {
                                 today={board.context.today}
                                 disabled={!connection.online || saving}
                                 onOpen={openTask}
+                                onMenu={openTaskMenu}
                                 onComplete={(task) => complete(task, true)}
                               />
                             ))}
+                          </AnimatePresence>
                         </div>
                       )}
-                    </section>
-                  </div>
+                      </TabSwap>
+                      </AnimatePresence>
+                    </motion.section>
+                  </motion.div>
                 )}
-                <form
+                <motion.form
+                  style={route === "list" ? quickReveal : undefined}
                   className="tile frost quick-add"
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -1114,7 +1427,10 @@ export function Panel() {
                     if (ownsFocus) quickInput.current?.focus();
                     void run(async () => {
                       try {
-                        await client.createTask(payload, { idempotencyKey: operation.key });
+                        const created = await client.createTask(payload, { idempotencyKey: operation.key });
+                        notify({
+                          message: settings.language === "en" ? `Added “${created.task.title}”` : `已添加「${created.task.title}」`,
+                        });
                         const restoreFocus = ownsFocus && activePage.current.route === route && quickFocusRevision.current === focusRevision && (
                           document.activeElement === quickInput.current || document.activeElement === submitter ||
                           document.activeElement === document.body
@@ -1227,7 +1543,7 @@ export function Panel() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </form>
+                </motion.form>
               </>
             )}
             {route === "completed" && (
@@ -1235,9 +1551,12 @@ export function Panel() {
                 language={settings.language}
                 online={connection.online}
                 eventRevision={eventRevision}
+                today={board?.context.today}
+                timezone={board?.context.timezone}
                 query={completedQuery}
                 onQuery={setCompletedQuery}
                 onOpen={openTask}
+                onMenu={openTaskMenu}
                 onComplete={async (task) => {
                   return complete(task, true);
                 }}
@@ -1249,6 +1568,8 @@ export function Panel() {
                 language={settings.language}
                 online={connection.online}
                 rules={rules}
+                selectedId={periodicSelected?.id}
+                loadError={runtimeError}
                 onError={setError}
                 onChanged={refresh}
                 onEdit={editPeriodic}
@@ -1314,6 +1635,9 @@ export function Panel() {
                 }}
               />
             )}
+            {route === "detail" && !selected && (
+              <NotFoundPage language={settings.language} loading={!board} onBack={back} />
+            )}
             {route === "detail" && selected && (
               <Detail
                 key={selected.id}
@@ -1325,12 +1649,17 @@ export function Panel() {
                 eventRevision={eventRevision}
                 onEdit={edit}
                 onComplete={complete}
+                onNotify={notify}
                 onUpdated={(task) =>
                   setSelected((current) =>
                     current?.id === task.id ? task : current,
                   )
                 }
                 onDeleted={back}
+                onRequestDelete={(task) => {
+                  deleteTrigger.current = document.querySelector<HTMLElement>(".detail-more summary");
+                  setPendingDelete(task);
+                }}
                 onChanged={refresh}
                 onError={setError}
               />
@@ -1353,6 +1682,13 @@ export function Panel() {
                     setDraft(value);
                 }}
                 onSaved={(task, submitted) => {
+                  notify({
+                    message: submitted.original
+                      ? settings.language === "en" ? "Saved" : "已保存"
+                      : submitted.repeat !== "none"
+                        ? settings.language === "en" ? "Repeating task created" : "已创建重复任务"
+                        : settings.language === "en" ? `Added “${task.title}”` : `已添加「${task.title}」`,
+                  });
                   const key = submitted.original?.id ?? "new";
                   const cached = drafts.current.get(key);
                   const ownDraft =
@@ -1402,215 +1738,59 @@ export function Panel() {
               />
             )}
             {route === "settings" && (
-              <section className="tile frost editor">
-                <label>
-                  {t("language")}
-                  <select
-                    value={settings.language}
-                    onChange={(event) => {
-                      const next = {
-                        ...settings,
-                        language: event.target
-                          .value as DesktopSettings["language"],
-                      };
-                      setSettings(next);
-                      void saveSettings(next).catch((error) =>
-                        setError(String(error)),
-                      );
-                    }}
-                  >
-                    <option value="zh-CN">简体中文</option>
-                    <option value="en">English</option>
-                  </select>
-                </label>
-                <label>
-                  {t("width")}
-                  <input
-                    type="range"
-                    min="300"
-                    max="600"
-                    value={settings.width}
-                    onChange={(event) => {
-                      const next = {
-                        ...settings,
-                        width: Number(event.target.value),
-                      };
-                      setSettings(next);
-                      void saveSettings(next).catch((error) =>
-                        setError(String(error)),
-                      );
-                    }}
-                  />
-                  <output>{settings.width}</output>
-                </label>
-                {(["notchEnabled", "quietFullscreen"] as const).map((key) => (
-                  <label key={key}>
-                    {t(key === "notchEnabled" ? "notch" : "quiet")}
-                    <input
-                      type="checkbox"
-                      checked={settings[key]}
-                      onChange={(event) => {
-                        const next = {
-                          ...settings,
-                          [key]: event.target.checked,
-                        };
-                        setSettings(next);
-                        void saveSettings(next).catch((error) =>
-                          setError(String(error)),
-                        );
-                      }}
-                    />
-                  </label>
-                ))}
-                <label>
-                  {settings.language === "en"
-                    ? "Global shortcut"
-                    : "全局快捷键"}
-                  <button
-                    className="shortcut-recorder pill secondary"
-                    onClick={(event) => {
-                      event.currentTarget.focus();
-                      void focusPanel().catch(error => setError(String(error)));
-                      setRecording((value) => !value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (!recording) return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (event.key === "Escape") {
-                        setRecording(false);
-                        return;
-                      }
-                      if (
-                        !["Meta", "Control", "Alt", "Shift"].includes(
-                          event.key,
-                        ) &&
-                        (event.metaKey || event.ctrlKey || event.altKey)
-                      ) {
-                        const shortcut = [
-                          event.metaKey ? "Super" : null,
-                          event.ctrlKey ? "Control" : null,
-                          event.altKey ? "Alt" : null,
-                          event.shiftKey ? "Shift" : null,
-                          event.code,
-                        ]
-                          .filter(Boolean)
-                          .join("+");
-                        const next = { ...settings, shortcut };
-                        setRecording(false);
-                        void saveSettings(next)
-                          .then(() => setSettings(next))
-                          .catch((error) => setError(String(error)));
-                      }
-                    }}
-                  >
-                    {recording
-                      ? settings.language === "en"
-                        ? "Press a shortcut…"
-                        : "按下快捷键…"
-                      : (settings.shortcut ??
-                        (settings.language === "en"
-                          ? "Record shortcut"
-                          : "录制快捷键"))}
-                  </button>
-                  {settings.shortcut && (
-                    <button
-                      className="text-button"
-                      onClick={() => {
-                        const next = { ...settings, shortcut: null };
-                        void saveSettings(next)
-                          .then(() => setSettings(next))
-                          .catch((error) => setError(String(error)));
-                      }}
-                    >
-                      {settings.language === "en" ? "Clear" : "清除"}
-                    </button>
-                  )}
-                </label>
-                <label>
-                  {settings.language === "en" ? "Open at login" : "登录时启动"}
-                  <input
-                    type="checkbox"
-                    checked={settings.autostart}
-                    disabled={!native}
-                    onChange={(event) => {
-                      const next = {
-                        ...settings,
-                        autostart: event.target.checked,
-                      };
-                      void saveSettings(next)
-                        .then(() => setSettings(next))
-                        .catch((error) => setError(String(error)));
-                    }}
-                  />
-                </label>
-                <button
-                  className="pill"
-                  disabled={!connection.online}
-                  onClick={() => void run(() => client.testNotification())}
-                >
-                  {t("notify")}
-                </button>
-                <button
-                  className="pill secondary"
-                  disabled={!connection.online}
-                  onClick={() =>
-                    void run(() => client.openNotificationSettings())
-                  }
-                >
-                  {t("notifySettings")}
-                </button>
-              </section>
+              <SettingsPage
+                settings={settings}
+                setSettings={setSettings}
+                online={connection.online}
+                onError={setError}
+                onReconnect={refresh}
+              />
             )}
           </RouteSurface>
         </AnimatePresence>
       </div>
-      {(!connection.online || error || runtimeError || undo || orderUndo) && (
-        <aside
-          className={`toast graphite ${route !== "list" && route !== "calendar" ? "toast-top" : ""}`}
-          role={error ? "alert" : "status"}
-        >
-          {error ??
-            runtimeError ??
-            (!connection.online
-              ? t("offline")
-              : orderUndo
-                ? settings.language === "en"
-                  ? "Order updated"
-                  : "排序已更新"
-                : t("completed"))}
-          {orderUndo && connection.online && (
+      <AnimatePresence>
+        {toast && (
+          <motion.aside
+            key={toast.id}
+            className={`toast graphite ${toast.kind === "error" ? "toast-error" : ""} ${route !== "list" && route !== "calendar" ? "toast-top" : ""}`}
+            role={toast.kind === "error" ? "alert" : "status"}
+            style={{ transformOrigin: route !== "list" && route !== "calendar" ? "top" : "bottom" }}
+            initial={
+              reduced
+                ? { opacity: 0 }
+                : { opacity: 0, y: route !== "list" && route !== "calendar" ? -16 : 16, scale: 0.96 }
+            }
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={
+              reduced
+                ? { opacity: 0, transition: { duration: 0.12 } }
+                : { opacity: 0, scale: 0.96, transition: { duration: 0.14, ease: "easeIn" } }
+            }
+            transition={reduced ? { duration: 0.12 } : motionTokens.settle}
+          >
+            <span className="toast-message">{toast.message}</span>
+            {toast.undo && (
+              <button
+                className="toast-undo"
+                disabled={!connection.online || saving || !!taskDrag.drag}
+                title={`${settings.language === "en" ? "Undo" : "撤销"} (${chord("Z")})`}
+                onClick={() => void undoAction(toast.undo!)}
+              >
+                {settings.language === "en" ? "Undo" : "撤销"}
+              </button>
+            )}
             <button
-              disabled={!!taskDrag.drag || saving}
-              onClick={() =>
-                void run(async () => {
-                  await client.undoOrder({
-                    token: orderUndo,
-                    expectedRevision: board!.ordering.revision,
-                  });
-                  setOrderUndo(null);
-                })
-              }
+              className="toast-close"
+              aria-label={settings.language === "en" ? "Dismiss" : "关闭提示"}
+              onClick={() => dismiss(toast.id)}
             >
-              {settings.language === "en" ? "Undo" : "撤销"}
+              <Icon name="close" size={10} />
             </button>
-          )}
-          {undo && connection.online && (
-            <button
-              onClick={() =>
-                void run(async () => {
-                  await client.reopenTask(undo.id, {
-                    expectedVersion: undo.version,
-                  });
-                  setUndo(null);
-                })
-              }
-            >
-              {settings.language === "en" ? "Undo" : "撤销"}
-            </button>
-          )}
-        </aside>
-      )}
+          </motion.aside>
+        )}
+      </AnimatePresence>
+      {contextMenu.node}
     </main>
   );
 }
@@ -1619,10 +1799,12 @@ function RouteSurface({
   children,
   reduced,
   depth,
+  reveal,
 }: {
   children: import("react").ReactNode;
   reduced: boolean;
   depth: number;
+  reveal?: { x: MotionValue<number> };
 }) {
   const present = useIsPresent();
   return (
@@ -1630,7 +1812,7 @@ function RouteSurface({
       className="page-content"
       inert={!present}
       aria-hidden={!present}
-      style={{ zIndex: depth }}
+      style={{ zIndex: depth, x: reveal?.x }}
       initial={{ y: reduced ? 0 : 14, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{
