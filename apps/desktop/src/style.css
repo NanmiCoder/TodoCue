@@ -2967,15 +2967,14 @@ body[data-native="true"][data-surface="notch"] .notch {
   pointer-events: none;
 }
 .notch-offline {
-  width: 14px;
-  height: 14px;
   fill: none;
   stroke: #ff9f0a;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.notch-wing .notch-offline { color: inherit; }
+/* `.notch-wing svg` (17px, orange) is more specific than `.notch-offline`: size the icon here. */
+.notch-wing .notch-offline { width: 14px; height: 14px; color: inherit; }
 
 .notch-stack-header {
   display: flex;
@@ -3056,6 +3055,8 @@ body[data-native="true"][data-surface="notch"] .notch {
 .notch-toast svg { color: var(--orange); flex: none; }
 .notch-toast button { color: var(--orange); font-size: 12px; white-space: nowrap; }
 .notch-toast .notch-toast-close { color: #ffffff8c; display: grid; place-items: center; }
+/* `.notch-toast svg` colours every icon orange; the close icon stays grey. */
+.notch-toast .notch-toast-close svg { color: #ffffff8c; }
 .notch-quick-header.is-covered { visibility: hidden; }
 
 /* Reminder rows and the featured card */

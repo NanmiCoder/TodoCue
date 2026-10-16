@@ -42,6 +42,18 @@ import {
   estimateMenuHeight,
   menuWindowHeight,
   pinDuringMenu,
+  restorePinAfterMenu,
+  rememberPin,
+  recallPin,
+  pointerIsOutside,
+  menuAbandoned,
+  deferredAfterExpand,
+  periodicRenderGate,
+  PERIODIC_RENDER_STEP,
+  ActionGate,
+  errorFeedback,
+  type PinMemory,
+  type PointerSample,
   type QuickLookClose,
   type Cue,
 } from "./model.js";
@@ -69,6 +81,7 @@ export function Notch() {
   const [folded, setFolded] = useState(false);
   /** After the quick look closes the stack waits for the shell to shrink before it comes back. */
   const [stackHold, setStackHold] = useState(false);
+  const stackHoldRef = useRef(false);
   const [featuredKey, setFeaturedKey] = useState<string | null>(null);
   const [quick, setQuick] = useState("");
   const [saving, setSaving] = useState(false);
@@ -77,7 +90,7 @@ export function Notch() {
   const pendingFocus = useRef(false);
   const [focusTick, setFocusTick] = useState(0);
   const quickFocusRevision = useRef(0);
-  const actionBusy = useRef(false);
+  const actionGate = useRef(new ActionGate());
   const busyCues = useRef(new Set<string>());
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
   const [featured, setFeatured] = useState(false);
@@ -90,7 +103,10 @@ export function Notch() {
   /** Pin state before the menu opened, restored when it closes; null while no menu is active. */
   const menuPin = useRef<{ before: boolean; opened: boolean } | null>(null);
   /** Pin state at the moment of a secondary press, before focusing the row could pin the quick look. */
-  const pinBeforePress = useRef<boolean | null>(null);
+  const pinBeforePress = useRef<PinMemory | null>(null);
+  /** The latest pointer evidence: the host's `notch:pointer` and the page's own enter/leave. */
+  const hostPointer = useRef<PointerSample | null>(null);
+  const domPointer = useRef<PointerSample | null>(null);
   /** Last pointer position seen by the page: `:hover` lags a frame behind a removed menu. */
   const pointerPos = useRef<{ x: number; y: number } | null>(null);
   const presentNow = useRef<() => Promise<unknown>>(async () => undefined);
@@ -110,6 +126,12 @@ export function Notch() {
   const lastPulse = useRef(Date.now());
   const panelVisible = useRef(false);
   const lastDomPointer = useRef(0);
+  /** A DOM enter/leave: remembered for the host fallback to yield to, and for the pointer-outside check. */
+  const markDom = (inside: boolean) => {
+    const at = Date.now();
+    lastDomPointer.current = at;
+    domPointer.current = { inside, at };
+  };
   const rearmAfterLeave = useRef(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -140,6 +162,7 @@ export function Notch() {
   };
   const t = translate(settings.language);
   const n = pick(settings.language);
+  stackHoldRef.current = stackHold;
   const stackShown = cues.length > 0 && !folded && !expanded && !stackHold;
   const stackShownRef = useRef(stackShown);
   stackShownRef.current = stackShown;
@@ -160,6 +183,13 @@ export function Notch() {
     setDeferredCount(0);
     commitCues();
   }
+  // Opening the quick look lists every reminder live, so none is still waiting to join the stack.
+  useEffect(() => {
+    if (!expanded || !deferred.current.length) return;
+    deferred.current = deferredAfterExpand(deferred.current, true);
+    setDeferredCount(0);
+    commitCues();
+  }, [expanded]);
   function showToast(next: Omit<NotchToast, "id">) {
     clearTimeout(toastTimer.current);
     const id = Date.now();
@@ -311,6 +341,19 @@ export function Notch() {
   const active = periodicActive;
   const eventHandler = useRef<(event: RuntimeEvent) => void>(() => {});
   const runtime = useRuntime((event) => eventHandler.current(event));
+  /** Menus and queued work outlive the render that built them: they read these, never a snapshot. */
+  const boardRef = useRef(runtime.board);
+  boardRef.current = runtime.board;
+  const onlineRef = useRef(runtime.connection.online);
+  onlineRef.current = runtime.connection.online;
+  const failRef = useRef<(error: unknown) => void>(() => {});
+  failRef.current = (error) => {
+    const feedback = errorFeedback(error, settings.language);
+    setError(feedback.message);
+    // Someone else changed it: re-read, so a retry carries the current version.
+    if (feedback.refresh) void runtime.refresh();
+  };
+  const fail = (error: unknown) => failRef.current(error);
   eventHandler.current = (event) => {
     if (event.type === "reminder.fired" && event.related?.taskId) {
       void client
@@ -319,7 +362,7 @@ export function Notch() {
           const cue = taskCue(event, task);
           if (cue) arrival(cue);
         })
-        .catch((error) => setError(String(error)));
+        .catch(fail);
     }
     if (event.type === "periodic.fired" && event.id) void claim(event.id);
   };
@@ -363,6 +406,8 @@ export function Notch() {
         await client.receiptPeriodic(id, { ...claim, displayed: false });
         return;
       }
+      // The quick look may have just closed: the stack then comes back after a short hold.
+      const heldAtArrival = stackHoldRef.current;
       arrival({
         key: `periodic:${id}`,
         id: `${occurrence.id}:${occurrence.round}`,
@@ -374,9 +419,20 @@ export function Notch() {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
-      const rendered = !!content.current?.querySelector(
-        `[data-cue-id="${occurrence.id}:${occurrence.round}"]`,
-      );
+      const isRendered = () =>
+        !!content.current?.querySelector(`[data-cue-id="${occurrence.id}:${occurrence.round}"]`);
+      let rendered = isRendered();
+      // During the hold there is nothing to paint yet. Wait for the stack instead of reporting a
+      // failure, which would drop a reminder the person never got to see.
+      for (
+        let waited = 0;
+        periodicRenderGate({ rendered, held: heldAtArrival || stackHoldRef.current, waited }) === "wait" &&
+        canPresentPeriodic({ ...displayState.current, hovered: hovering.current });
+        waited += PERIODIC_RENDER_STEP
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, PERIODIC_RENDER_STEP));
+        rendered = isRendered();
+      }
       const displayed =
         rendered &&
         canPresentPeriodic({
@@ -398,7 +454,7 @@ export function Notch() {
         commitCues();
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      fail(error);
     } finally {
       inFlight.current.delete(id);
       stack.current.release(key);
@@ -425,6 +481,7 @@ export function Notch() {
         // Host-side pointer position: a fallback for when the WebView gets no mouse events
         // (the app is not active). DOM events win while they are arriving.
         listen<{ inside: boolean }>("notch:pointer", (event) => {
+          hostPointer.current = { inside: event.payload.inside, at: Date.now() };
           if (Date.now() - lastDomPointer.current < 300) return;
           if (event.payload.inside) pointer.current.enter();
           else pointer.current.leave();
@@ -531,7 +588,7 @@ export function Notch() {
           if (document.activeElement !== quickInput.current || !document.hasFocus()) quickInput.current?.focus();
         }
         return presented;
-      }).catch((error) => { if (active) setError(String(error)); });
+      }).catch((error) => { if (active) fail(error); });
     };
     presentNow.current = async () => resize();
     resize();
@@ -587,7 +644,7 @@ export function Notch() {
       commitCues();
       await runtime.refresh();
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      fail(error);
     } finally {
       busyCues.current.delete(cue.key);
       setBusyKeys(new Set(busyCues.current));
@@ -598,20 +655,22 @@ export function Notch() {
     runtime.board?.today.items
       .filter((item) => item.task.id !== next?.id)
       .slice(0, 5) ?? [];
-  async function taskAction(action: () => Promise<unknown>) {
-    if (!runtime.connection.online || actionBusy.current) return;
-    actionBusy.current = true;
+  async function performAction(action: () => Promise<unknown>) {
     setSaving(true);
     setError(null);
     try {
       await action();
       await runtime.refresh();
     } catch (error) {
-      setError(String(error));
+      fail(error);
     } finally {
-      actionBusy.current = false;
       setSaving(false);
     }
+  }
+  /** A click: dropped while another write is in flight (its control is disabled anyway). */
+  async function taskAction(action: () => Promise<unknown>) {
+    if (!onlineRef.current) return;
+    await actionGate.current.run(() => performAction(action));
   }
   const remaining = runtime.board?.today.remaining ?? 0;
   const nextTitle = next?.title ?? null;
@@ -627,11 +686,16 @@ export function Notch() {
       nextId,
     }).catch(() => {});
   }, [settings.language, remaining, online, nextTitle, nextId]);
-  const tomorrow = () => runtime.board!.context.today;
-  /** The freshest copy of a task: the board may have moved on since a menu or a row was built. */
-  const latest = (task: Task) => runtime.board?.all.find((item) => item.id === task.id) ?? task;
-  async function completeWithFeedback(task: Task, beat = true) {
+  const tomorrow = () => {
+    const today = boardRef.current?.context.today;
+    if (!today) throw new Error("The board has not loaded yet");
+    return today;
+  };
+  /** The freshest copy of a task, read when the action runs (a menu may have been open for a while). */
+  const latest = (task: Task) => boardRef.current?.all.find((item) => item.id === task.id) ?? task;
+  async function completeWithFeedback(given: Task, beat = true) {
     if (beat) await new Promise((resolve) => setTimeout(resolve, reduced ? 120 : 420));
+    const task = latest(given);
     const { task: after } = await client.completeTask(task.id, { expectedVersion: task.version });
     showToast({
       message: n(`已完成「${task.title}」`, `Completed “${task.title}”`),
@@ -651,7 +715,9 @@ export function Notch() {
   function undoToast(action: UndoAction) {
     clearTimeout(toastTimer.current);
     setToast(null);
-    void taskAction(async () => {
+    if (!onlineRef.current) return;
+    // An undo is never dropped because the action it undoes is still refreshing: it waits its turn.
+    void actionGate.current.whenIdle(() => performAction(async () => {
       if (action.kind === "reopen") await client.reopenTask(action.taskId, { expectedVersion: action.version });
       else if (action.kind === "reschedule")
         await client.updateTask(action.taskId, {
@@ -661,7 +727,7 @@ export function Notch() {
           ...("dueDate" in action ? { dueDate: action.dueDate, dueAt: action.dueAt } : {}),
           ...(action.scheduledAt || action.dueAt ? { timezone: action.timezone } : {}),
         });
-    });
+    }));
   }
   // The row menu: the panel's items, run here. "Edit…" and "Delete…" need the panel, which opens
   // on the form or on the confirmation (deleting is permanent, so it always asks first).
@@ -669,11 +735,11 @@ export function Notch() {
     complete: (task) => void taskAction(() => completeWithFeedback(latest(task), false)),
     snooze: (task) => void taskAction(() => snoozeWithFeedback(task)),
     tomorrow: (task) => void taskAction(() => tomorrowWithFeedback(task)),
-    edit: (task) => void revealTask(task.id, "edit").catch((error) => setError(String(error))),
+    edit: (task) => void revealTask(task.id, "edit").catch(fail),
     cancel: (task) => void taskAction(() => taskCommands.cancel(latest(task))),
     skip: (task) => void taskAction(() => taskCommands.skip(latest(task))),
     reopen: (task) => void taskAction(() => taskCommands.reopen(latest(task))),
-    requestDelete: (task) => void revealTask(task.id, "delete").catch((error) => setError(String(error))),
+    requestDelete: (task) => void revealTask(task.id, "delete").catch(fail),
   };
   /**
    * Open the menu once the window can hold it: growing the window resizes the WebView, which
@@ -683,7 +749,9 @@ export function Notch() {
   async function openTaskMenu(task: Task, anchor: MenuAnchor) {
     const items = taskMenuItems(task, { language: settings.language, online, busy: saving, commands: menuCommands });
     const floor = { anchorY: anchor.y, height: estimateMenuHeight(items) };
-    if (!menuPin.current) menuPin.current = { before: pinBeforePress.current ?? interaction.current.pinned, opened: false };
+    // Only a fresh memory of a secondary press counts; a menu opened by keyboard or touch has none.
+    const remembered = recallPin(pinBeforePress.current, Date.now());
+    if (!menuPin.current) menuPin.current = { before: remembered ?? interaction.current.pinned, opened: false };
     pinBeforePress.current = null;
     clearTimeout(leaveTimer.current);
     interaction.current.pinned = pinDuringMenu(menuPin.current.before, true);
@@ -705,17 +773,24 @@ export function Notch() {
     if (contextMenu.isOpen || !session?.opened) return;
     menuPin.current = null;
     menuFloor.current = null;
-    interaction.current.pinned = pinDuringMenu(session.before, false);
-    setPinned(session.before);
+    // The quick look may have closed while the menu was up (outside click, the panel opened): then
+    // there is nothing left to pin.
+    const stillOpen = interaction.current.expanded;
+    const restored = restorePinAfterMenu({ before: pinDuringMenu(session.before, false), expanded: stillOpen });
+    interaction.current.pinned = restored;
+    setPinned(restored);
     setFocusTick((value) => value + 1);
-    // The pointer may have left while the menu was up, and the page never saw it leave (it was on
-    // the menu, which is not inside `.notch`): ask the browser where it is now.
+    if (!stillOpen) return;
+    // The pointer may have left while the menu was up, and the page never saw it leave. In the
+    // native window the page's box is the whole window, so geometry says nothing there: the host's
+    // `notch:pointer` and the page's enter/leave decide. The browser preview still asks geometry.
     const box = document.querySelector(".notch")?.getBoundingClientRect();
     const at = pointerPos.current;
-    const away = !!box && !!at && (at.x < box.left || at.x >= box.right || at.y < box.top || at.y >= box.bottom);
-    if (!session.before && away) {
+    const geometryAway = !!box && !!at && (at.x < box.left || at.x >= box.right || at.y < box.top || at.y >= box.bottom);
+    const away = pointerIsOutside({ native, geometryAway, host: hostPointer.current, dom: domPointer.current });
+    if (!restored && away) {
       if (hovering.current) {
-        lastDomPointer.current = Date.now();
+        markDom(false);
         pointer.current.leave();
       } else {
         // Already counted as gone while the menu held the pin; start the timer that pin cancelled.
@@ -725,6 +800,18 @@ export function Notch() {
         }, dial.leaveDelay);
       }
     }
+  }, [contextMenu.isOpen]);
+  // Windows has no global click monitor, so a click on the desktop never reaches the page and an
+  // abandoned menu would hold the quick look open for good. While a menu is up, the host's report
+  // of the pointer being outside the window for MENU_ABSENCE_MS closes it (the usual restore and
+  // leave timer then follow). Harmless on macOS. Not verified on real Windows hardware.
+  useEffect(() => {
+    if (!contextMenu.isOpen || !native) return;
+    const close = contextMenu.close;
+    const timer = setInterval(() => {
+      if (menuAbandoned({ host: hostPointer.current, dom: domPointer.current, now: Date.now() })) close();
+    }, 200);
+    return () => clearInterval(timer);
   }, [contextMenu.isOpen]);
   // A menu belongs to the quick look and to one connection state.
   useEffect(() => {
@@ -749,11 +836,11 @@ export function Notch() {
       }}
       transition={reduced ? { duration: 0.12 } : motionTokens.expand}
       onMouseEnter={() => {
-        lastDomPointer.current = Date.now();
+        markDom(true);
         pointer.current.enter();
       }}
       onMouseLeave={() => {
-        lastDomPointer.current = Date.now();
+        markDom(false);
         pointer.current.leave();
       }}
     >
@@ -808,7 +895,8 @@ export function Notch() {
             <NotchSurface
               mode={expanded ? "quick" : "stack"}
               bandHeight={bandHeight}
-              onSecondaryPress={() => { pinBeforePress.current = interaction.current.pinned; }}
+              onSecondaryPress={() => { pinBeforePress.current = rememberPin(interaction.current.pinned, Date.now()); }}
+              onPlainPress={() => { pinBeforePress.current = null; }}
               reduced={!!reduced}
               onPin={(target) => {
                 if (target instanceof Element && !target.closest(".notch-quick-field")) {
@@ -1031,7 +1119,7 @@ export function Notch() {
                                     await completeWithFeedback(latest(task), false);
                                     await runtime.refresh();
                                   } catch (error) {
-                                    setError(String(error));
+                                    fail(error);
                                     return false;
                                   }
                                 }}
@@ -1078,7 +1166,7 @@ export function Notch() {
                     aria-busy={saving}
                     onSubmit={(event) => {
                       event.preventDefault();
-                      if (!quick.trim() || actionBusy.current || !runtime.connection.online)
+                      if (!quick.trim() || actionGate.current.busy || !runtime.connection.online)
                         return;
                       const submitter = (event.nativeEvent as SubmitEvent).submitter;
                       const focusRevision = quickFocusRevision.current;
@@ -1241,7 +1329,7 @@ interface NotchToast {
  * drops in from the top edge; the quick look settles in just behind the growing shell and
  * pulls back (scale and offset) before it leaves.
  */
-function NotchSurface({ children, mode, bandHeight, reduced, onPin, onSecondaryPress }: {
+function NotchSurface({ children, mode, bandHeight, reduced, onPin, onSecondaryPress, onPlainPress }: {
   children: ReactNode;
   mode: "stack" | "quick";
   bandHeight: number;
@@ -1249,6 +1337,8 @@ function NotchSurface({ children, mode, bandHeight, reduced, onPin, onSecondaryP
   onPin: (target: EventTarget) => void;
   /** A secondary press: the menu will pin, and remembers what the pin was before this press. */
   onSecondaryPress: () => void;
+  /** Any other press or key: whatever a secondary press remembered no longer applies. */
+  onPlainPress: () => void;
 }) {
   const present = useIsPresent();
   const initial = reduced
@@ -1269,9 +1359,16 @@ function NotchSurface({ children, mode, bandHeight, reduced, onPin, onSecondaryP
     onPointerDownCapture={(event) => {
       // A secondary press opens the context menu, which pins the quick look only while it is up.
       const secondary = event.button === 2 || (platform === "macos" && event.ctrlKey);
-      if (present && secondary) onSecondaryPress();
-      else if (present) onPin(event.target);
+      if (!present) return;
+      if (secondary) onSecondaryPress();
+      else {
+        // A touch press may turn into a long press (a menu); a mouse press is just a press.
+        if (event.pointerType === "touch" || event.pointerType === "pen") onSecondaryPress();
+        else onPlainPress();
+        onPin(event.target);
+      }
     }}
+    onKeyDownCapture={() => { if (present) onPlainPress(); }}
     onFocusCapture={(event) => { if (present) onPin(event.target); }}
     initial={initial}
     animate={{ opacity: 1, scale: 1, y: 0 }}

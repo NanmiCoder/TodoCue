@@ -1,5 +1,6 @@
 import { TodoCueClient, type Board } from "@todocue/client";
 import type { PeriodicReminder, RuntimeEvent, Task } from "@todocue/shared";
+import { describeError, isVersionConflict } from "./errors.js";
 
 export interface Cue {
   key: string;
@@ -378,4 +379,118 @@ export type RevealMode = "edit" | "delete";
 export type RevealKind = "task" | "task_edit" | "task_delete";
 export function revealKind(mode?: RevealMode): RevealKind {
   return mode === "edit" ? "task_edit" : mode === "delete" ? "task_delete" : "task";
+}
+
+/**
+ * The pin after a menu closed. The menu pinned the quick look; closing it gives back the earlier
+ * state, but only if the quick look is still open: it may have been closed (outside click, panel
+ * opened, focus lost) while the menu was up, and a closed quick look must never stay pinned.
+ */
+export function restorePinAfterMenu(input: { before: boolean; expanded: boolean }): boolean {
+  return input.expanded ? input.before : false;
+}
+
+/** A secondary press remembers the pin it found; the memory expires if no menu follows. */
+export const PIN_MEMORY_MS = 1500;
+export interface PinMemory { pinned: boolean; at: number }
+export function rememberPin(pinned: boolean, now: number): PinMemory {
+  return { pinned, at: now };
+}
+/** The remembered pin if it is still fresh, otherwise null (a menu opened by keyboard or touch must not use it). */
+export function recallPin(memory: PinMemory | null, now: number): boolean | null {
+  return memory && now - memory.at <= PIN_MEMORY_MS && now >= memory.at ? memory.pinned : null;
+}
+
+/** Where the pointer was last seen: by the page (DOM enter/leave) or by the host's own polling. */
+export interface PointerSample { inside: boolean; at: number }
+/** The host's `notch:pointer` yields to DOM events that arrived this recently. */
+export const DOM_POINTER_PRIORITY_MS = 300;
+/** The newest sample wins; a DOM event wins a tie and anything within DOM_POINTER_PRIORITY_MS. */
+export function latestPointer(host: PointerSample | null, dom: PointerSample | null): PointerSample | null {
+  if (!host) return dom;
+  if (!dom) return host;
+  return dom.at >= host.at - DOM_POINTER_PRIORITY_MS ? dom : host;
+}
+/**
+ * Whether the pointer is outside the notch. In the native window the host's position and the
+ * page's events are the evidence (the page's bounding box covers the whole window, so geometry
+ * says nothing); the browser preview has no host and keeps using the geometry.
+ */
+export function pointerIsOutside(input: {
+  native: boolean;
+  geometryAway: boolean;
+  host: PointerSample | null;
+  dom: PointerSample | null;
+}): boolean {
+  if (!input.native) return input.geometryAway;
+  const sample = latestPointer(input.host, input.dom);
+  return sample ? !sample.inside : input.geometryAway;
+}
+
+/**
+ * Windows has no global click monitor, so a click on the desktop never reaches the page. An open
+ * menu (which pins the quick look) is therefore dropped once the host has reported the pointer
+ * outside the window for this long. Unverified on real Windows hardware.
+ */
+export const MENU_ABSENCE_MS = 800;
+export function menuAbandoned(input: {
+  host: PointerSample | null;
+  dom: PointerSample | null;
+  now: number;
+  threshold?: number;
+}): boolean {
+  const { host, dom } = input;
+  if (!host || host.inside) return false;
+  // The page saw the pointer come back after the host last said it was away.
+  if (dom && dom.inside && dom.at > host.at) return false;
+  return input.now - host.at >= (input.threshold ?? MENU_ABSENCE_MS);
+}
+
+/** Rows deferred under the pointer are listed live once the quick look opens, so nothing stays deferred. */
+export function deferredAfterExpand<T>(deferred: T[], expanded: boolean): T[] {
+  return expanded ? [] : deferred;
+}
+
+/**
+ * A periodic reminder shown while the quick look had just closed has no DOM yet: the stack comes
+ * back after STACK_RETURN_DELAY. The receipt waits for that instead of reporting a failure.
+ */
+export const PERIODIC_RENDER_STEP = 50;
+export const PERIODIC_RENDER_MAX_WAIT = STACK_RETURN_DELAY + 300;
+export function periodicRenderGate(input: {
+  rendered: boolean;
+  held: boolean;
+  waited: number;
+}): "show" | "wait" | "fail" {
+  if (input.rendered) return "show";
+  return input.held && input.waited < PERIODIC_RENDER_MAX_WAIT ? "wait" : "fail";
+}
+
+/**
+ * One notch write at a time. `run` is for clicks (dropped while busy, the control is disabled
+ * anyway); `whenIdle` is for work that must not be lost (an undo): it waits its turn and runs once.
+ */
+export class ActionGate {
+  private current: Promise<void> | null = null;
+  get busy() {
+    return this.current !== null;
+  }
+  async run(action: () => Promise<void>): Promise<boolean> {
+    if (this.current) return false;
+    const running = action().finally(() => {
+      if (this.current === running) this.current = null;
+    });
+    this.current = running;
+    await running;
+    return true;
+  }
+  async whenIdle(action: () => Promise<void>): Promise<void> {
+    while (this.current) await this.current.catch(() => {});
+    await this.run(action);
+  }
+}
+
+/** What a failed notch call says, and whether the board must be re-read (someone else changed it). */
+export function errorFeedback(error: unknown, language: string): { message: string; refresh: boolean } {
+  return { message: describeError(error, language), refresh: isVersionConflict(error) };
 }
