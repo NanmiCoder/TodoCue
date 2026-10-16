@@ -16,7 +16,7 @@ struct Profile {
 
 pub fn profile_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| {
-        PathBuf::from(home).join("Library/Application Support/TodoCue Preview/launch-home.json")
+        PathBuf::from(home).join("Library/Application Support/TodoCue/launch-home.json")
     })
 }
 

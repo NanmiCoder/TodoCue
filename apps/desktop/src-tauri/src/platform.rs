@@ -1,4 +1,30 @@
 use tauri::WebviewWindow;
+
+#[cfg(target_os = "macos")]
+pub fn check_legacy_client() -> Result<(), String> {
+    use objc2_app_kit::{NSAlert, NSRunningApplication};
+    use objc2_foundation::NSString;
+    let running = NSRunningApplication::runningApplicationsWithBundleIdentifier(
+        &NSString::from_str("com.todocue.app"),
+    );
+    let legacy = running.iter().any(|app| {
+        app.processIdentifier() != std::process::id() as i32
+            && app
+                .executableURL()
+                .and_then(|url| url.lastPathComponent())
+                .is_some_and(|name| name.to_string() == "TodoCue")
+    });
+    if legacy {
+        let alert = NSAlert::new(objc2::MainThreadMarker::new().ok_or("Expected main thread")?);
+        alert.setMessageText(&NSString::from_str(
+            "请先退出旧版 TodoCue / Quit the previous TodoCue first",
+        ));
+        alert.setInformativeText(&NSString::from_str("旧 SwiftUI 客户端仍在运行。退出旧版后重新打开通用版；任务数据会保留。 / Your tasks are preserved."));
+        alert.runModal();
+        return Err("The previous SwiftUI client is still running".into());
+    }
+    Ok(())
+}
 #[cfg(all(windows, test))]
 #[path = "win_activation_tests.rs"]
 mod win_activation_tests;

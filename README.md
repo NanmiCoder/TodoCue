@@ -1,5 +1,7 @@
 **English** · [简体中文](README.zh-CN.md)
 
+> **v0.6.0 desktop release:** macOS and Windows now use the shared React/Tauri client. Installers bundle Node, SQLite and notifications; no separate runtime is required. Choose macOS Apple Silicon/Intel or Windows x64/ARM64 from [Releases](https://github.com/NanmiCoder/TodoCue/releases/latest). Mac installers are Developer ID signed and notarized; Windows installers are unsigned. [Upgrade details, rollback and known limits](release-notes/v0.6.0.md). Apple Calendar/Reminders sync and hardware-notch adaptation remain available in the legacy v0.5.3 SwiftUI client; they are not yet supported by the shared client. The older screenshots and descriptions below document that legacy experience where indicated.
+
 <p align="center">
   <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. A large signal-orange open ring behind a Dial panel on a glass tray, with a reminder dropping from the notch.">
 </p>
@@ -11,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>Download for macOS</strong></a> ·
+  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>Download for macOS & Windows</strong></a> ·
   <a href="#install-the-skill">Install the Skill</a> ·
   <a href="release-notes/">Release notes</a> ·
   <a href="LICENSE">MIT</a>

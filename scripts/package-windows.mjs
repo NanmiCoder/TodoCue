@@ -4,10 +4,13 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { materializeWorkspaceLinks, stageRuntime } from "./stage-runtime.mjs";
+import { checkRelease, checkVersions } from "./release.mjs";
 import { runWindowsBundler } from "./windows-bundler.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 if (process.platform !== "win32" || !["x64", "arm64"].includes(process.arch)) throw new Error("Build on a Windows x64 or ARM64 runner");
+const version = checkVersions(root);
+if (process.argv.includes("--release")) checkRelease(root, process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : undefined);
 const arch = process.arch, target = `${arch === "arm64" ? "aarch64" : "x86_64"}-pc-windows-msvc`;
 const nodeVersion = "26.7.0";
 const hashes = { arm64: "be8775204cfceca5a73c30f91bf0de5e85274c01b776dc13f16b91aa251ebb01", x64: "d3bd72755141ed32bbcd841228ee81897c8a98d50dfa7dae2179399a0a7c90f8" };
@@ -51,4 +54,11 @@ const output = path.join(native, "target", target, "release", "bundle/nsis");
 for (const file of fs.readdirSync(output).filter(file => file.endsWith(".exe"))) {
   fs.writeFileSync(path.join(output, `${file}.sha256`), `${createHash("sha256").update(fs.readFileSync(path.join(output, file))).digest("hex")}  ${file}\n`);
 }
-console.log(`Windows ${arch} preview installers: ${output}`);
+const installers = fs.readdirSync(output).filter(file => file.endsWith(".exe"));
+if (installers.length !== 1) throw new Error("Expected exactly one Windows installer");
+const releaseOut = path.join(root, "apps/desktop/build");
+fs.mkdirSync(releaseOut, { recursive: true });
+const name = `TodoCue-${version}-Windows-${arch}-setup.exe`;
+fs.copyFileSync(path.join(output, installers[0]), path.join(releaseOut, name));
+fs.writeFileSync(path.join(releaseOut, `${name}.sha256`), `${createHash("sha256").update(fs.readFileSync(path.join(releaseOut, name))).digest("hex")}  ${name}\n`);
+console.log(`Windows ${arch} installer: ${path.join(releaseOut, name)}`);

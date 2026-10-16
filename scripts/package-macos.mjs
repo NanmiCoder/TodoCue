@@ -9,7 +9,8 @@ import { checkVersions, checkRelease } from './release.mjs';
 import { signingIdentity, notarize } from './macos-signing.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const out = path.join(root, 'apps/macos/build');
+const desktop = process.argv.includes('--desktop');
+const out = path.join(root, desktop ? 'apps/desktop/build' : 'apps/macos/build');
 const version = checkVersions(root);
 const arch = process.arch;
 if (process.platform !== 'darwin' || !['arm64', 'x64'].includes(arch)) throw new Error('Build on an arm64 or x64 Mac.');
@@ -41,7 +42,15 @@ function copy(source, destination) {
 }
 
 run('npm', ['run', 'build']);
-run('/bin/bash', [path.join(root, 'scripts/build-macos.sh')]);
+run('/bin/bash', [path.join(root, 'scripts/build-macos.sh'), ...(desktop ? ['--notifier-only'] : [])]);
+fs.mkdirSync(out, { recursive: true });
+if (desktop) {
+  run('npm', ['run', 'tauri', '--workspace', '@todocue/desktop', '--', 'build', '--bundles', 'app', '--config', '{"bundle":{"active":true}}'], {
+    env: { ...process.env, APPLE_SIGNING_IDENTITY: '-' },
+  });
+  fs.rmSync(path.join(out, 'TodoCue.app'), { recursive: true, force: true });
+  copy(path.join(root, 'apps/desktop/src-tauri/target/release/bundle/macos/TodoCue.app'), path.join(out, 'TodoCue.app'));
+}
 const app = path.join(out, 'TodoCue.app');
 const resources = path.join(app, 'Contents/Resources');
 const runtime = path.join(resources, 'runtime');
@@ -72,7 +81,7 @@ const prebuilds = path.join(runtime, 'node_modules/better-sqlite3/prebuilds');
 for (const file of fs.readdirSync(prebuilds)) {
   if (file !== `darwin-${arch}.node`) fs.rmSync(path.join(prebuilds, file), { recursive: true, force: true });
 }
-copy(path.join(out, 'TodoCueNotifier.app'), path.join(app, 'Contents/Helpers/TodoCueNotifier.app'));
+copy(path.join(root, 'apps/macos/build/TodoCueNotifier.app'), path.join(app, 'Contents/Helpers/TodoCueNotifier.app'));
 copy(path.join(root, 'skills/todocue'), path.join(resources, 'skills/todocue'));
 const runtimeDigest = createHash('sha256');
 for (const name of runtimePackages) {
@@ -82,21 +91,21 @@ for (const name of runtimePackages) {
   }
 }
 runtimeDigest.update(fs.readFileSync(path.join(runtime, 'package-lock.json')));
-fs.writeFileSync(path.join(runtime, 'BUILD.json'), JSON.stringify({ version, nodeVersion, arch, nodeSha256: hash, buildId: runtimeDigest.digest('hex') }, null, 2) + '\n');
+fs.writeFileSync(path.join(runtime, 'BUILD.json'), JSON.stringify({ version, nodeVersion, arch, nodeSha256: hash, buildId: runtimeDigest.digest('hex'), client: desktop ? 'shared-tauri' : 'swiftui', source: process.env.GITHUB_SHA ?? execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim() }, null, 2) + '\n');
 // macOS normally uses a case-insensitive filesystem: never put `todocue` beside `TodoCue`.
 fs.mkdirSync(path.join(resources, 'bin'), { recursive: true });
 fs.writeFileSync(path.join(resources, 'bin/todocue'), `#!/bin/sh
 runtime_dir="$(CDPATH= cd -- "$(dirname -- "$0")/../runtime" && pwd)"
 exec "$runtime_dir/bin/node" "$runtime_dir/packages/cli/dist/index.js" "$@"
 `, { mode: 0o755 });
-const appExecutable = path.join(app, 'Contents/MacOS/TodoCue');
+const appExecutable = path.join(app, desktop ? 'Contents/MacOS/todocue-desktop' : 'Contents/MacOS/TodoCue');
 if (!execFileSync('/usr/bin/file', [appExecutable], { encoding: 'utf8' }).includes('Mach-O')) {
   throw new Error('The main app executable must remain a native Mach-O binary.');
 }
 
 // Sign every executable inside-out; native addons share the Node executable's team identity.
 const sign = (target, entitlements) => run('/usr/bin/codesign', [
-  '--force', '--sign', identity, ...(identity === '-' ? [] : ['--timestamp']), '--options', 'runtime',
+  '--force', '--sign', identity, ...(identity === '-' ? [] : ['--timestamp', '--options', 'runtime']),
   ...(keychain ? ['--keychain', keychain] : []),
   ...(entitlements ? ['--entitlements', entitlements] : []), target,
 ]);
@@ -104,6 +113,12 @@ console.log(`Signing ${identity === '-' ? 'with an ad-hoc identity' : 'with Deve
 sign(path.join(prebuilds, `darwin-${arch}.node`));
 sign(path.join(runtime, 'bin/node'), path.join(root, 'scripts/node.entitlements.plist'));
 sign(path.join(app, 'Contents/Helpers/TodoCueNotifier.app'));
+if (desktop) {
+  // Cargo's Windows-only helper entrypoints are inert stubs on Mac; they are not shipped.
+  for (const name of ['todocue-cli', 'todocue-runtime', 'TodoCueNotifier']) {
+    fs.rmSync(path.join(app, 'Contents/MacOS', name), { force: true });
+  }
+}
 // Hardened runtime blocks Calendar and Reminders without this entitlement.
 sign(app, path.join(root, 'scripts/app.entitlements.plist'));
 run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);

@@ -94,7 +94,7 @@ pub fn correct_startup_command(home: &Path) -> Result<(), String> {
         .create(r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run")
         .and_then(|key| {
             key.set_string(
-                format!("TodoCue Preview {}", home_id(home)),
+                format!("TodoCue {}", home_id(home)),
                 startup_command(&exe, home),
             )
         })

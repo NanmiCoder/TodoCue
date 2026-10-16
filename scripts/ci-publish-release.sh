@@ -5,6 +5,7 @@ tag="v$RELEASE_VERSION"
 notes="release-notes/$tag.md"
 [[ "$tag" == "${GITHUB_REF_NAME:?}" ]] || { echo 'Tag mismatch' >&2; exit 1; }
 [[ -s "$notes" ]] || { echo "Missing $notes" >&2; exit 1; }
+node "$(dirname "${BASH_SOURCE[0]}")/verify-release-assets.mjs" release-assets
 error_file="$(mktemp)"
 trap 'rm -f "$error_file"' EXIT
 
@@ -22,6 +23,8 @@ fi
 gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber \
   "release-assets/TodoCue-$RELEASE_VERSION-macOS-arm64.dmg" \
   "release-assets/TodoCue-$RELEASE_VERSION-macOS-x64.dmg" \
+  "release-assets/TodoCue-$RELEASE_VERSION-Windows-arm64-setup.exe" \
+  "release-assets/TodoCue-$RELEASE_VERSION-Windows-x64-setup.exe" \
   release-assets/SHA256SUMS
 gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest \
   --title "TodoCue $tag" --notes-file "$notes"

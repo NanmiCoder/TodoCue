@@ -1,6 +1,12 @@
-# TodoCue desktop preview
+# TodoCue shared desktop
 
-共享 React / TypeScript / Motion 界面与 Tauri 2 宿主，复用现有任务引擎、数据库、REST API、CLI 和 MCP。当前是迁移预览，正式 macOS 发行版仍使用 `apps/macos`；Apple 日历/提醒事项同步仍由旧客户端负责。
+v0.6.0 起正式桌面客户端使用 React / TypeScript / Motion 与 Tauri 2，复用现有引擎、数据库、API、CLI 和 MCP。Mac / Windows 正式安装包都内置对应架构运行时，首次打开自动配置后台，无需另装 Node；关闭 UI 后服务继续运行。
+
+Mac 打包：`npm run desktop:macos`；正式签名/公证：`npm run desktop:macos -- --release`。产物为 `apps/desktop/build/TodoCue-<version>-macOS-<arm64|x64>.dmg`。Windows 对应架构打包：`npm run windows:build -- --release`，产物为 `TodoCue-<version>-Windows-<arm64|x64>-setup.exe`。`Release desktop (Mac and Windows)` 在 tag 上构建四种安装包，验证所有校验和后才发布；手动运行只构建验收，不公开 Release。Windows 暂无 Authenticode 证书，安装包未签名。
+
+正式版默认 `~/.todocue`，显式 `--home` / `TODOCUE_HOME` 优先；Mac 选择记在 `~/Library/Application Support/TodoCue/launch-home.json`，后续 Finder/Dock 打开复用。debug 和开发脚本默认仍用临时隔离目录。正式版不自动读取旧 Preview 的目录指针。Mac 包含签名通知辅助程序、runtime BUILD.json 和 Skill；与旧 SwiftUI 包使用兼容的 CLI bootstrap，保留数据格式和后台端口。检测到旧 SwiftUI App 正在运行会提示退出。
+
+**当前边界：** 旧 SwiftUI 的 Apple 同步、硬件刘海和全部偏好导入尚未接入；保留旧源码和 v0.5.3 回退。Windows 硬件 GUI、原生鼠标/IME 与逐帧动效仍待验收，见[发布说明](../../release-notes/v0.6.0.md)。以下是迁移期间的开发说明与历史验证记录；其中 Preview 下载和外部后台条件仅适用于旧预览产物。
 
 ## 本地预览
 
@@ -24,10 +30,10 @@ TODOCUE_HOME=/tmp/todocue-desktop-dev npm run tauri --workspace @todocue/desktop
 ```sh
 npm run desktop:build
 npm run tauri --workspace @todocue/desktop -- build --debug --bundles app --config '{"bundle":{"active":true}}'
-TODOCUE_HOME=/tmp/todocue-desktop-dev "apps/desktop/src-tauri/target/debug/bundle/macos/TodoCue Preview.app/Contents/MacOS/todocue-desktop"
+TODOCUE_HOME=/tmp/todocue-desktop-dev "apps/desktop/src-tauri/target/debug/bundle/macos/TodoCue.app/Contents/MacOS/todocue-desktop"
 ```
 
-产物在 `src-tauri/target/debug/bundle/macos/TodoCue Preview.app`。macOS 预览默认仍使用临时目录；没有接入 EventKit、旧版偏好迁移和真实硬件刘海，不替代当前 SwiftUI App。
+产物在 `src-tauri/target/debug/bundle/macos/TodoCue.app`。macOS 预览默认仍使用临时目录；没有接入 EventKit、旧版偏好迁移和真实硬件刘海，不替代当前 SwiftUI App。
 
 macOS release 配置的 Preview 首次通过 `--home` 或 `TODOCUE_HOME` 选择隔离运行时后，会把目录记在 `~/Library/Application Support/TodoCue Preview/launch-home.json`。以后从应用程序、Dock 或 Finder 直接打开仍连接该目录，避免误回到没有后台的临时目录。显式参数/环境仍优先；debug 开发预览不读取或更新这个选择。记录仅含目录和版本，不含 token；外部后台仍需正常运行。见[直接打开后离线的修复与实测](../../docs/qa/desktop-macos-runtime/README.md)。
 

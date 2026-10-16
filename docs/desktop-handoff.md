@@ -1,5 +1,7 @@
 # TodoCue 跨平台客户端开发交接
 
+**2026-10-16 正式分发推进（用户已授权 merge / CI / Mac + Win release）：** v0.6.0 改用共享 Tauri 正式客户端。Mac 独立包内置 Node/SQLite/通知辅助程序/Skill，并复用原 CLI bootstrap 自动安装与启动后台；修复自定义目录 CLI 和端口保留。正式标识为 `com.todocue.app`，Mac 注册通知链接，旧 SwiftUI 正在运行时提示退出。正式流水线构建 Mac arm64/x64 签名公证 DMG、Windows x64/ARM64 NSIS；安装回归与四包校验通过后才允许公开。手动流水线只预检。实现不等于全部硬件验收；Apple 同步、硬件刘海、偏好迁移与原生 GUI 清单仍保留。发布与实测结果追加在下方，未取得结果前不标成通过。旧 Preview 外部运行时说明均为历史状态。
+
 更新：2026-10-15。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
 
 本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，[PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 已按用户授权合并到 `codex/desktop-migration-handoff`（`a57d012`）。此前代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。

@@ -1,5 +1,7 @@
 [English](README.md) · **简体中文**
 
+> **v0.6.0 通用桌面正式发行：** Mac 与 Windows 改用共享 React/Tauri 客户端，安装包内置 Node、SQLite、后台通知和 Skill，无需另配运行时。[下载](https://github.com/NanmiCoder/TodoCue/releases/latest)提供 Mac Apple Silicon/Intel 与 Windows x64/ARM64。Mac 包签名并公证，Windows 包未签名。[升级、回退与边界](release-notes/v0.6.0.md)。Apple 日历/提醒事项同步、硬件刘海适配仍由旧 v0.5.3 SwiftUI 客户端提供，通用版尚未接入；下文相关原生功能描述与截图保留为旧版参考。
+
 <p align="center">
   <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. 信号橙开口圆环衬在玻璃托盘上的 Dial 面板后方，刘海里落下一条提醒。">
 </p>
@@ -11,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>下载 macOS 版</strong></a> ·
+  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>下载 Mac / Windows 版</strong></a> ·
   <a href="#安装-skills">安装 Skills</a> ·
   <a href="release-notes/">版本说明</a> ·
   <a href="LICENSE">MIT</a>

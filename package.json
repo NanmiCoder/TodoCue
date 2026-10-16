@@ -32,7 +32,9 @@
     "desktop:build": "npm run build && npm run build --workspace @todocue/desktop",
     "desktop:native": "npm run tauri --workspace @todocue/desktop -- dev",
     "desktop:check": "npm run desktop:build && cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml",
-    "windows:preview": "node scripts/package-windows.mjs"
+    "windows:preview": "node scripts/package-windows.mjs",
+    "desktop:macos": "node scripts/package-macos.mjs --desktop",
+    "windows:build": "node scripts/package-windows.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
