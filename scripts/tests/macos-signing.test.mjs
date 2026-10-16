@@ -3,11 +3,40 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { signingIdentity, notarize } from '../macos-signing.mjs';
+import { signingIdentity, notarize, validateStapled } from '../macos-signing.mjs';
 
 const developerHash = 'A'.repeat(40);
 const developmentHash = 'B'.repeat(40);
 const identities = `1) ${developmentHash} "Apple Development: Person (TEAM123456)"\n2) ${developerHash} "Developer ID Application: Company (TEAM123456)"`;
+
+test('stapled ticket validation recovers a CloudKit disconnect and still validates again', async () => {
+  let calls = 0;
+  const pauses = [];
+  await validateStapled('/tmp/TodoCue.app', { log: () => {}, sleep: async ms => { pauses.push(ms); }, run: (_command, args) => {
+    assert.deepEqual(args, ['stapler', 'validate', '/tmp/TodoCue.app']);
+    if (++calls === 1) throw Object.assign(new Error('network lost'), { status: 68, stderr: 'Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost."' });
+    return 'The validate action worked!';
+  } });
+  assert.equal(calls, 2);
+  assert.deepEqual(pauses, [5000]);
+});
+
+for (const scenario of ['permanent', 'repeated-network', 'signal']) {
+  test(`ticket validation fails closed for ${scenario}`, async () => {
+    let calls = 0;
+    const failure = Object.assign(new Error(scenario), { status: scenario === 'signal' ? null : 68,
+      signal: scenario === 'signal' ? 'SIGKILL' : null,
+      stdout: scenario === 'permanent' ? 'Invalid ticket. The validate action failed! Error 68.' : 'Error Domain=NSURLErrorDomain Code=-1005' });
+    await assert.rejects(validateStapled('/tmp/TodoCue.dmg', { run: () => { calls++; throw failure; }, sleep: async () => {}, log: () => {} }), error => error === failure);
+    assert.equal(calls, scenario === 'repeated-network' ? 3 : 1);
+  });
+}
+
+test('invalid retry limits never bypass ticket validation', async () => {
+  for (const attempts of [0, -1, NaN, 4]) {
+    await assert.rejects(validateStapled('/tmp/TodoCue.app', { attempts }), /1–3/);
+  }
+});
 
 test('release signing fails closed on missing, development, ad-hoc or wrong-team identities', () => {
   assert.equal(signingIdentity(identities, { required: true, teamId: 'TEAM123456' }), developerHash);

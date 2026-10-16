@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { checkVersions, checkRelease } from './release.mjs';
-import { signingIdentity, notarize } from './macos-signing.mjs';
+import { signingIdentity, notarize, validateStapled } from './macos-signing.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const desktop = process.argv.includes('--desktop');
@@ -144,7 +144,7 @@ if (profile) {
     run('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, archive]);
     notarize(archive, notaryOptions);
     run('/usr/bin/xcrun', ['stapler', 'staple', app]);
-    run('/usr/bin/xcrun', ['stapler', 'validate', app]);
+    await validateStapled(app);
     run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', app]);
   } finally {
     fs.rmSync(archive, { force: true });
@@ -162,7 +162,7 @@ try {
   if (profile) {
     notarize(dmg, notaryOptions);
     run('/usr/bin/xcrun', ['stapler', 'staple', dmg]);
-    run('/usr/bin/xcrun', ['stapler', 'validate', dmg]);
+    await validateStapled(dmg);
     run('/usr/sbin/spctl', ['--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=2', dmg]);
   }
   if (identity !== '-') run('/usr/bin/codesign', ['--verify', '--strict', dmg]);
