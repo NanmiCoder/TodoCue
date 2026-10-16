@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createServer } from "node:net";
@@ -45,7 +44,12 @@ try {
   assert.equal(cli("bootstrap").running, true);
   assert.equal(new URL(JSON.parse(fs.readFileSync(path.join(home, "connection.json"), "utf8")).baseUrl).port, String(port));
   assert.equal(cli("show", created.task.id).task.id, created.task.id);
-  assert.equal(cli("service", "uninstall").running, false);
+  assert.equal(cli("service", "uninstall").removed, true);
+  const shutdown = Date.now() + 5000;
+  while (cli("service", "status").runtime && Date.now() < shutdown) {
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  assert.equal(cli("service", "status").runtime, null);
   assert(fs.existsSync(path.join(home, "todocue.sqlite")));
   console.log("PASS packaged native Node/SQLite, bootstrap, ordinary CLI, idempotency, attachments, restart, non-default port, uninstall keeps data");
 } finally {
