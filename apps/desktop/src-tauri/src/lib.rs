@@ -5,6 +5,7 @@ mod host_tray;
 mod notch_geometry;
 #[cfg(any(target_os = "macos", test))]
 mod panel_geometry;
+mod panel_fade;
 mod platform;
 mod runtime;
 mod tray_icon;
@@ -16,13 +17,14 @@ use serde_json::{json, Value};
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc, Mutex,
     },
     time::{Duration, Instant},
 };
 use tauri::{Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use host_tray::TrayState;
+use panel_fade::PanelFade;
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -83,6 +85,24 @@ struct NotchState {
 fn latch_keyboard(previous: bool, state: &NotchState) -> bool {
     state.expanded && (previous || state.focus)
 }
+/// One `notch_present` call takes its turn: it reads what the last call left, works out the
+/// keyboard latch from it and stores its own state, all under one lock. Two calls that overlap
+/// (the renderer measures more than once) can then never both start from the same "previous" and
+/// let the later writer take back a grant the other made. Nothing slow runs under the lock.
+fn take_turn(shared: &Mutex<NotchState>, mut incoming: NotchState) -> (NotchState, NotchState) {
+    let mut stored = shared.lock().unwrap();
+    let previous = stored.clone();
+    incoming.keyboard = latch_keyboard(previous.keyboard, &incoming);
+    *stored = incoming.clone();
+    (previous, incoming)
+}
+/// The notch was taken away (switched off, or quiet because of a fullscreen app): the quick look
+/// is gone and with it the keyboard, so coming back starts from a clean slate.
+fn release_turn(shared: &Mutex<NotchState>) {
+    let mut stored = shared.lock().unwrap();
+    stored.keyboard = false;
+    stored.expanded = false;
+}
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NotchMetrics {
@@ -115,10 +135,8 @@ struct Desktop {
     routing: Mutex<Routing>,
     notch_animation: AtomicU64,
     panel_resize: AtomicU64,
-    /// Bumped by every panel show / hide so a fade that was overtaken stops.
-    panel_fade: AtomicU64,
-    /// True from the start of a fade-out until the panel is hidden or shown again.
-    panel_hiding: AtomicBool,
+    /// Generation and "leaving" flag of the panel's fades; see `panel_fade.rs`.
+    panel_fade: PanelFade,
     fitted_panel: Mutex<Option<(f64, f64)>>,
     tray: Mutex<Option<TrayState>>,
 }
@@ -230,6 +248,11 @@ fn set_autostart(
     let _ = home;
     Ok(())
 }
+/// The tray menu shows the language and the "open at login" check; a settings change that touches
+/// either has to rebuild it, because the renderer only pushes what the board looks like.
+fn tray_needs_refresh(language_changed: bool, startup_changed: bool) -> bool {
+    language_changed || startup_changed
+}
 #[tauri::command]
 fn settings_save(
     app: tauri::AppHandle,
@@ -250,6 +273,7 @@ fn settings_save(
     )
     .map_err(|e| e.to_string())?;
     let changed_shortcut = settings.shortcut != current.shortcut;
+    let language_changed = settings.language != current.language;
     if changed_shortcut {
         if let Some(value) = &settings.shortcut {
             if let Err(error) = app.global_shortcut().register(value.as_str()) {
@@ -285,6 +309,9 @@ fn settings_save(
     }
     *current = settings.clone();
     drop(current);
+    if tray_needs_refresh(language_changed, changed_startup) {
+        refresh_tray(&app);
+    }
     if let Some(panel) = app.get_webview_window("panel") {
         fit_panel(&panel, &settings, false)?;
     }
@@ -298,21 +325,47 @@ fn settings_save(
     app.emit("settings:changed", settings)
         .map_err(|e| e.to_string())
 }
+/// macOS reports positions in points times the scale of one screen or another; Windows in
+/// virtual-desktop pixels. `notch_geometry` brings them to one unit when this is true.
+const PER_SCREEN_SCALE: bool = cfg!(target_os = "macos");
+
+/// The scale the pointer position is reported with (the main screen's on macOS).
+fn pointer_scale(window: &WebviewWindow) -> f64 {
+    window
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| monitor.scale_factor())
+        .or_else(|| window.scale_factor().ok())
+        .unwrap_or(1.0)
+}
+
+fn pointer_on_monitor(
+    pointer: tauri::PhysicalPosition<f64>,
+    pointer_scale: f64,
+    monitor: &tauri::Monitor,
+) -> bool {
+    let position = monitor.position();
+    let size = monitor.size();
+    notch_geometry::pointer_on_monitor(
+        (pointer.x, pointer.y),
+        pointer_scale,
+        (position.x as f64, position.y as f64),
+        (size.width as f64, size.height as f64),
+        monitor.scale_factor(),
+        PER_SCREEN_SCALE,
+    )
+}
+
 fn fit_panel(window: &WebviewWindow, settings: &Settings, align: bool) -> Result<(), String> {
     let monitor = if align {
         window.cursor_position().ok().and_then(|pointer| {
+            let cursor_scale = pointer_scale(window);
             window
                 .available_monitors()
                 .ok()?
                 .into_iter()
-                .find(|monitor| {
-                    let p = monitor.position();
-                    let s = monitor.size();
-                    pointer.x >= p.x as f64
-                        && pointer.x < p.x as f64 + s.width as f64
-                        && pointer.y >= p.y as f64
-                        && pointer.y < p.y as f64 + s.height as f64
-                })
+                .find(|monitor| pointer_on_monitor(pointer, cursor_scale, monitor))
         })
     } else {
         None
@@ -391,9 +444,16 @@ fn fade_alpha(fading_in: bool, progress: f64) -> f64 {
     }
 }
 fn panel_showing(app: &tauri::AppHandle) -> bool {
-    app.get_webview_window("panel")
-        .is_some_and(|window| window.is_visible().unwrap_or(false))
-        && !app.state::<Desktop>().panel_hiding.load(Ordering::SeqCst)
+    let Some(window) = app.get_webview_window("panel") else {
+        return false;
+    };
+    let visible = window.is_visible().unwrap_or(false);
+    // Asked only for a window that is on screen: it is the costly half.
+    panel_fade::showing(
+        visible,
+        visible && platform::on_active_space(&window),
+        app.state::<Desktop>().panel_fade.is_hiding(),
+    )
 }
 /// The notch needs to know: it does not open its quick look on hover while the panel is up.
 fn announce_panel(app: &tauri::AppHandle, visible: bool) {
@@ -403,6 +463,17 @@ fn announce_panel(app: &tauri::AppHandle, visible: bool) {
 fn panel_visible(app: tauri::AppHandle) -> bool {
     panel_showing(&app)
 }
+/// Set the panel's opacity, on the main thread, for generation `generation` only.
+fn panel_alpha(window: &WebviewWindow, fade: &PanelFade, generation: u64, alpha: f64) {
+    // Only macOS fades the window itself; Windows fades the page.
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    let target = window.clone();
+    let _ = window.run_on_main_thread(fade.guarded(generation, move || {
+        platform::set_alpha_now(&target, alpha)
+    }));
+}
 fn panel_present(
     app: tauri::AppHandle,
     desktop: State<'_, Desktop>,
@@ -410,30 +481,42 @@ fn panel_present(
 ) -> Result<(), String> {
     let _ = app.emit_to("notch", "notch:collapse", ());
     let window = app.get_webview_window("panel").ok_or("Panel unavailable")?;
+    let fade = desktop.panel_fade.clone();
     // Showing cancels a fade-out that is still running.
-    let generation = desktop.panel_fade.fetch_add(1, Ordering::SeqCst) + 1;
-    let fading_out = desktop.panel_hiding.swap(false, Ordering::SeqCst);
-    let was_visible = window.is_visible().unwrap_or(false);
+    let (generation, fading_out) = fade.present();
+    // A panel ordered in on another Space is not up for the person looking at this one.
+    let was_visible =
+        window.is_visible().unwrap_or(false) && platform::on_active_space(&window);
     let reduced = platform::reduce_motion();
-    if !was_visible {
-        // Only a hidden panel is placed; an open one keeps wherever the user dragged it.
-        fit_panel(&window, &desktop.settings.lock().unwrap(), true)?;
-        platform::follow_virtual_desktop(&window);
-        if !reduced {
-            platform::set_alpha(&window, 0.0);
+    // A snapshot: fit_panel waits on the main thread, and nothing may hold the lock meanwhile.
+    let settings = desktop.settings.lock().unwrap().clone();
+    let shown = (|| -> Result<(), String> {
+        if !was_visible {
+            // Only a hidden panel is placed; an open one keeps wherever the user dragged it.
+            fit_panel(&window, &settings, true)?;
+            platform::follow_virtual_desktop(&window);
+            if !reduced {
+                panel_alpha(&window, &fade, generation, 0.0);
+            }
+        } else {
+            // An unfinished fade in or out must not leave the window translucent.
+            panel_alpha(&window, &fade, generation, 1.0);
         }
-    } else {
-        // An unfinished fade in or out must not leave the window translucent.
-        platform::set_alpha(&window, 1.0);
-    }
-    if focus_input {
-        platform::allow_activation(&window)?;
-        window.set_focusable(true).map_err(|e| e.to_string())?;
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-        window.as_ref().set_focus().map_err(|e| e.to_string())?;
-    } else {
-        platform::show_without_activation(&window)?;
+        if focus_input {
+            platform::allow_activation(&window)?;
+            window.set_focusable(true).map_err(|e| e.to_string())?;
+            window.show().map_err(|e| e.to_string())?;
+            window.set_focus().map_err(|e| e.to_string())?;
+            window.as_ref().set_focus().map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            platform::show_without_activation(&window)
+        }
+    })();
+    if let Err(error) = shown {
+        // Never leave a window that is on screen invisible because a step failed.
+        panel_alpha(&window, &fade, generation, 1.0);
+        return Err(error);
     }
     if !was_visible || fading_out {
         announce_panel(&app, true);
@@ -444,13 +527,12 @@ fn panel_present(
         tauri::async_runtime::spawn(async move {
             let start = Instant::now();
             loop {
-                let desktop = handle.state::<Desktop>();
-                if desktop.panel_fade.load(Ordering::SeqCst) != generation {
+                if !fade.is_current(generation) {
                     return;
                 }
                 let progress = start.elapsed().as_secs_f64() / PANEL_FADE_IN.as_secs_f64();
                 if let Some(window) = handle.get_webview_window("panel") {
-                    platform::set_alpha(&window, fade_alpha(true, progress));
+                    panel_alpha(&window, &fade, generation, fade_alpha(true, progress));
                 }
                 if progress >= 1.0 {
                     return;
@@ -463,29 +545,30 @@ fn panel_present(
 }
 /// Hide the panel the way the original does: a short fade (a window fade on macOS, a page fade on
 /// Windows, where the WebView2 window cannot be layered), then ordering out. Showing again during
-/// the fade cancels it.
+/// the fade cancels it, even a step that is already waiting for the main thread.
 fn panel_hide_animated(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("panel") else {
         return;
     };
-    let desktop = app.state::<Desktop>();
-    if !window.is_visible().unwrap_or(false) || desktop.panel_hiding.load(Ordering::SeqCst) {
+    let fade = app.state::<Desktop>().panel_fade.clone();
+    if !window.is_visible().unwrap_or(false) {
         return;
     }
-    let generation = desktop.panel_fade.fetch_add(1, Ordering::SeqCst) + 1;
+    let reduced = platform::reduce_motion();
+    let Some(generation) = fade.start_hide(!reduced) else {
+        return;
+    };
     announce_panel(app, false);
-    if platform::reduce_motion() {
+    if reduced {
         let _ = window.hide();
         return;
     }
-    desktop.panel_hiding.store(true, Ordering::SeqCst);
     let _ = app.emit_to("panel", "panel:hiding", ());
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let start = Instant::now();
         loop {
-            let desktop = handle.state::<Desktop>();
-            if desktop.panel_fade.load(Ordering::SeqCst) != generation {
+            if !fade.is_current(generation) {
                 return;
             }
             let progress = start.elapsed().as_secs_f64() / PANEL_FADE_OUT.as_secs_f64();
@@ -493,12 +576,14 @@ fn panel_hide_animated(app: &tauri::AppHandle) {
                 return;
             };
             if progress >= 1.0 {
-                let _ = window.hide();
-                platform::set_alpha(&window, 1.0);
-                desktop.panel_hiding.store(false, Ordering::SeqCst);
+                let target = window.clone();
+                let _ = window.run_on_main_thread(fade.guarded_finish_hide(generation, move || {
+                    let _ = target.hide();
+                    platform::set_alpha_now(&target, 1.0);
+                }));
                 return;
             }
-            platform::set_alpha(&window, fade_alpha(false, progress));
+            panel_alpha(&window, &fade, generation, fade_alpha(false, progress));
             tokio::time::sleep(Duration::from_millis(16)).await;
         }
     });
@@ -692,11 +777,12 @@ async fn notch_present(
     let window = app.get_webview_window("notch").ok_or("Notch unavailable")?;
     let settings = desktop.settings.lock().unwrap().clone();
     if !settings.notch_enabled || (settings.quiet_fullscreen && platform::fullscreen(&window)) {
+        release_turn(&desktop.notch);
+        let _ = window.set_focusable(false);
         window.hide().map_err(|e| e.to_string())?;
         return Ok(false);
     }
-    let previous = desktop.notch.lock().unwrap().clone();
-    state.keyboard = latch_keyboard(previous.keyboard, &state);
+    let (previous, state) = take_turn(&desktop.notch, state);
     let release_keyboard = cfg!(target_os = "macos")
         && !state.expanded
         && previous.expanded
@@ -728,7 +814,6 @@ async fn notch_present(
         window.as_ref().set_focus().map_err(|e| e.to_string())?;
     }
     let changed = previous.width != state.width || previous.height != state.height;
-    *desktop.notch.lock().unwrap() = state.clone();
     if changed {
         let generation = desktop.notch_animation.fetch_add(1, Ordering::SeqCst) + 1;
         let size = window
@@ -960,6 +1045,8 @@ fn refresh_tray(app: &tauri::AppHandle) {
     let desktop = app.state::<Desktop>();
     let state = desktop.tray.lock().unwrap().clone();
     let language = desktop.settings.lock().unwrap().language.clone();
+    // The saved language wins over the one in the last push, which can be a moment behind it.
+    let state = state.map(|state| TrayState { language: language.clone(), ..state });
     let entries = match &state {
         Some(state) => {
             host_tray::entries(state, app.autolaunch().is_enabled().unwrap_or(false))
@@ -1037,31 +1124,42 @@ fn build_tray(app: &tauri::App, language: &str) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     let builder = builder.icon_as_template(true).show_menu_on_left_click(true);
     #[cfg(not(target_os = "macos"))]
-    let builder = builder
-        .show_menu_on_left_click(false)
-        .on_tray_icon_event(|tray, event| {
-            if let tauri::tray::TrayIconEvent::Click {
-                button: tauri::tray::MouseButton::Left,
-                button_state: tauri::tray::MouseButtonState::Up,
-                ..
-            } = event
-            {
-                panel_toggle(tray.app_handle());
-            }
-        });
+    let builder = {
+        // A double-click delivers two releases; only the first toggles the panel.
+        let gate = Mutex::new(host_tray::ClickGate::default());
+        builder
+            .show_menu_on_left_click(false)
+            .on_tray_icon_event(move |tray, event| {
+                if let tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left,
+                    button_state: tauri::tray::MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    if gate.lock().unwrap().release(Instant::now()) {
+                        panel_toggle(tray.app_handle());
+                    }
+                }
+            })
+    };
     builder.build(app)?;
     Ok(())
 }
 
 /// Save the export in the system Downloads folder and show it in the file manager.
 #[tauri::command]
-fn export_json(app: tauri::AppHandle, name: String, contents: String) -> Result<String, String> {
+async fn export_json(
+    app: tauri::AppHandle,
+    name: String,
+    contents: String,
+) -> Result<String, String> {
     let directory = app
         .path()
         .download_dir()
         .or_else(|_| app.path().home_dir().map(|home| home.join("Downloads")))
         .map_err(|e| e.to_string())?;
-    let path = export::save(&directory, &name, &contents)?;
+    // Written off the main thread: an export can be large.
+    let path = export::save_async(directory, name, contents).await?;
     export::reveal(&path);
     Ok(path.to_string_lossy().into_owned())
 }
@@ -1194,8 +1292,7 @@ pub fn run() {
                 }),
                 notch_animation: AtomicU64::new(0),
                 panel_resize: AtomicU64::new(0),
-                panel_fade: AtomicU64::new(0),
-                panel_hiding: AtomicBool::new(false),
+                panel_fade: PanelFade::default(),
                 fitted_panel: Mutex::new(None),
                 tray: Mutex::new(None),
             });
@@ -1356,21 +1453,21 @@ pub fn run() {
                     if tick % 5 == 3 {
                         platform::follow_virtual_desktop(&window);
                     }
+                    let cursor_scale = pointer_scale(&window);
                     if report_pointer {
-                        if let (Ok(cursor), Ok(origin), Ok(size)) = (
+                        if let (Ok(cursor), Ok(origin), Ok(size), Ok(window_scale)) = (
                             window.cursor_position(),
                             window.outer_position(),
                             window.outer_size(),
+                            window.scale_factor(),
                         ) {
-                            let inside = notch_geometry::contains(
-                                notch_geometry::Frame {
-                                    x: origin.x as f64,
-                                    y: origin.y as f64,
-                                    width: size.width as f64,
-                                    height: size.height as f64,
-                                },
-                                cursor.x,
-                                cursor.y,
+                            let inside = notch_geometry::pointer_in_window(
+                                (cursor.x, cursor.y),
+                                cursor_scale,
+                                (origin.x as f64, origin.y as f64),
+                                (size.width as f64, size.height as f64),
+                                window_scale,
+                                PER_SCREEN_SCALE,
                             );
                             if pointer_inside != Some(inside) {
                                 pointer_inside = Some(inside);
@@ -1385,14 +1482,9 @@ pub fn run() {
                     let Ok(pointer) = window.cursor_position() else {
                         continue;
                     };
-                    let target = monitors.iter().find(|monitor| {
-                        let position = monitor.position();
-                        let size = monitor.size();
-                        pointer.x >= position.x as f64
-                            && pointer.x < position.x as f64 + size.width as f64
-                            && pointer.y >= position.y as f64
-                            && pointer.y < position.y as f64 + size.height as f64
-                    });
+                    let target = monitors
+                        .iter()
+                        .find(|monitor| pointer_on_monitor(pointer, cursor_scale, monitor));
                     if let Some(monitor) = target {
                         if window
                             .current_monitor()
@@ -1535,6 +1627,72 @@ mod tests {
         // Closing releases it, even if the request flag is still set.
         let closed = NotchState { expanded: false, focus: true, ..NotchState::default() };
         assert!(!latch_keyboard(true, &closed));
+    }
+    fn open_state(focus: bool) -> NotchState {
+        NotchState { width: 560.0, height: 200.0, expanded: true, focus, ..NotchState::default() }
+    }
+    #[test]
+    fn a_later_measurement_starts_from_what_the_earlier_one_left() {
+        let shared = Mutex::new(NotchState::default());
+        let (before, first) = take_turn(&shared, open_state(true));
+        assert!(!before.keyboard && first.keyboard);
+        let (before, second) = take_turn(&shared, open_state(false));
+        assert!(before.keyboard, "the second call sees the grant of the first");
+        assert!(second.keyboard);
+        assert!(shared.lock().unwrap().keyboard);
+        // Closing hands the keyboard back; the next hover does not take it.
+        let (_, closed) = take_turn(&shared, NotchState { focus: true, ..NotchState::default() });
+        assert!(!closed.keyboard);
+        let (_, hovered) = take_turn(&shared, open_state(false));
+        assert!(!hovered.keyboard);
+    }
+    #[test]
+    fn overlapping_present_calls_never_take_back_a_keyboard_grant() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize};
+        let shared = Arc::new(Mutex::new(NotchState::default()));
+        let granted = Arc::new(AtomicBool::new(false));
+        let lost = Arc::new(AtomicUsize::new(0));
+        let readers: Vec<_> = (0..4)
+            .map(|_| {
+                let (shared, granted, lost) = (shared.clone(), granted.clone(), lost.clone());
+                std::thread::spawn(move || {
+                    for _ in 0..20_000 {
+                        let was_granted = granted.load(Ordering::SeqCst);
+                        let (_, mine) = take_turn(&shared, open_state(false));
+                        if was_granted && !mine.keyboard {
+                            lost.fetch_add(1, Ordering::SeqCst);
+                        }
+                    }
+                })
+            })
+            .collect();
+        std::thread::sleep(Duration::from_millis(2));
+        let (_, grant) = take_turn(&shared, open_state(true));
+        assert!(grant.keyboard);
+        granted.store(true, Ordering::SeqCst);
+        for reader in readers {
+            reader.join().unwrap();
+        }
+        assert_eq!(lost.load(Ordering::SeqCst), 0);
+    }
+    #[test]
+    fn switching_the_notch_off_releases_the_keyboard_and_the_quick_look() {
+        let shared = Mutex::new(NotchState::default());
+        take_turn(&shared, open_state(true));
+        release_turn(&shared);
+        let stored = shared.lock().unwrap().clone();
+        assert!(!stored.keyboard && !stored.expanded);
+        // Back again with a plain hover: the keyboard is not taken on the strength of the old grant.
+        let (_, hovered) = take_turn(&shared, open_state(false));
+        assert!(!hovered.keyboard);
+    }
+    #[test]
+    fn the_tray_is_rebuilt_when_the_language_or_the_login_item_changes() {
+        assert!(tray_needs_refresh(true, false));
+        assert!(tray_needs_refresh(false, true));
+        assert!(tray_needs_refresh(true, true));
+        // A resize or a shortcut change touches neither.
+        assert!(!tray_needs_refresh(false, false));
     }
     #[test]
     fn panel_fades_ease_in_and_out_between_visible_and_hidden() {

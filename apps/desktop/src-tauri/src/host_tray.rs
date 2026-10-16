@@ -3,6 +3,7 @@
 //! it can be tested on any platform; `lib.rs` turns the entries into native menu items.
 
 use serde::Deserialize;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -43,6 +44,12 @@ pub fn shorten(title: &str) -> String {
     cut
 }
 
+/// Menu text treats `&` as a mnemonic marker (macOS drops it, Windows underlines the next letter);
+/// `&&` shows a literal one. Anything a person wrote goes through here before it becomes a label.
+pub fn escape_menu_text(text: &str) -> String {
+    text.replace('&', "&&")
+}
+
 fn item(id: &'static str, label: String, enabled: bool) -> Entry {
     Entry::Item { id, label, enabled, checked: None }
 }
@@ -71,7 +78,7 @@ pub fn entries(state: &TrayState, login_enabled: bool) -> Vec<Entry> {
         ),
     ];
     if let (Some(title), Some(_)) = (&state.next_title, &state.next_id) {
-        let title = shorten(title);
+        let title = escape_menu_text(&shorten(title));
         list.push(item(
             "next",
             if l == "en" { format!("Next: {title}") } else { format!("下一项：{title}") },
@@ -121,6 +128,31 @@ pub fn title(state: &TrayState) -> String {
         format!(" {}", state.remaining)
     } else {
         String::new()
+    }
+}
+
+/// A double-click on the Windows tray icon delivers two left-button releases. Only the first one
+/// toggles the panel; otherwise it would open and close again straight away.
+pub const DOUBLE_CLICK: Duration = Duration::from_millis(500);
+
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+#[derive(Debug, Default)]
+pub struct ClickGate {
+    last: Option<Instant>,
+}
+
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+impl ClickGate {
+    /// A left-button release on the tray icon at `now`: true when it should toggle the panel.
+    pub fn release(&mut self, now: Instant) -> bool {
+        if self
+            .last
+            .is_some_and(|last| now.saturating_duration_since(last) < DOUBLE_CLICK)
+        {
+            return false;
+        }
+        self.last = Some(now);
+        true
     }
 }
 
@@ -212,6 +244,68 @@ mod tests {
         assert_eq!(cut.chars().count(), TITLE_LIMIT);
         assert!(cut.ends_with('…'));
         assert_eq!(shorten("a\n  b"), "a b");
+    }
+
+    /// What muda does with menu text: `&x` is a mnemonic (dropped on macOS, underlined on Windows)
+    /// and `&&` is a literal ampersand.
+    fn displayed(text: &str) -> String {
+        let mut out = String::new();
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '&' {
+                if chars.peek() == Some(&'&') {
+                    chars.next();
+                    out.push('&');
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn ampersands_in_task_titles_survive_the_menu() {
+        for (title, shown) in [
+            ("Q&A 复盘", "Q&A 复盘"),
+            ("a&&b", "a&&b"),
+            ("&开头与结尾&", "&开头与结尾&"),
+            ("R&D & Q&A", "R&D & Q&A"),
+        ] {
+            let mut s = state();
+            s.next_title = Some(title.into());
+            let list = entries(&s, false);
+            assert_eq!(displayed(label(&list, "next")), format!("下一项：{shown}"), "{title}");
+        }
+        // The cut happens on what the person sees, and never leaves a lone `&` behind.
+        let mut s = state();
+        s.language = "en".into();
+        s.next_title = Some(format!("{}&{}", "x".repeat(TITLE_LIMIT - 2), "tail"));
+        let list = entries(&s, false);
+        let shown = displayed(label(&list, "next"));
+        assert_eq!(shown, format!("Next: {}&…", "x".repeat(TITLE_LIMIT - 2)));
+        s.next_title = Some(format!("{}&{}", "x".repeat(TITLE_LIMIT - 1), "tail"));
+        let shown = displayed(label(&entries(&s, false), "next"));
+        assert_eq!(shown, format!("Next: {}…", "x".repeat(TITLE_LIMIT - 1)));
+    }
+
+    #[test]
+    fn a_double_click_toggles_once_and_a_later_click_toggles_again() {
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        let mut gate = ClickGate::default();
+        assert!(gate.release(at(0)));
+        // The second release of a double-click arrives well inside the system interval.
+        assert!(!gate.release(at(120)));
+        assert!(!gate.release(at(499)));
+        // A separate click after the interval is a new toggle.
+        assert!(gate.release(at(500)));
+        assert!(!gate.release(at(700)));
+        // The interval is measured from the click that was accepted, not from the ignored ones.
+        assert!(gate.release(at(1000)));
+        // A clock that steps back never wedges the gate shut.
+        assert!(!gate.release(at(900)));
+        assert!(gate.release(at(1600)));
     }
 
     #[test]

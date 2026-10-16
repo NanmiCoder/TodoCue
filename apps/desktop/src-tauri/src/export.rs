@@ -40,6 +40,13 @@ pub fn save(directory: &Path, name: &str, contents: &str) -> Result<PathBuf, Str
     Ok(target)
 }
 
+/// `save` off the caller's thread: a large export is written without holding up the window.
+pub async fn save_async(directory: PathBuf, name: String, contents: String) -> Result<PathBuf, String> {
+    tauri::async_runtime::spawn_blocking(move || save(&directory, &name, &contents))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Os {
     Mac,
@@ -82,24 +89,65 @@ pub fn valid_id(id: &str) -> bool {
         && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
+/// Longest file name offered, in characters, and the longest extension worth protecting from the cut.
+const NAME_LIMIT: usize = 180;
+const EXTENSION_LIMIT: usize = 16;
+
+/// Windows device names (`CON`, `NUL`, `COM1`…): they are devices whatever follows them, an
+/// extension, spaces or dots, so `CON .txt` is as reserved as `CON`.
+fn is_device_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("");
+    let stem = stem.trim_end_matches([' ', '.']).to_uppercase();
+    if ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"].contains(&stem.as_str()) {
+        return true;
+    }
+    let mut chars = stem.chars();
+    let prefix: String = chars.by_ref().take(3).collect();
+    matches!(prefix.as_str(), "COM" | "LPT")
+        && matches!(chars.next(), Some(c) if c.is_ascii_digit() || matches!(c, '¹' | '²' | '³'))
+        && chars.next().is_none()
+}
+
+/// Cut `name` to `limit` characters, keeping a short extension, and leave no space or dot at the
+/// end of what is left of the stem.
+fn truncate_keeping_extension(name: &str, limit: usize) -> String {
+    if name.chars().count() <= limit {
+        return name.to_string();
+    }
+    let (stem, extension) = match name.rfind('.') {
+        Some(index) if index > 0 && name[index..].chars().count() <= EXTENSION_LIMIT => {
+            name.split_at(index)
+        }
+        _ => (name, ""),
+    };
+    let budget = limit - extension.chars().count();
+    let stem: String = stem.chars().take(budget).collect();
+    let stem = stem.trim_end_matches([' ', '.']);
+    if stem.is_empty() {
+        format!("attachment{extension}")
+    } else {
+        format!("{stem}{extension}")
+    }
+}
+
 /// A file name that is safe to offer in a save dialog: no directory parts, no control characters
-/// or characters Windows rejects, no trailing dots or spaces, no reserved device names.
+/// or characters Windows rejects, no trailing dots or spaces, no reserved device names. The person
+/// still confirms the final path in the dialog; this is only the suggestion.
 pub fn safe_file_name(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or("");
     let cleaned: String = base
         .chars()
         .map(|c| if c.is_control() || "<>:\"|?*".contains(c) { '_' } else { c })
         .collect();
-    let mut trimmed: String = cleaned.trim_matches(|c: char| c == ' ' || c == '.').chars().take(180).collect();
-    let stem = trimmed.split('.').next().unwrap_or("").to_ascii_uppercase();
-    let reserved = ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str())
-        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
-            && stem.len() == 4
-            && stem.as_bytes()[3].is_ascii_digit());
-    if trimmed.is_empty() || reserved {
-        trimmed = format!("attachment{}", if reserved { format!("-{trimmed}") } else { String::new() });
-    }
-    trimmed
+    let trimmed = cleaned.trim_matches(|c: char| c == ' ' || c == '.');
+    let named = if trimmed.is_empty() {
+        "attachment".to_string()
+    } else if is_device_name(trimmed) {
+        format!("attachment-{trimmed}")
+    } else {
+        trimmed.to_string()
+    };
+    truncate_keeping_extension(&named, NAME_LIMIT)
 }
 
 /// Pull the file name and bytes out of the runtime's attachment response
@@ -132,7 +180,7 @@ pub fn open_directory_command(os: Os, path: &Path) -> (&'static str, Vec<String>
     }
 }
 
-fn spawn(program: &str, arguments: &[String]) -> std::io::Result<std::process::Child> {
+fn spawn_child(program: &str, arguments: &[String]) -> std::io::Result<std::process::Child> {
     let mut command = std::process::Command::new(program);
     #[cfg(windows)]
     {
@@ -147,13 +195,33 @@ fn spawn(program: &str, arguments: &[String]) -> std::io::Result<std::process::C
     command.spawn()
 }
 
+/// Start `program` and collect its exit status on a helper thread, so a short-lived `open`,
+/// `explorer` or `xdg-open` never lingers as a zombie. Returns the process id and the helper.
+fn spawn_reaped(
+    program: &str,
+    arguments: &[String],
+) -> std::io::Result<(u32, std::thread::JoinHandle<()>)> {
+    let mut child = spawn_child(program, arguments)?;
+    let pid = child.id();
+    let reaper = std::thread::Builder::new()
+        .name("file-manager-reaper".into())
+        .spawn(move || {
+            let _ = child.wait();
+        })?;
+    Ok((pid, reaper))
+}
+
+fn spawn(program: &str, arguments: &[String]) -> std::io::Result<()> {
+    spawn_reaped(program, arguments).map(|_| ())
+}
+
 /// Open `path` (the data directory itself) in the file manager.
 pub fn open_directory(path: &Path) -> Result<(), String> {
     if !path.is_dir() {
         return Err("The data folder does not exist yet".into());
     }
     let (program, arguments) = open_directory_command(current_os(), path);
-    spawn(program, &arguments).map(|_| ()).map_err(|e| e.to_string())
+    spawn(program, &arguments).map_err(|e| e.to_string())
 }
 
 pub fn reveal(path: &Path) {
@@ -228,6 +296,68 @@ mod tests {
         assert_eq!(safe_file_name("CON.txt"), "attachment-CON.txt");
         assert_eq!(safe_file_name("lpt1"), "attachment-lpt1");
         assert_eq!(safe_file_name(&"长".repeat(400)).chars().count(), 180);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_finished_file_manager_process_is_collected_not_left_as_a_zombie() {
+        let (pid, reaper) = spawn_reaped("true", &[]).unwrap();
+        reaper.join().unwrap();
+        let listing = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&listing.stdout).trim(), "", "process {pid} is still listed");
+    }
+
+    #[test]
+    fn spawning_a_missing_program_reports_the_error() {
+        assert!(spawn("todocue-no-such-program-xyz", &[]).is_err());
+    }
+
+    #[test]
+    fn the_async_save_writes_the_same_file_and_reports_the_same_errors() {
+        let directory = std::env::temp_dir().join(format!("todocue-export-async-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        let name = "todocue-export-2026-10-17.json".to_string();
+        let path = tauri::async_runtime::block_on(save_async(directory.clone(), name.clone(), "{\"a\":3}".into())).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"a\":3}");
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
+        let refused = tauri::async_runtime::block_on(save_async(directory.clone(), "../x.json".into(), "x".into()));
+        assert_eq!(refused.unwrap_err(), "Invalid export file name");
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn long_names_keep_their_extension_and_never_end_in_space_or_dot() {
+        let long = format!("{}.pdf", "长".repeat(400));
+        let cleaned = safe_file_name(&long);
+        assert_eq!(cleaned.chars().count(), 180);
+        assert!(cleaned.ends_with(".pdf"), "{cleaned}");
+        // Cutting lands on a space: it must not be left at the end of the stem.
+        let spaced = format!("{} {}.txt", "a".repeat(175), "b".repeat(20));
+        let cleaned = safe_file_name(&spaced);
+        assert!(cleaned.ends_with(".txt"), "{cleaned}");
+        assert!(!cleaned.trim_end_matches(".txt").ends_with([' ', '.']), "{cleaned}");
+        assert!(cleaned.chars().count() <= 180);
+        // No extension at all: a cut that ends on a dot or space is trimmed.
+        let bare = format!("{}. {}", "a".repeat(178), "z".repeat(10));
+        assert!(!safe_file_name(&bare).ends_with([' ', '.']));
+        // An absurd "extension" is not worth keeping over the name.
+        let odd = format!("name.{}", "x".repeat(300));
+        assert_eq!(safe_file_name(&odd).chars().count(), 180);
+        assert!(safe_file_name(&odd).starts_with("name."));
+    }
+
+    #[test]
+    fn windows_device_names_are_caught_with_trailing_spaces_dots_and_superscripts() {
+        for name in ["CON .txt", "NUL.", "nul . ", "aux  .tar.gz", "COM1 .log", "LPT9.", "COM¹", "lpt².txt", "CONIN$", "conout$.txt", "COM0"] {
+            let cleaned = safe_file_name(name);
+            assert!(cleaned.starts_with("attachment-"), "{name} -> {cleaned}");
+        }
+        for name in ["CONSOLE.txt", "COM10.txt", "console", "com.txt", "LPT.txt", "aux-1.txt", "my CON.txt", "COMX"] {
+            assert_eq!(safe_file_name(name), name, "{name}");
+        }
     }
 
     #[test]

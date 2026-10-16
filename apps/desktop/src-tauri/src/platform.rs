@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use crate::notch_geometry::{covers_screen, Frame};
+use crate::notch_geometry::{covers_screen, fullscreen_top_inset, Frame};
 use tauri::WebviewWindow;
 
 #[cfg(target_os = "macos")]
@@ -328,7 +328,9 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
 
 /// macOS: the frontmost application owns an on-screen window covering the notch's screen
 /// (NotchController.shouldAutoExpand). Window bounds from CGWindowList and the monitor frame are
-/// both top-left-origin points; the allowed top gap is the menu-bar / camera band.
+/// both top-left-origin points. The monitor frame is the whole screen, menu bar and camera area
+/// included; a fullscreen window may start below the camera's safe area, whose height (not the work
+/// area's gap, which is 0 once the menu bar hides) is the room allowed at the top.
 #[cfg(target_os = "macos")]
 pub fn fullscreen(window: &WebviewWindow) -> bool {
     let Ok(Some(monitor)) = window.current_monitor() else {
@@ -341,10 +343,12 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
         width: monitor.size().width as f64 / scale,
         height: monitor.size().height as f64 / scale,
     };
-    let inset = (monitor.work_area().position.y - monitor.position().y).max(0) as f64 / scale;
-    mac_windows::front_application_windows()
-        .into_iter()
-        .any(|frame| covers_screen(frame, screen, inset))
+    let windows = mac_windows::front_application_windows();
+    if windows.is_empty() {
+        return false;
+    }
+    let inset = fullscreen_top_inset(safe_area_top(window));
+    windows.into_iter().any(|frame| covers_screen(frame, screen, inset))
 }
 #[cfg(not(any(windows, target_os = "macos")))]
 pub fn fullscreen(_window: &WebviewWindow) -> bool {
@@ -434,18 +438,66 @@ mod mac_windows {
 }
 
 /// Opacity of a window as a whole, glass included. macOS only; Windows fades the page with CSS
-/// because its transparent WebView2 window is not a layered window.
+/// because its transparent WebView2 window is not a layered window. Must run on the main thread.
 #[cfg(target_os = "macos")]
-pub fn set_alpha(window: &WebviewWindow, alpha: f64) {
-    let target = window.clone();
-    let _ = window.run_on_main_thread(move || {
-        if let Ok(raw) = target.ns_window() {
-            unsafe { (&*(raw as *const objc2_app_kit::NSWindow)).setAlphaValue(alpha) };
-        }
-    });
+pub fn set_alpha_now(window: &WebviewWindow, alpha: f64) {
+    if let Ok(raw) = window.ns_window() {
+        unsafe { (&*(raw as *const objc2_app_kit::NSWindow)).setAlphaValue(alpha) };
+    }
 }
 #[cfg(not(target_os = "macos"))]
-pub fn set_alpha(_window: &WebviewWindow, _alpha: f64) {}
+pub fn set_alpha_now(_window: &WebviewWindow, _alpha: f64) {}
+
+/// Run `read` on the main thread and wait for its answer. `None` if the main thread does not
+/// answer in time, so a busy or blocked one never stalls the caller for long.
+#[cfg(target_os = "macos")]
+fn on_main_thread<T: Send + 'static>(
+    window: &WebviewWindow,
+    read: impl FnOnce(&WebviewWindow) -> T + Send + 'static,
+) -> Option<T> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let target = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let _ = sender.send(read(&target));
+        })
+        .ok()?;
+    receiver.recv_timeout(std::time::Duration::from_millis(300)).ok()
+}
+
+/// Whether the window is in the Space the person is looking at. A window that is ordered in on
+/// another Space is "visible" but not here (macOS); elsewhere it always is.
+#[cfg(target_os = "macos")]
+pub fn on_active_space(window: &WebviewWindow) -> bool {
+    on_main_thread(window, |window| {
+        window
+            .ns_window()
+            .map(|raw| unsafe { (&*(raw as *const objc2_app_kit::NSWindow)).isOnActiveSpace() })
+            .unwrap_or(true)
+    })
+    .unwrap_or(true)
+}
+#[cfg(not(target_os = "macos"))]
+pub fn on_active_space(_window: &WebviewWindow) -> bool {
+    true
+}
+
+/// Height of the camera housing's safe area at the top of the window's screen; 0 without one.
+#[cfg(target_os = "macos")]
+fn safe_area_top(window: &WebviewWindow) -> f64 {
+    on_main_thread(window, |window| {
+        let Ok(raw) = window.ns_window() else {
+            return 0.0;
+        };
+        unsafe {
+            (&*(raw as *const objc2_app_kit::NSWindow))
+                .screen()
+                .map(|screen| screen.safeAreaInsets().top)
+                .unwrap_or(0.0)
+        }
+    })
+    .unwrap_or(0.0)
+}
 
 /// The panel follows you to the active Space and may sit over a fullscreen app, like the original.
 #[cfg(target_os = "macos")]
