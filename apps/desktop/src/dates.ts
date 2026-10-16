@@ -136,3 +136,27 @@ export function ghostDates(
   }
   return output;
 }
+
+/**
+ * "Move to tomorrow" (TaskRescheduling.tomorrow): the plan moves to tomorrow keeping its time of
+ * day, and a deadline that is today's or already past moves with it so the task really leaves
+ * Today. A deadline still ahead is kept. `today` is the runtime's date in the task's world.
+ * (Temporary home: the context-menu change adds the same helper; merge by removing one copy.)
+ */
+export function rescheduleToTomorrow(task: Task, today: string): UpdateTaskInput {
+  const tomorrow = shiftDate(today, 1);
+  const input = reschedule(task, tomorrow);
+  const zone = task.timezone;
+  const dayStart = DateTime.fromISO(tomorrow, { zone }).startOf("day").toMillis();
+  if (task.dueAt && Date.parse(task.dueAt) < dayStart) {
+    const time = DateTime.fromISO(task.dueAt).setZone(zone).toFormat("HH:mm:ss.SSS");
+    const instant = DateTime.fromISO(`${tomorrow}T${time}`, { zone }).toUTC().toISO();
+    if (!instant) throw new Error("Invalid deadline");
+    input.dueAt = instant;
+    input.dueDate = null;
+  } else if (!task.dueAt && task.dueDate && task.dueDate < tomorrow) {
+    input.dueDate = tomorrow;
+    input.dueAt = null;
+  }
+  return input;
+}
