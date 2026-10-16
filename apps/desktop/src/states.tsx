@@ -14,10 +14,10 @@ export function OfflineBanner({
 }) {
   const en = language === "en";
   return (
-    <div className="offline-banner" role="status">
+    <div className="offline-banner" role="status" title={message}>
       <div className="offline-banner-text">
         <strong>{en ? "Can’t reach the TodoCue service" : "无法连接 TodoCue 后台服务"}</strong>
-        <span>{message || (en ? "Showing the last data. Changes are paused." : "显示上次数据，已暂停写入")}</span>
+        <span>{en ? "Showing the last data. Changes are paused." : "显示上次数据，已暂停写入"}</span>
       </div>
       <button type="button" className="offline-retry" disabled={retrying} onClick={onRetry}>
         {en ? "Retry" : "重试"}

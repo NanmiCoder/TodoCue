@@ -241,7 +241,10 @@ describe("notification status", () => {
     expect(notificationStatus(notifier("unknown"), "windows", "zh-CN")).toMatchObject({ state: "unknown", actions: { request: false, openSettings: true } });
   });
   it("degrades when there is no helper or no report yet", () => {
-    expect(notificationStatus(notifier("unknown", false, "no helper"), "other", "en")).toMatchObject({ state: "unsupported", reason: "no helper" });
+    expect(notificationStatus(notifier("unknown", false, "no helper"), "other", "en")).toMatchObject({
+      state: "unsupported",
+      actions: { request: false, openSettings: true, test: true },
+    });
     expect(notificationStatus(undefined, "windows", "en").state).toBe("unknown");
   });
   it("words the results of testing and requesting", () => {

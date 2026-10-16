@@ -35,8 +35,9 @@ export function notificationStatus(notifier: Notifier | undefined, platform: Pla
     return {
       state: "unsupported",
       raw: notifier.authorization,
-      reason: notifier.detail ?? text("这台设备上没有可用的通知程序", "No notification helper is available on this device"),
-      actions: { request: false, openSettings: false, test: false },
+      // The runtime's own `detail` is English diagnostics text; it stays in the diagnostics list.
+      reason: text("没有找到专用的通知程序，通知可能无法点击跳转，甚至不会送达。可以发测试通知确认。", "No dedicated notification helper was found. Notifications may not be clickable or may not arrive. Send a test to check."),
+      actions: { request: false, openSettings: true, test: true },
     };
   }
   switch (notifier.authorization) {

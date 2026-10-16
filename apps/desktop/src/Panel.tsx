@@ -371,8 +371,9 @@ export function Panel() {
     document.documentElement.lang = settings.language;
   }, [settings.language]);
   useEffect(() => {
-    if (runtimeError) notify({ message: runtimeError, kind: "error" });
-  }, [runtimeError, notify]);
+    // Offline already has its own banner with a retry button; only report failures while connected.
+    if (runtimeError && connection.online) notify({ message: runtimeError, kind: "error" });
+  }, [runtimeError, connection.online, notify]);
   function navigate(next: Route) {
     if (next !== route)
       history.current.push({
