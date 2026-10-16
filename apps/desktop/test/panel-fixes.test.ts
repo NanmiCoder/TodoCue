@@ -28,6 +28,19 @@ function task(patch: Partial<Task> = {}): Task {
   return { id: "t1", title: "T", status: "todo", version: 1, timezone: "Asia/Shanghai", seriesId: null, ...patch } as Task;
 }
 
+describe("quit shortcut", () => {
+  it("macOS quits on command-Q and Windows on control-Q", () => {
+    expect(shortcutFor(key({ key: "q", metaKey: true }), state(), "macos")?.intent.kind).toBe("quit");
+    expect(shortcutFor(key({ key: "q", ctrlKey: true }), state(), "windows")?.intent.kind).toBe("quit");
+  });
+
+  it("ignores the other platform's modifier and a plain Q", () => {
+    expect(shortcutFor(key({ key: "q", ctrlKey: true }), state(), "macos")).toBeNull();
+    expect(shortcutFor(key({ key: "q", metaKey: true }), state(), "windows")).toBeNull();
+    expect(shortcutFor(key({ key: "q" }), state(), "macos")).toBeNull();
+  });
+});
+
 describe("undo shortcut reads the panel as it is when the key is pressed", () => {
   it("a toast raised while saving can be undone once the save finished", () => {
     // The listener is installed while `run()` is still saving; the toast it raised is undone later.

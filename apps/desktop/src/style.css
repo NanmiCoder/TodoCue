@@ -1035,6 +1035,11 @@ body[data-surface="notch"] {
 .header-menu button:hover {
   background: #ffffff12;
 }
+.header-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: #ffffff1f;
+}
 .detail-page {
   flex: 1;
   min-height: 0;

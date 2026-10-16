@@ -13,6 +13,7 @@ import { TodoCueError } from "@todocue/shared";
 import {
   client,
   exportJson,
+  quitApp,
   hidePanel,
   focusPanel,
   loadSettings,
@@ -378,6 +379,7 @@ export function Panel() {
         break;
       case "refresh": void refresh(); break;
       case "settings": navigate("settings"); break;
+      case "quit": void quitApp(); break;
     }
   }
   useEffect(() => {
@@ -1088,6 +1090,16 @@ export function Panel() {
             }}
           >
             ↓ {settings.language === "en" ? "Export JSON" : "导出 JSON"}
+          </button>
+          <div className="header-menu-divider" role="separator" />
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              void quitApp();
+            }}
+          >
+            <Icon name="power" />
+            {settings.language === "en" ? "Quit TodoCue" : "退出 TodoCue"}
           </button>
         </div>
       )}

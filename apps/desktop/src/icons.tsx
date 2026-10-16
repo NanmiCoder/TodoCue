@@ -24,7 +24,8 @@ export type IconName =
   | "settings"
   | "trash"
   | "skip"
-  | "download";
+  | "download"
+  | "power";
 const paths: Record<IconName, string> = {
   calendar:
     "M6 3v4m12-4v4M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1M8 12h1m3 0h1m3 0h1m-9 4h1m3 0h1m3 0h1",
@@ -54,6 +55,7 @@ const paths: Record<IconName, string> = {
   trash: "M4 7h16M10 7V4h4v3M6 7l1 13h10l1-13M10 11v5M14 11v5",
   skip: "M5 5l9 7-9 7V5M18 5v14",
   download: "M12 4v11m-5-5 5 5 5-5M5 20h14",
+  power: "M12 3v8M7 6.5a7 7 0 1 0 10 0",
 };
 export function Icon({
   name,
