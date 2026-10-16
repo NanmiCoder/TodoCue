@@ -695,6 +695,32 @@ export function Notch() {
             >
               {expanded ? (
                 <>
+                  <div className="notch-toast-slot">
+                  <AnimatePresence initial={false}>
+                    {toast && (
+                      <motion.div
+                        key={toast.id}
+                        className="notch-toast"
+                        role="status"
+                        initial={reduced ? { opacity: 0 } : { opacity: 0, y: -14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                        transition={reduced ? { duration: 0.12 } : motionTokens.snap}
+                      >
+                        <Icon name="check" size={14} />
+                        <span>{toast.message}</span>
+                        {toast.undoTaskId && (
+                          <button onClick={() => undoCompletion(toast.undoTaskId!)} disabled={!online}>
+                            {n("撤销", "Undo")}
+                          </button>
+                        )}
+                        <button className="notch-toast-close" onClick={() => setToast(null)} aria-label={n("关闭提示", "Dismiss")}>
+                          <Icon name="close" size={10} />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  </div>
                   <div className={`notch-quick-header ${toast ? "is-covered" : ""}`} aria-hidden={!!toast}>
                     <Mark />
                     <div>
@@ -749,30 +775,6 @@ export function Notch() {
                       <Icon name="pin" />
                     </button>
                   </div>
-                  <AnimatePresence initial={false}>
-                    {toast && (
-                      <motion.div
-                        key={toast.id}
-                        className="notch-toast"
-                        role="status"
-                        initial={reduced ? { opacity: 0 } : { opacity: 0, y: -14 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                        transition={reduced ? { duration: 0.12 } : motionTokens.snap}
-                      >
-                        <Icon name="check" size={14} />
-                        <span>{toast.message}</span>
-                        {toast.undoTaskId && (
-                          <button onClick={() => undoCompletion(toast.undoTaskId!)} disabled={!online}>
-                            {n("撤销", "Undo")}
-                          </button>
-                        )}
-                        <button className="notch-toast-close" onClick={() => setToast(null)} aria-label={n("关闭提示", "Dismiss")}>
-                          <Icon name="close" size={10} />
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                   {!online && (
                     <p className="notch-notice">
                       {t("offline")}

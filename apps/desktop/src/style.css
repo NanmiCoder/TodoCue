@@ -2650,6 +2650,12 @@ body[data-native="true"][data-surface="notch"] .notch {
 .notch-pending h3 span { font-family: Michroma, sans-serif; font-size: 10px; opacity: 0.8; }
 .notch-next-reason.is-late { color: #ff6b5f; }
 
+.notch-toast-slot {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 3;
+}
 .notch-toast {
   position: absolute;
   z-index: 3;
@@ -2747,6 +2753,7 @@ body[data-native="true"][data-surface="notch"] .notch {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.cue-card .cue-title { padding: 0; }
 .cue-card .cue-meta { color: #ffffff8c; }
 .cue-card .cue-fold { color: #ffffff80; align-self: flex-start; }
 .cue-card .cue-actions { margin-top: 0; display: flex; align-items: center; gap: 8px; }
