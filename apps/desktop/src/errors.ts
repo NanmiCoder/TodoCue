@@ -20,3 +20,8 @@ export function describeError(error: unknown, language: string): string {
   if (error instanceof Error && error.message) return error.message;
   return String(error);
 }
+
+/** What a failed write shows, and whether the board it was based on is out of date. */
+export function failureOf(error: unknown, language: string): { message: string; reload: boolean } {
+  return { message: describeError(error, language), reload: isVersionConflict(error) };
+}

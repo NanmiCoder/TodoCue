@@ -39,12 +39,14 @@ import {
 import { motionTokens, spring } from "./tokens.js";
 import { pageDirection } from "./motionKit.js";
 import { LatestRequest } from "./model.js";
-import { describeError } from "./errors.js";
+import { failureOf } from "./errors.js";
+import { isSubmitChord } from "./platform.js";
 import type { NotifyInput } from "./toast.js";
 import { EmptyState } from "./states.js";
 import {
   completedDays,
   growWindow,
+  completedView,
   hasMore,
   matchingCompleted,
   probe,
@@ -82,11 +84,14 @@ export function CalendarPage({
   today,
   onQuickDate,
   onNotify,
+  onConflict,
   state,
   setState,
   activeTasks,
 }: PageProps & {
   onNotify: (input: NotifyInput) => void;
+  /** A move was refused because the task changed elsewhere: the host reloads its board. */
+  onConflict?: () => void;
   today: string;
   activeTasks: Task[];
   state: CalendarState;
@@ -272,7 +277,12 @@ export function CalendarPage({
       });
     } catch (error) {
       setConfirm(null);
-      onError(describeError(error, language));
+      const failure = failureOf(error, language);
+      onError(failure.message);
+      if (failure.reload) {
+        setRevision((value) => value + 1);
+        onConflict?.();
+      }
     }
   }
   return (
@@ -569,10 +579,13 @@ export function CompletedPage({
     );
   };
   useEffect(() => {
+    // Going offline abandons the request in flight; nothing will report back to clear `loading`.
     if (online) void reload();
+    else setLoading(false);
     return () => history.current.invalidate();
   }, [online, eventRevision]);
   const searching = query.trim().length > 0;
+  const view = completedView({ loaded, loading, online, count: tasks.length });
   const matching = matchingCompleted(tasks, query);
   const days = completedDays(matching, zone);
   const loadMore = () => {
@@ -608,8 +621,8 @@ export function CompletedPage({
         </span>
       </section>
       <section className="tile graphite completed-list" aria-busy={loading}>
-        {!loaded ? (
-          loading ? (
+        {view === "loading" || view === "offline" ? (
+          view === "loading" ? (
             <p className="completed-status" role="status">
               {zh ? "正在加载已完成的任务" : "Loading completed tasks"}
             </p>
@@ -621,7 +634,7 @@ export function CompletedPage({
               </button>
             </p>
           )
-        ) : tasks.length === 0 ? (
+        ) : view === "empty" ? (
           <EmptyState
             icon="check"
             title={zh ? "还没有完成的任务" : "Nothing finished yet"}
@@ -932,7 +945,7 @@ export function PeriodicForm({
           if (!stopped) setPreview(result);
         })
         .catch((error) => {
-          if (!stopped) setPreviewError(describeError(error, language));
+          if (!stopped) setPreviewError(failureOf(error, language).message);
         });
     }, 250);
     return () => {
@@ -959,7 +972,7 @@ export function PeriodicForm({
       setConflict(false);
       setError(null);
     } catch (error) {
-      setError(describeError(error, language));
+      setError(failureOf(error, language).message);
     } finally {
       setBusy(false);
     }
@@ -1018,11 +1031,7 @@ export function PeriodicForm({
     <section
       className="tile frost composer-page"
       onKeyDown={(event) => {
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          event.key === "Enter" &&
-          !isCompositionKey(event.nativeEvent)
-        ) {
+        if (isSubmitChord(event) && !isCompositionKey(event.nativeEvent)) {
           event.preventDefault();
           void save();
         }

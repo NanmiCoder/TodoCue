@@ -14,6 +14,25 @@ export interface TaskMenuCommands {
   requestDelete(task: Task): void;
 }
 
+/**
+ * Commands that look the real implementation up when they run. A menu's items are built once, when
+ * it opens, and a menu can stay open while the board refreshes; going through `current()` keeps
+ * every command on the host's latest state (latest task version, latest busy flag) instead of the
+ * render the menu happened to open in.
+ */
+export function delegateCommands(current: () => TaskMenuCommands): TaskMenuCommands {
+  return {
+    complete: (task) => current().complete(task),
+    snooze: (task) => current().snooze(task),
+    tomorrow: (task) => current().tomorrow(task),
+    edit: (task) => current().edit(task),
+    cancel: (task) => current().cancel(task),
+    skip: (task) => current().skip(task),
+    reopen: (task) => current().reopen(task),
+    requestDelete: (task) => current().requestDelete(task),
+  };
+}
+
 export interface TaskMenuContext {
   language: string;
   online: boolean;

@@ -34,6 +34,11 @@ export function isPrimaryModifier(event: ModifierEvent, on: Platform = platform)
   return on === "macos" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 }
 
+/** ⌘↵ on macOS, Ctrl+↵ elsewhere: the chord every form saves with. */
+export function isSubmitChord(event: ModifierEvent & { key: string }, on: Platform = platform): boolean {
+  return event.key === "Enter" && isPrimaryModifier(event, on);
+}
+
 export function primaryLabel(on: Platform = platform): string {
   return on === "macos" ? "⌘" : "Ctrl+";
 }

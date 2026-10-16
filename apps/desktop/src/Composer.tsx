@@ -16,7 +16,7 @@ import { dateOf, dayLabel, shiftDate, weekdayLabels } from "./dates.js";
 import { Icon, type IconName } from "./icons.js";
 import { draftPayload, newDraft, startRepeat, validateDraft, type TaskDraft } from "./drafts.js";
 import { describeError } from "./errors.js";
-import { chord, isPrimaryModifier } from "./platform.js";
+import { chord, isSubmitChord } from "./platform.js";
 import { motionTokens } from "./tokens.js";
 import { isCompositionKey } from "./quickAdd.js";
 import { useTextAreaSize } from "./useTextAreaSize.js";
@@ -287,8 +287,7 @@ export function Composer({
       onKeyDown={(event) => {
         if (
           !event.defaultPrevented &&
-          isPrimaryModifier(event) &&
-          event.key === "Enter" &&
+          isSubmitChord(event) &&
           !isCompositionKey(event.nativeEvent)
         ) {
           event.preventDefault();

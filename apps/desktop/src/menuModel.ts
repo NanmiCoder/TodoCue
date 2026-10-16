@@ -74,3 +74,16 @@ export function edgeEnabled(items: MenuItem[], edge: "first" | "last"): number {
 export function keepsNativeMenu(input: { editable: boolean; hasSelection: boolean; development: boolean }) {
   return input.development || input.editable || input.hasSelection;
 }
+
+/**
+ * Where focus goes back to when a menu or a dialog opened from it closes: the element that had it,
+ * unless that is gone or is just the page body, in which case the row's own control.
+ */
+export function returnFocusTarget<T extends { isConnected: boolean }>(
+  preferred: T | null | undefined,
+  fallback: T | null | undefined,
+  body: T | null | undefined,
+): T | null {
+  if (preferred && preferred.isConnected && preferred !== body) return preferred;
+  return fallback && fallback.isConnected ? fallback : null;
+}

@@ -50,3 +50,17 @@ export function matchingCompleted(tasks: Task[], query: string): Task[] {
   if (!term) return tasks;
   return tasks.filter((task) => [task.title, task.project ?? "", task.notes ?? ""].some((value) => fold(value).includes(term)));
 }
+
+/**
+ * Which body the history page shows. A request that was in flight when the connection dropped never
+ * reports back, so "loading" only counts while the page is online.
+ */
+export function completedView(input: {
+  loaded: boolean;
+  loading: boolean;
+  online: boolean;
+  count: number;
+}): "loading" | "offline" | "empty" | "list" {
+  if (!input.loaded) return input.loading && input.online ? "loading" : "offline";
+  return input.count === 0 ? "empty" : "list";
+}

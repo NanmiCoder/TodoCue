@@ -24,16 +24,20 @@ import {
   defaults,
 } from "./bridge.js";
 import { translate } from "./i18n.js";
-import { describeError, isNotFound, isVersionConflict } from "./errors.js";
-import { isEditable, isPrimaryModifier, chord, platform } from "./platform.js";
-import { moveMessage, undoForShortcut, type NotifyInput, type UndoAction } from "./toast.js";
+import { failureOf, isNotFound } from "./errors.js";
+import { chord, platform } from "./platform.js";
+import { moveMessage, type UndoAction } from "./toast.js";
+import { createShortcutHandler, type ShortcutIntent, type ShortcutState } from "./shortcuts.js";
+import { afterTaskDeleted, removeTolerantly } from "./deletion.js";
+import { latestTask as latestOf } from "./taskLookup.js";
+import { returnFocusTarget } from "./menuModel.js";
 import { useToasts } from "./useToasts.js";
 import { EmptyState, emptyCopy, NotFoundPage, OfflineBanner } from "./states.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
 import { useContextMenu, type MenuAnchor } from "./ContextMenu.js";
-import { deleteConfirmText, taskMenuItems, type TaskMenuCommands } from "./taskMenu.js";
+import { deleteConfirmText, delegateCommands, taskMenuItems, type TaskMenuCommands } from "./taskMenu.js";
 import { taskCommands } from "./taskCommands.js";
 import { Detail } from "./Detail.js";
 import { afterSave, composerDraft, newDraft, type TaskDraft } from "./drafts.js";
@@ -133,6 +137,8 @@ export function Panel() {
   const [saving, setSaving] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
+  // Where focus goes back to when the delete confirmation is dismissed without deleting.
+  const deleteTrigger = useRef<HTMLElement | null>(null);
   const contextMenu = useContextMenu();
   const deleteCancel = useRef<HTMLButtonElement>(null);
   // Deleting is permanent, so the safe answer is the one under the keyboard.
@@ -155,10 +161,6 @@ export function Panel() {
     if (route === "list" && !quickInput.current?.closest("[inert]")) quickInput.current?.focus();
   }, [route, quickFocusTick]);
   const t = translate(settings.language);
-  // Each tab starts at its top, as it did when every tab had its own scroller.
-  useEffect(() => {
-    listScroll.current?.scrollTo({ top: 0 });
-  }, [view]);
   const reduced = useReducedMotion();
   const [revealTick, setRevealTick] = useState(0);
   useEffect(() => watchReveal(() => setRevealTick((tick) => tick + 1), onPanelRevealed), []);
@@ -172,7 +174,8 @@ export function Panel() {
   const viewDirection = tabDirection(previousView.current, view);
   useEffect(() => {
     previousView.current = view;
-    document.querySelector(".list-scroll")?.scrollTo({ top: 0 });
+    // Each tab starts at its top, as it did when every tab had its own scroller.
+    listScroll.current?.scrollTo({ top: 0 });
   }, [view]);
   useEffect(() => {
     void loadSettings()
@@ -314,7 +317,10 @@ export function Panel() {
       } else if (pendingTarget.kind === "task_delete" && pendingTarget.id) {
         // "Delete…": the panel opens and asks first, as the original does.
         const { task } = await client.getTask(pendingTarget.id);
-        if (!stopped) setPendingDelete(task);
+        if (!stopped) {
+          deleteTrigger.current = null;
+          setPendingDelete(task);
+        }
       } else if (pendingTarget.kind === "periodic" && pendingTarget.id) {
         const { reminder } = await client.getPeriodicReminder(pendingTarget.id);
         if (!stopped) {
@@ -338,74 +344,54 @@ export function Panel() {
       stopped = true;
     };
   }, [pendingTarget, connection.online, eventRevision]);
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isCompositionKey(event)) return;
-      const primary = isPrimaryModifier(event);
-      const key = event.key.toLowerCase();
-      if (event.key === "Escape" || (primary && !event.shiftKey && key === "w")) {
-        if (event.key !== "Escape") event.preventDefault();
-        if (menuOpen) setMenuOpen(false);
-        else if (pendingDelete) setPendingDelete(null);
-        else if (pendingMove) setPendingMove(null);
-        else if (route !== "list") back();
-        else if (search) setSearch("");
-        else if (!panelPinned) void hidePanel();
-      }
-      if (primary && event.shiftKey && key === "k") {
-        event.preventDefault();
-        navigate(route === "calendar" ? "list" : "calendar");
-      }
-      if (primary && !event.shiftKey && key === "z") {
-        // A visible undo wins; inside a text field ⌘Z/Ctrl+Z stays the field's own undo.
-        const action = undoForShortcut(toastState.current, isEditable(event.target));
-        if (action) {
-          event.preventDefault();
-          void undoAction(action);
-        }
-      }
-      if (primary && key === "n") {
-        event.preventDefault();
-        edit();
-      }
-      if (primary && key === "f") {
-        event.preventDefault();
-        void focusPanel().catch(error => setError(String(error)));
+  // Window-level shortcuts. The listener is installed once and reads the panel's state when a key
+  // is pressed, so what it acts on is never the render it was installed in (a toast raised inside
+  // `run()` used to be undone against that render's `saving`, which was still true).
+  const shortcutState = useRef<Omit<ShortcutState, "toast">>(null!);
+  shortcutState.current = {
+    route,
+    menuOpen,
+    pendingDelete: !!pendingDelete,
+    pendingMove: !!pendingMove,
+    search,
+    panelPinned,
+    canWrite: connection.online && !saving && !taskDrag.drag,
+  };
+  const performShortcut = useRef<(intent: ShortcutIntent) => void>(() => {});
+  performShortcut.current = perform;
+  function perform(intent: ShortcutIntent) {
+    switch (intent.kind) {
+      case "closeMenu": setMenuOpen(false); break;
+      case "cancelDelete": closeDelete(); break;
+      case "cancelMove": setPendingMove(null); break;
+      case "back": back(); break;
+      case "clearSearch": setSearch(""); break;
+      case "hide": void hidePanel(); break;
+      case "toggleCalendar": navigate(route === "calendar" ? "list" : "calendar"); break;
+      case "undo": void undoAction(intent.action); break;
+      case "newTask": edit(); break;
+      case "focusSearch":
+        void focusPanel().catch((error) => setError(String(error)));
         pendingQuickFocus.current = true;
-        setQuickFocusTick(value => value + 1);
-        if (route !== "list") {
-          navigate("list");
-        }
-      }
-      if (primary && key === "r") {
-        event.preventDefault();
-        void refresh();
-      }
-      if (primary && event.key === ",") {
-        event.preventDefault();
-        navigate("settings");
-      }
-      if (primary && event.key === "[") {
-        event.preventDefault();
-        back();
-      }
+        setQuickFocusTick((value) => value + 1);
+        if (route !== "list") navigate("list");
+        break;
+      case "refresh": void refresh(); break;
+      case "settings": navigate("settings"); break;
+    }
+  }
+  useEffect(() => {
+    const handle = createShortcutHandler(
+      () => ({ ...shortcutState.current, toast: toastState.current }),
+      (intent) => performShortcut.current(intent),
+    );
+    const handler = (event: KeyboardEvent) => {
+      if (isCompositionKey(event)) return;
+      handle(event);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [
-    route,
-    panelPinned,
-    menuOpen,
-    pendingDelete,
-    search,
-    quick,
-    calendarState.selected,
-    liveBoard?.context.today,
-    selected?.id,
-    settings.language,
-    pendingMove,
-    toast?.id,
-  ]);
+  }, []);
   // Native `<details>` menus stay open until toggled again; close them on an outside press or a choice.
   useEffect(() => {
     const close = (event: Event) => {
@@ -508,8 +494,9 @@ export function Panel() {
   }
   /** One place that turns a failed write into a toast; a version conflict also refreshes the board. */
   function fail(error: unknown) {
-    notify({ message: describeError(error, settings.language), kind: "error" });
-    if (isVersionConflict(error)) {
+    const failure = failureOf(error, settings.language);
+    notify({ message: failure.message, kind: "error" });
+    if (failure.reload) {
       setConflict(true);
       void refresh();
     }
@@ -530,6 +517,8 @@ export function Panel() {
     }
   }
   async function undoAction(action: UndoAction) {
+    // An undo that cannot run yet keeps its toast, so it can still be used a moment later.
+    if (!connection.online || saving) return;
     dismiss();
     await run(async () => {
       if (action.kind === "reopen")
@@ -631,12 +620,10 @@ export function Panel() {
       setFinishing(new Set(finishingRef.current));
     }
   }
-  // The row menu. Every command looks the task up again, so a menu that stayed open while the
-  // board refreshed still writes against the current version.
-  const latestTask = (task: Task) =>
-    liveBoard?.all.find((item) => item.id === task.id) ??
-    liveBoard?.today.completed.find((item) => item.id === task.id) ??
-    task;
+  // The row menu. A menu's items are built when it opens and it can stay open while the board
+  // refreshes, so its commands go through `menuCommandsRef` (always this render's) and each one
+  // looks the task up again in the live board: they write against the current version.
+  const latestTask = (task: Task) => latestOf(liveBoard, task);
   const planToday = liveBoard?.context.today ?? calendarState.anchor;
   const menuCommands: TaskMenuCommands = {
     complete: (task) => void complete(latestTask(task), false),
@@ -658,30 +645,68 @@ export function Panel() {
     edit: (task) => edit(latestTask(task)),
     cancel: (task) => void run(() => taskCommands.cancel(latestTask(task))),
     skip: (task) => void run(() => taskCommands.skip(latestTask(task))),
-    requestDelete: (task) => setPendingDelete(latestTask(task)),
+    requestDelete: (task) => requestDelete(latestTask(task)),
   };
+  const menuCommandsRef = useRef(menuCommands);
+  menuCommandsRef.current = menuCommands;
+  const [stableMenuCommands] = useState(() => delegateCommands(() => menuCommandsRef.current));
+  const menuReturnFocus = useRef<HTMLElement | null>(null);
   function openTaskMenu(task: Task, anchor: MenuAnchor) {
+    // A pointer-opened menu has no focused row to give focus back to; use the row's own button.
+    const rowButton = document.querySelector<HTMLElement>(
+      `[data-task-id="${CSS.escape(task.id)}"] .task-text`,
+    );
+    const returnFocus = returnFocusTarget(anchor.returnFocus, rowButton, document.body);
+    menuReturnFocus.current = returnFocus;
     contextMenu.open(
-      anchor,
+      { ...anchor, returnFocus },
       taskMenuItems(task, {
         language: settings.language,
         online: connection.online,
         busy: saving || finishingRef.current.has(task.id),
-        commands: menuCommands,
+        commands: stableMenuCommands,
       }),
       task.title,
     );
   }
   // A menu belongs to the page it was opened on, and its items were built for one connection state.
   useEffect(() => contextMenu.close(), [route, connection.online]);
+  function requestDelete(task: Task) {
+    deleteTrigger.current = menuReturnFocus.current;
+    setPendingDelete(task);
+  }
+  /** Dismiss the delete confirmation without deleting, and hand focus back to where it came from. */
+  function closeDelete() {
+    setPendingDelete(null);
+    const target = returnFocusTarget(deleteTrigger.current, null, document.body);
+    deleteTrigger.current = null;
+    // Not deferred to a frame: the dialog is still mounted, and moving focus away from it is harmless.
+    target?.focus({ preventScroll: true });
+  }
   async function confirmDelete(task: Task) {
     await run(async () => {
-      await taskCommands.remove(latestTask(task));
+      const current = latestTask(task);
+      // Already gone elsewhere counts as deleted, as in the native client.
+      await removeTolerantly(() => taskCommands.remove(current));
       setPendingDelete(null);
+      deleteTrigger.current = null;
       notify({
         message: settings.language === "en" ? `Deleted “${task.title}”` : `已删除「${task.title}」`,
       });
-      if (route === "detail" && selected?.id === task.id) back();
+      // Its draft goes with it, and so does any page of it: detail, or the edit form it was opened on.
+      drafts.current.delete(task.id);
+      const { stack, leaveTo } = afterTaskDeleted(
+        { route, taskId: selected?.id },
+        history.current,
+        task.id,
+      );
+      history.current = stack;
+      if (leaveTo !== undefined) {
+        setRoute(leaveTo?.route ?? "list");
+        setSelected(leaveTo?.task);
+        setPeriodicSelected(leaveTo?.periodic);
+        setConflict(false);
+      } else if (selected?.id === task.id) setSelected(undefined);
     });
   }
   return (
@@ -761,7 +786,7 @@ export function Panel() {
           >
             {deleteConfirmText(settings.language).confirm}
           </button>
-          <button className="text-button" ref={deleteCancel} onClick={() => setPendingDelete(null)}>
+          <button className="text-button" ref={deleteCancel} onClick={closeDelete}>
             {deleteConfirmText(settings.language).cancel}
           </button>
         </div>
@@ -1090,6 +1115,7 @@ export function Panel() {
                     }
                     onQuickDate={setQuickDate}
                     onNotify={notify}
+                    onConflict={() => void refresh()}
                     onOpen={openTask}
                     onMenu={openTaskMenu}
                     onComplete={async (task) => {
@@ -1630,7 +1656,10 @@ export function Panel() {
                   )
                 }
                 onDeleted={back}
-                onRequestDelete={setPendingDelete}
+                onRequestDelete={(task) => {
+                  deleteTrigger.current = document.querySelector<HTMLElement>(".detail-more summary");
+                  setPendingDelete(task);
+                }}
                 onChanged={refresh}
                 onError={setError}
               />
