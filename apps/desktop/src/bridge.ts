@@ -23,6 +23,16 @@ export interface DesktopSettings {
   autostart: boolean;
 }
 export const native = isTauri();
+export type Platform = "macos" | "windows" | "other";
+/** The one place the host OS is read from the WebView; everything else imports this. */
+export const platform: Platform = (() => {
+  const agent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  return agent.includes("Macintosh") ? "macos" : agent.includes("Windows") ? "windows" : "other";
+})();
+/** The platform's command modifier: ⌘ on macOS only, Ctrl elsewhere. */
+export function isCommandKey(event: { metaKey: boolean; ctrlKey: boolean }) {
+  return platform === "macos" ? event.metaKey : event.ctrlKey;
+}
 export interface NotchMetrics { bandHeight: number }
 export async function loadNotchMetrics(): Promise<NotchMetrics> {
   return native ? invoke<NotchMetrics>("notch_metrics") : { bandHeight: 24 };
@@ -147,6 +157,8 @@ export async function presentNotch(state: {
   pinned: boolean;
   expanded: boolean;
   stack: boolean;
+  /** Take the keyboard (the input field or the notch band was clicked); card buttons never do. */
+  focus?: boolean;
 }) {
   if (native)
     return invoke<boolean>("notch_present", {
@@ -173,8 +185,7 @@ export async function resizePanel(direction: "West" | "South") {
   if (native) await getCurrentWindow().startResizeDragging(direction);
 }
 
-export const manualPanelResize =
-  native && navigator.userAgent.includes("Macintosh");
+export const manualPanelResize = native && platform === "macos";
 export function resizePanelMac(input: {
   direction: "West" | "South";
   width: number;
@@ -182,4 +193,30 @@ export function resizePanelMac(input: {
   delta: number;
 }) {
   return invoke<void>("panel_resize_macos", input);
+}
+
+export interface TrayState {
+  language: DesktopSettings["language"];
+  remaining: number;
+  online: boolean;
+  nextTitle: string | null;
+  nextId: string | null;
+}
+/** Push what the menu-bar / tray entry shows; the host rebuilds its menu from this. */
+export async function updateTray(state: TrayState) {
+  if (native) await invoke("tray_update", { state });
+}
+/**
+ * Save an export in the system Downloads folder and reveal it in the file manager.
+ * Returns the written path. The browser preview falls back to a download link.
+ */
+export async function exportJson(name: string, contents: string): Promise<string> {
+  if (native) return invoke<string>("export_json", { name, contents });
+  const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return name;
 }

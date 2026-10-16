@@ -11,6 +11,8 @@ import type { CreateTaskInput, Task, UpdateTaskInput } from "@todocue/shared";
 import { TodoCueError } from "@todocue/shared";
 import {
   client,
+  exportJson,
+  isCommandKey,
   hidePanel,
   focusPanel,
   loadSettings,
@@ -44,6 +46,17 @@ import { useRuntime } from "./useRuntime.js";
 import { ResizeEdge } from "./ResizeEdge.js";
 import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
 
+/** Where the host or the tray asks the panel to go. */
+type TargetKind =
+  | "task"
+  | "periodic"
+  | "open"
+  | "new_task"
+  | "new_periodic"
+  | "periodic_list"
+  | "settings";
+const LOCAL_TARGETS: TargetKind[] = ["new_task", "new_periodic", "periodic_list", "settings"];
+
 type Route =
   | "list"
   | "form"
@@ -70,7 +83,7 @@ export function Panel() {
     { route: Route; task?: Task; periodic?: PeriodicReminder }[]
   >([]);
   const [pendingTarget, setPendingTarget] = useState<{
-    kind: "task" | "periodic" | "open" | "new_task";
+    kind: TargetKind;
     id?: string;
   } | null>(null);
   const [formSession, setFormSession] = useState("");
@@ -183,7 +196,7 @@ export function Panel() {
     let dispose: (() => void) | undefined,
       stopped = false;
     const revealRoute = (target: {
-      kind: "task" | "periodic" | "open" | "new_task";
+      kind: TargetKind;
       id?: string;
     }) => setPendingTarget(target);
     if (native)
@@ -191,7 +204,7 @@ export function Panel() {
         const stops = await Promise.all([
           listen<string>("task:reveal", (event) => reveal(event.payload)),
           listen<{
-            kind: "task" | "periodic" | "open" | "new_task";
+            kind: TargetKind;
             id?: string;
           }>("route:reveal", (event) => revealRoute(event.payload)),
         ]);
@@ -201,7 +214,7 @@ export function Panel() {
         }
         dispose = () => stops.forEach((stop) => stop());
         const target = await invoke<{
-          kind: "task" | "periodic" | "open" | "new_task";
+          kind: TargetKind;
           id?: string;
         } | null>("route_ready");
         if (target && !stopped) revealRoute(target);
@@ -214,11 +227,17 @@ export function Panel() {
     };
   }, []);
   useEffect(() => {
-    if (!pendingTarget || (!connection.online && pendingTarget.kind !== "new_task")) return;
+    if (!pendingTarget || (!connection.online && !LOCAL_TARGETS.includes(pendingTarget.kind))) return;
     let stopped = false;
     void (async () => {
       if (pendingTarget.kind === "new_task") {
         edit(undefined, undefined, false, false);
+      } else if (pendingTarget.kind === "new_periodic") {
+        editPeriodic();
+      } else if (pendingTarget.kind === "periodic_list") {
+        navigate("periodic");
+      } else if (pendingTarget.kind === "settings") {
+        navigate("settings");
       } else if (pendingTarget.kind === "task" && pendingTarget.id) {
         const { task } = await client.getTask(pendingTarget.id);
         if (!stopped) {
@@ -290,6 +309,14 @@ export function Panel() {
       if ((event.metaKey || event.ctrlKey) && event.key === "[") {
         event.preventDefault();
         back();
+      }
+      // The undo toast owns the platform undo shortcut (⌘Z on macOS, Ctrl+Z elsewhere), even in a field.
+      if (isCommandKey(event) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "z") {
+        const undoButton = document.querySelector<HTMLButtonElement>(".toast [data-undo-shortcut]:not(:disabled)");
+        if (undoButton) {
+          event.preventDefault();
+          undoButton.click();
+        }
       }
     };
     window.addEventListener("keydown", handler);
@@ -793,18 +820,15 @@ export function Panel() {
           </button>
           <button
             onClick={() => {
-              void client.export().then((bundle) => {
-                const url = URL.createObjectURL(
-                  new Blob([JSON.stringify(bundle, null, 2)], {
-                    type: "application/json",
-                  }),
-                );
-                const anchor = document.createElement("a");
-                anchor.href = url;
-                anchor.download = "todocue.json";
-                anchor.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              });
+              void client
+                .export()
+                .then((bundle) =>
+                  exportJson(
+                    `todocue-export-${new Date().toLocaleDateString("sv-SE")}.json`,
+                    JSON.stringify(bundle, null, 2),
+                  ),
+                )
+                .catch((failure) => setError(String(failure)));
               setMenuOpen(false);
             }}
           >
@@ -1581,6 +1605,7 @@ export function Panel() {
                 : t("completed"))}
           {orderUndo && connection.online && (
             <button
+              data-undo-shortcut
               disabled={!!taskDrag.drag || saving}
               onClick={() =>
                 void run(async () => {
@@ -1597,6 +1622,7 @@ export function Panel() {
           )}
           {undo && connection.online && (
             <button
+              data-undo-shortcut
               onClick={() =>
                 void run(async () => {
                   await client.reopenTask(undo.id, {

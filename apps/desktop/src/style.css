@@ -2557,3 +2557,251 @@ body[data-native="true"][data-surface="notch"] .notch {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* notch parity */
+.notch-content { position: relative; }
+.notch-wing { position: relative; }
+.notch-wing .numeral {
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #fff;
+}
+.notch-badge {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--orange);
+  color: #fff;
+  display: inline-grid;
+  place-items: center;
+}
+.notch-badge .numeral { font-size: 10px; }
+.notch-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid #f26a2e8c;
+  pointer-events: none;
+}
+.notch-offline {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #ff9f0a;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.notch-wing .notch-offline { color: inherit; }
+.notch-count { font-size: 12px; }
+
+.notch-stack-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 8px;
+  font-size: 11px;
+}
+.notch-stack-header strong { font-weight: 600; color: #fff9; }
+.notch-stack-spacer { flex: 1; }
+.notch-deferred {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--orange);
+  background: #f26a2e29;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.notch-today-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff9;
+}
+.notch-stack-header .icon-button { width: 26px; height: 26px; color: #ffffff8c; }
+.notch-fold-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 36px;
+  margin-top: 6px;
+  border: 1px dashed #ffffff38;
+  border-radius: 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #ffffffbf;
+}
+.notch-pending { display: grid; gap: 6px; margin-bottom: 8px; }
+.notch-pending h3 {
+  display: flex;
+  gap: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--orange);
+}
+.notch-pending h3 span { font-family: Michroma, sans-serif; font-size: 10px; opacity: 0.8; }
+.notch-next-reason.is-late { color: #ff6b5f; }
+
+.notch-toast {
+  position: absolute;
+  z-index: 3;
+  top: 7px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 24px;
+  background: #1c1d20;
+  box-shadow: 0 0 0 0.5px #ffffff1f, 0 6px 14px #0006;
+  font-size: 12px;
+  color: #fff;
+}
+.notch-toast span { flex: 1; min-width: 0; }
+.notch-toast svg { color: var(--orange); flex: none; }
+.notch-toast button { color: var(--orange); font-size: 12px; white-space: nowrap; }
+.notch-toast .notch-toast-close { color: #ffffff8c; display: grid; place-items: center; }
+.notch-quick-header.is-covered { visibility: hidden; }
+
+/* Reminder rows and the featured card */
+.cue-item { display: block; border: 0; padding: 0; margin: 0; }
+.cue-item + .cue-item { margin-top: 6px; }
+.cue-row {
+  border-radius: 16px;
+  background: #ffffff12;
+  padding: 8px 9px;
+  transition: background 160ms ease;
+}
+.cue-row:hover { background: #ffffff1a; }
+.cue-row-line { display: flex; align-items: center; gap: 10px; }
+.cue-glyph {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #ffffff24;
+  color: #fff;
+}
+.cue-glyph.is-periodic { background: var(--orange); }
+.cue-glyph svg { width: 17px; height: 17px; color: #fff; }
+.cue-row .cue-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.cue-row .cue-title strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cue-meta { font-size: 11px; color: #ffffff80; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cue-row .icon-button { width: 30px; height: 30px; color: #ffffffcc; }
+.cue-complete { width: 30px; height: 30px; flex: none; color: #fff; }
+.cue-repeat {
+  flex: none;
+  font-family: Michroma, sans-serif;
+  font-size: 10px;
+  color: var(--orange);
+  background: #f26a2e29;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+.cue-card { padding: 4px 6px; display: grid; gap: 12px; }
+.notch-content:has(.notch-stack-header) .cue-card {
+  background: #ffffff12;
+  border-radius: 22px;
+  padding: 10px 12px;
+}
+.cue-card-head { display: flex; align-items: center; gap: 13px; }
+.cue-card-text { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.cue-card-kicker { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--orange); }
+.cue-card-kicker em { font-style: normal; font-weight: 400; font-size: 11px; color: #ffffff80; }
+.cue-card .cue-title {
+  display: block;
+  flex: none;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: #fff;
+  text-align: left;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cue-card .cue-meta { color: #ffffff8c; }
+.cue-card .cue-fold { color: #ffffff80; align-self: flex-start; }
+.cue-card .cue-actions { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+.cue-card .cue-actions .pill { gap: 8px; padding: 3px 14px 3px 5px; min-height: 32px; }
+.cue-actions-end { margin-left: auto; font-family: Michroma, sans-serif; font-size: 9.5px; color: #ffffff59; display: inline-flex; align-items: center; }
+.cue-disc { position: relative; display: grid; place-items: center; flex: none; }
+.cue-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid var(--orange);
+  pointer-events: none;
+}
+.cue-disc-fill {
+  border-radius: 50%;
+  background: var(--orange);
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+.cue-mark { display: grid; place-items: center; will-change: transform; }
+.cue-mark svg { width: 20px; height: 20px; color: #fff; }
+.cue-item.completing .cue-title { opacity: 0.55; text-decoration: line-through; }
+.cue-more { color: #ffffffb3; }
+@media (prefers-reduced-motion: reduce) {
+  .cue-row { transition: none; }
+}
+
+/* Panel reveal: tiles slide in from the right edge, one after another (DialRevealModifier). */
+@keyframes panel-tile-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes panel-page-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+body[data-surface="panel"][data-panel-phase="reveal"] .panel-header {
+  animation: panel-tile-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+body[data-surface="panel"][data-panel-phase="reveal"] .page-stage {
+  animation: panel-tile-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) 45ms both;
+}
+/* Windows: the window cannot be faded, so the page does it. macOS fades the whole window. */
+body[data-surface="panel"][data-panel-phase="reveal"]:not([data-platform="macos"]) .panel-shell {
+  animation: panel-page-in 0.16s ease-out both;
+}
+body[data-surface="panel"][data-panel-phase="hiding"]:not([data-platform="macos"]) .panel-shell {
+  opacity: 0;
+  transition: opacity 0.18s ease-in;
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-surface="panel"] .panel-header,
+  body[data-surface="panel"] .page-stage,
+  body[data-surface="panel"] .panel-shell {
+    animation: none !important;
+    transition: none !important;
+  }
+}
