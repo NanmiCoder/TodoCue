@@ -10,8 +10,8 @@ export function shellQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
-export function cliWrapper(node: string, entry: string): string {
-  return `#!/bin/sh\nexec ${shellQuote(node)} ${shellQuote(entry)} "$@"\n`;
+export function cliWrapper(node: string, entry: string, home?: string): string {
+  return `#!/bin/sh\nexec ${shellQuote(node)} ${shellQuote(entry)}${home ? ` --home ${shellQuote(home)}` : ""} "$@"\n`;
 }
 
 /** Keep an in-use Windows launcher usable; its runtime pointer can still be updated. */
@@ -41,10 +41,16 @@ export function installedWindowsPort(home: string): number | undefined {
   } catch { return undefined; }
 }
 
+export function installedMacPort(plist: string): number | undefined {
+  const value = plist.match(/<key>TODOCUE_PORT<\/key>\s*<string>(\d+)<\/string>/)?.[1];
+  const port = value ? Number(value) : NaN;
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : undefined;
+}
+
 /** Install only our wrapper; never replace an unrelated command or symlink. */
 export function installCliWrapper(paths: RuntimePaths, node: string, entry: string, linkDirs = ["/opt/homebrew/bin", "/usr/local/bin"]): string {
   const wrapper = path.join(paths.bin, "todocue");
-  fs.writeFileSync(wrapper, cliWrapper(node, entry), { mode: 0o755 });
+  fs.writeFileSync(wrapper, cliWrapper(node, entry, paths.home), { mode: 0o755 });
   fs.chmodSync(wrapper, 0o755);
   for (const dir of linkDirs) {
     const link = path.join(dir, "todocue");
@@ -99,7 +105,9 @@ export async function bootstrapRuntime(home: string): Promise<{ running: boolean
   const stampPath = path.join(home, "runtime-install.json");
   const stamp = JSON.stringify({ app, build: JSON.parse(fs.readFileSync(path.join(root, "BUILD.json"), "utf8")) });
   const previousStamp = fs.existsSync(stampPath) ? fs.readFileSync(stampPath, "utf8") : null;
-  const spec = { nodePath, cliEntry, notifierPath: helper };
+  // Upgrades must not silently move an existing installation back to the default port.
+  const previousPlist = fs.existsSync(paths.launchAgentPlist) ? fs.readFileSync(paths.launchAgentPlist, "utf8") : "";
+  const spec = { nodePath, cliEntry, notifierPath: helper, port: installedMacPort(previousPlist) };
   const desired = renderPlist({ ...spec, home, logDir: paths.logs, label: paths.launchAgentLabel, plistPath: paths.launchAgentPlist });
   const current = fs.existsSync(paths.launchAgentPlist) ? fs.readFileSync(paths.launchAgentPlist, "utf8") : null;
   const status = await launchAgentStatus(paths);

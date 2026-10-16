@@ -1,6 +1,28 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
+
+/** Retry only the observed Apple CloudKit connection loss; validation remains mandatory. */
+export async function validateStapled(target, { run = execFileSync, sleep = delay, attempts = 3, log = value => process.stdout.write(value) } = {}) {
+  if (!Number.isInteger(attempts) || attempts < 1 || attempts > 3) throw new Error('Expected 1–3 ticket validation attempts');
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const output = run('/usr/bin/xcrun', ['stapler', 'validate', target], {
+        encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (output) log(output.toString());
+      return;
+    } catch (error) {
+      const output = (error.stdout?.toString() ?? '') + (error.stderr?.toString() ?? '');
+      if (output) log(output);
+      const transient = !error.signal && error.status === 68 && /NSURLErrorDomain[^\n]*Code=-1005\b/.test(output);
+      if (!transient || attempt === attempts) throw error;
+      log(`Apple ticket connection lost; retrying validation (${attempt + 1}/${attempts})\n`);
+      await sleep(attempt * 5000);
+    }
+  }
+}
 
 export function signingIdentity(output, { override, required = false, teamId } = {}) {
   const identities = [...output.matchAll(/\d+\)\s+([A-F0-9]{40}) "([^"]+)"/gi)]

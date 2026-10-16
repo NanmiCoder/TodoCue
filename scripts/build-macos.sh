@@ -16,7 +16,9 @@ CONFIG=release
 if [[ "${1:-}" == "--debug" ]]; then CONFIG=debug; fi
 
 echo "==> swift build -c $CONFIG"
-(cd "$PKG" && swift build -c "$CONFIG" --product TodoCue 2>&1 | tail -2)
+if [[ "${1:-}" != "--notifier-only" ]]; then
+  (cd "$PKG" && swift build -c "$CONFIG" --product TodoCue 2>&1 | tail -2)
+fi
 (cd "$PKG" && swift build -c "$CONFIG" --product TodoCueNotifier 2>&1 | tail -2)
 BIN="$(cd "$PKG" && swift build -c "$CONFIG" --show-bin-path)"
 
@@ -154,7 +156,9 @@ URL_TYPES='  <key>CFBundleURLTypes</key>
   <key>NSRemindersUsageDescription</key><string>TodoCue 会把待办同步到「TodoCue」提醒事项列表，并读取你在那里的修改。</string>'
 
 echo "==> assembling bundles"
-make_bundle "TodoCue" "com.todocue.app" "TodoCue" "$URL_TYPES" "$ROOT/scripts/app.entitlements.plist" "$PKG/Resources" >/dev/null
+if [[ "${1:-}" != "--notifier-only" ]]; then
+  make_bundle "TodoCue" "com.todocue.app" "TodoCue" "$URL_TYPES" "$ROOT/scripts/app.entitlements.plist" "$PKG/Resources" >/dev/null
+fi
 make_bundle "TodoCueNotifier" "com.todocue.notifier" "TodoCueNotifier" "" >/dev/null
 APP="$OUT/TodoCue.app"
 HELPER="$OUT/TodoCueNotifier.app"

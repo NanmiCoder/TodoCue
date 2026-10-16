@@ -98,7 +98,7 @@ export async function windowsProductIntegration(root: string, action: "stop" | "
       if (owned) await windowsUninstall(paths);
       await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
         "$key='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'; $name=$env:TODOCUE_START_NAME; $value=(Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).$name; if ($value -and $value.StartsWith(('\"'+$env:TODOCUE_START_APP+'\"'),[StringComparison]::OrdinalIgnoreCase)) { Remove-ItemProperty -LiteralPath $key -Name $name; $approved='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run'; Remove-ItemProperty -LiteralPath $approved -Name $name -ErrorAction SilentlyContinue }"],
-        { windowsHide: true, env: { ...process.env, TODOCUE_START_NAME: `TodoCue Preview ${value.id}`, TODOCUE_START_APP: path.join(path.dirname(root), "todocue-desktop.exe") } });
+        { windowsHide: true, env: { ...process.env, TODOCUE_START_NAME: `TodoCue ${value.id}`, TODOCUE_START_APP: path.join(path.dirname(root), "todocue-desktop.exe") } });
       const pointer = path.join(paths.bin, "todocue-runtime-path.txt");
       if (fs.existsSync(pointer) && sameWindowsPath(fs.readFileSync(pointer, "utf8").trim(), root)) {
         fs.rmSync(path.join(paths.bin, "todocue.exe"), { force: true });

@@ -34,6 +34,7 @@ pub struct Runtime {
     client: reqwest::Client,
     status: Arc<RwLock<Status>>,
     started: AtomicBool,
+    bootstrap_error: RwLock<Option<String>>,
 }
 
 #[derive(Deserialize)]
@@ -114,12 +115,26 @@ impl Runtime {
                 .expect("HTTP client"),
             status: Arc::default(),
             started: AtomicBool::new(false),
+            bootstrap_error: RwLock::new(None),
         }
+    }
+    pub async fn bootstrap_failed(&self, app: &AppHandle, message: String) {
+        *self.bootstrap_error.write().await = Some(message.clone());
+        self.publish(
+            app,
+            Status {
+                message: Some(message),
+                ..Status::default()
+            },
+        )
+        .await;
     }
     async fn connection(&self) -> Result<Connection, String> {
         let bytes = tokio::fs::read(self.home.join("connection.json"))
             .await
-            .map_err(|_| "Runtime unavailable. Start the isolated runtime first.".to_string())?;
+            .map_err(|_| {
+                "Runtime unavailable. Reopen TodoCue to start its background service.".to_string()
+            })?;
         let connection: Connection = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
         validate_connection(&connection)?;
         Ok(connection)
@@ -178,7 +193,9 @@ impl Runtime {
                     self.publish(
                         &app,
                         Status {
-                            message: Some(message),
+                            message: Some(
+                                self.bootstrap_error.read().await.clone().unwrap_or(message),
+                            ),
                             ..Status::default()
                         },
                     )
@@ -205,6 +222,7 @@ impl Runtime {
                 .await;
             if let Ok(response) = response {
                 if response.status().is_success() {
+                    *self.bootstrap_error.write().await = None;
                     self.publish(
                         &app,
                         Status {

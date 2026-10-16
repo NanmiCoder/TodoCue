@@ -1,8 +1,18 @@
-# TodoCue desktop preview
+# TodoCue shared desktop
 
-共享 React / TypeScript / Motion 界面与 Tauri 2 宿主，复用现有任务引擎、数据库、REST API、CLI 和 MCP。当前是迁移预览，正式 macOS 发行版仍使用 `apps/macos`；Apple 日历/提醒事项同步仍由旧客户端负责。
+v0.6.0 起正式桌面客户端使用 React / TypeScript / Motion 与 Tauri 2，复用现有引擎、数据库、API、CLI 和 MCP。Mac / Windows 正式安装包都内置对应架构运行时，首次打开自动配置后台，无需另装 Node；关闭 UI 后服务继续运行。
+
+Mac 打包：`npm run desktop:macos`；正式签名/公证：`npm run desktop:macos -- --release`。产物为 `apps/desktop/build/TodoCue-<version>-macOS-<arm64|x64>.dmg`。Windows 对应架构打包：`npm run windows:build -- --release`，产物为 `TodoCue-<version>-Windows-<arm64|x64>-setup.exe`。`Release desktop (Mac and Windows)` 在 tag 上构建四种安装包，验证所有校验和后才发布；手动运行只构建验收，不公开 Release。Windows 暂无 Authenticode 证书，安装包未签名。
+
+正式版默认 `~/.todocue`，显式 `--home` / `TODOCUE_HOME` 优先；Mac 选择记在 `~/Library/Application Support/TodoCue/launch-home.json`，后续 Finder/Dock 打开复用。debug、开发脚本和没有内置运行时的 CI App 默认仍用临时隔离目录；裸 App 不读取或改写正式目录指针。正式版不自动读取旧 Preview 的目录指针。Mac 包含签名通知辅助程序、runtime BUILD.json 和 Skill；与旧 SwiftUI 包使用兼容的 CLI bootstrap，保留数据格式和后台端口。检测到旧 SwiftUI App 正在运行会提示退出。
+
+**当前边界：** 旧 SwiftUI 的 Apple 同步、硬件刘海和全部偏好导入尚未接入；保留旧源码和 v0.5.3 回退。Windows 硬件 GUI、原生鼠标/IME 与逐帧动效仍待验收，见[发布说明](../../release-notes/v0.6.0.md)。以下是迁移期间的开发说明与历史验证记录；其中 Preview 下载和外部后台条件仅适用于旧预览产物。
+
+v0.6.0 的[公开 Release](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.6.0)包含 Mac ARM64/Intel 与 Windows x64/ARM64；[正式流水线](https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661)全部通过，安装与尚未验收边界见[正式分发记录](../../docs/qa/desktop-stable-release/README.md)。
 
 ## 本地预览
+
+本节保留迁移期间的 Preview 验证方式；旧预览下载、外部后台及 SwiftUI 分发说明以对应日期为准。当前正式包和最新验证以本文开头及[正式分发记录](../../docs/qa/desktop-stable-release/README.md)为准。
 
 需要 Node 24+；原生预览还需要 Rust 1.90+ 和所在平台的 Tauri 开发工具链。
 
@@ -24,10 +34,10 @@ TODOCUE_HOME=/tmp/todocue-desktop-dev npm run tauri --workspace @todocue/desktop
 ```sh
 npm run desktop:build
 npm run tauri --workspace @todocue/desktop -- build --debug --bundles app --config '{"bundle":{"active":true}}'
-TODOCUE_HOME=/tmp/todocue-desktop-dev "apps/desktop/src-tauri/target/debug/bundle/macos/TodoCue Preview.app/Contents/MacOS/todocue-desktop"
+TODOCUE_HOME=/tmp/todocue-desktop-dev "apps/desktop/src-tauri/target/debug/bundle/macos/TodoCue.app/Contents/MacOS/todocue-desktop"
 ```
 
-产物在 `src-tauri/target/debug/bundle/macos/TodoCue Preview.app`。macOS 预览默认仍使用临时目录；没有接入 EventKit、旧版偏好迁移和真实硬件刘海，不替代当前 SwiftUI App。
+产物在 `src-tauri/target/debug/bundle/macos/TodoCue.app`。macOS 预览默认仍使用临时目录；没有接入 EventKit、旧版偏好迁移和真实硬件刘海，不替代当前 SwiftUI App。
 
 macOS release 配置的 Preview 首次通过 `--home` 或 `TODOCUE_HOME` 选择隔离运行时后，会把目录记在 `~/Library/Application Support/TodoCue Preview/launch-home.json`。以后从应用程序、Dock 或 Finder 直接打开仍连接该目录，避免误回到没有后台的临时目录。显式参数/环境仍优先；debug 开发预览不读取或更新这个选择。记录仅含目录和版本，不含 token；外部后台仍需正常运行。见[直接打开后离线的修复与实测](../../docs/qa/desktop-macos-runtime/README.md)。
 
@@ -75,6 +85,6 @@ swift test --package-path apps/macos
 
 前一轮 UI 对照阶段的本地 `check` 175 个 Vitest / 24 个脚本测试、CLI/MCP 冒烟及 release check 通过；`desktop:check` 前端/Rust 11+5 通过。[当时的 Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 的完整 Xcode Swift Apple Silicon 275（4 跳过）、Intel 275（11 跳过）均 0 失败。本地 CLT 缺 XCTest，不冒充本地通过。
 
-真实鼠标外部点击、候选窗口、透明命中、Windows GUI/通知点击/多屏/DPI/休眠、全原生视觉/逐帧验收，以及共享 Mac 正式运行时、Developer ID 签名/公证、EventKit 和正式客户端切换仍待完成。Mac Intel Tauri release 预览包的构建与归档验证已通过。
+真实鼠标外部点击、候选窗口、透明命中、Windows GUI/通知点击/多屏/DPI/休眠、全原生视觉/逐帧验收，以及 EventKit、全部偏好迁移仍待完成。共享 Mac 正式运行时、签名/公证和客户端分发切换的最新结果见正式分发记录。Mac Intel Tauri release 预览包的构建与归档验证已通过。
 
 2026-10-15的[独立审查修复](../../docs/qa/desktop-review-fixes/README.md)补齐CLI所属目录、bootstrap端口、普通Return、日历选择、Pin、图片、逾期、提醒与被动窗口焦点；本地208项Vitest/34项脚本测试及desktop检查通过。最新50762d4两架构十组安装及恢复失败/不健康测试均通过，正式分发和完整SwiftUI复刻仍未验收。

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { ensureHome, runtimePaths } from "@todocue/server";
-import { cliWrapper, installCliWrapper } from "../src/bootstrap.js";
+import { cliWrapper, installCliWrapper, installedMacPort } from "../src/bootstrap.js";
 import { bootstrapWithRetry } from "../src/launchagent.js";
 
 const roots: string[] = [];
@@ -16,6 +16,12 @@ function temp() {
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
 describe("packaged CLI installation", () => {
+  it("preserves an installed Mac port and rejects malformed values", () => {
+    expect(installedMacPort('<key>TODOCUE_PORT</key>\n<string>58863</string>')).toBe(58863);
+    for (const value of ["", "0", "-1", "65536", "58863oops"]) {
+      expect(installedMacPort(`<key>TODOCUE_PORT</key><string>${value}</string>`)).toBeUndefined();
+    }
+  });
   it("waits for transient launchd teardown but does not retry permanent errors", async () => {
     const pauses: number[] = [];
     let calls = 0;
@@ -43,6 +49,8 @@ describe("packaged CLI installation", () => {
     fs.writeFileSync(wrapper, cliWrapper(process.execPath, entry));
     const args = ["标题 with spaces", "$(should-not-run)", "'quote'", "--json"];
     expect(JSON.parse(execFileSync("/bin/sh", [wrapper, ...args], { encoding: "utf8" }))).toEqual(args);
+    fs.writeFileSync(wrapper, cliWrapper(process.execPath, entry, dir));
+    expect(JSON.parse(execFileSync("/bin/sh", [wrapper, ...args], { encoding: "utf8" }))).toEqual(["--home", dir, ...args]);
   });
 
   it("preserves user data and unrelated commands during installation and app replacement", () => {

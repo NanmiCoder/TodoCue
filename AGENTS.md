@@ -2,12 +2,13 @@
 
 ## Project Structure & Module Organization
 
-TodoCue combines a local TypeScript runtime with a SwiftUI/AppKit macOS client.
+TodoCue combines a local TypeScript runtime with a shared React/Tauri desktop client for macOS and Windows. The legacy SwiftUI/AppKit client remains for reference and rollback.
 
 - `packages/engine`: task rules, scheduling, attachments, and SQLite persistence.
 - `packages/server`: Fastify API, authentication, and SSE updates.
 - `packages/cli`: CLI commands and MCP integration; `packages/shared`: shared types and Zod schemas.
 - TypeScript sources live in each package's `src/`; tests live in `test/`.
+- `apps/desktop`: shared React UI and Tauri host; `npm run desktop:check` validates it.
 - `apps/macos/Sources/`: `TodoCue` UI, `TodoCueKit` client library, and `TodoCueNotifier`; native tests live in `apps/macos/Tests/`.
 - `scripts/`: builds, releases, and smoke checks; `docs/`: API, design, and QA documentation; `assets/readme/`: screenshots; `skills/todocue/`: distributable Agent Skill.
 

@@ -1,6 +1,8 @@
 # TodoCue 跨平台客户端开发交接
 
-更新：2026-10-15。此文件是另一台电脑继续开发的入口；它记录未完成工作，不代表跨平台迁移已经交付。
+**2026-10-16 正式分发已完成：** [v0.6.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.6.0) 已作为公开、非预发布的 Latest 发布，源码 `62a4d16` 已合并 main。正式客户端为共享 React / Tauri，Mac ARM64/Intel 与 Windows x64/ARM64 四包及 SHA256SUMS 齐全；[正式流水线](https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661)第 2 次执行全通过。Mac App/DMG 的 Developer ID、公证、staple、验证和 Gatekeeper 通过；两个 Mac runner 的独立运行时回归及两个 Windows runner 的各十组真实 NSIS 安装检查通过。Windows 安装包未做 Authenticode 签名。当前本机已安装与公开校验和相同的 Mac ARM 通用版，无参数重开恢复原隔离任务与自定义端口。详见[正式分发验证](qa/desktop-stable-release/README.md)。Apple 同步、硬件刘海、全部偏好导入及完整原生 GUI/逐帧验收仍保留；以下旧 Preview/外部后台说明属于历史。
+
+以下 2026-10-14/15 的记录属于 Preview 历史；本文件继续列出未完成的功能与硬件验收，不将正式分发等同于迁移全部交付。
 
 本轮从交接提交 `2bf7349` 建立隔离工作树与 `codex/desktop-native-ui-fixes`，[PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 已按用户授权合并到 `codex/desktop-migration-handoff`（`a57d012`）。此前代码 `7ad1b95`（UI 修复基准 `fdb8ce3`）已完成刘海/面板输入修复、表单/附件/日历/Dial 校准及 Windows 双架构安装包冒烟。见 [P0 证据](qa/desktop-native-ui-fixes/README.md) 和 [完整 UI / 构建验证记录](qa/desktop-p1-ui/README.md)；真实鼠标、IME 与 Windows GUI 等未验证项仍保留。
 
@@ -12,20 +14,19 @@
 
 ## 代码从哪里继续
 
-- 仓库：<https://github.com/NanmiCoder/TodoCue>。
-- 交接分支：`codex/desktop-migration-handoff`，从 `3058f01379d1cf965445ca5f3bb3b826020e2686` 建立。
-- 本轮最初已先 `git fetch origin`，明确从 `origin/codex/desktop-migration-handoff` 的 `2bf7349` 创建新工作树；原主工作区未覆盖。修复和构建配置已合并，现在应从最新 `origin/codex/desktop-migration-handoff` 继续；不要从默认分支或旧交接提交开始。
-- 继续分支可使用新的 `codex/desktop-next`。若同名分支已存在，先检查其状态，复用或选择另一个 `codex/` 分支，不能覆盖已有分支或工作树。
-- PR #17/#18 已合并交接分支；未合并主分支、未发布正式版本。Windows 两架构各十组安装检查通过，Mac 两架构共享预览和原 SwiftUI 公证包均已构建；GUI 与正式共享 Mac 迁移另列。
-- 本机临时数据、依赖、编译产物、日志和运行中的进程不会随 Git 转移；新电脑需要重新安装依赖并启动隔离运行时。
+- 仓库：<https://github.com/NanmiCoder/TodoCue>；共享正式客户端已由 [PR #20](https://github.com/NanmiCoder/TodoCue/pull/20) 合并 main（`1050bb1`）。PR #21 将 CI 修复合并到 `62a4d16`，最终 tag `v0.6.0` 指向该提交；源码、构建/安装与发布结果见[正式分发验证](qa/desktop-stable-release/README.md)。
+- 后续功能或修复从最新 `origin/main` 建立新的隔离 `codex/` 分支；需要精确复现 0.6.0 时从 `v0.6.0` 建立。若用户明确指定其他基准，遵从该指令。同名分支存在时先检查并复用或换名，不重置已有修改。
+- 原交接 `origin/codex/desktop-migration-handoff` 与提交 `2bf7349` 保留历史。本轮最初确实先 fetch、从用户指定交接基准建立 `codex/desktop-native-ui-fixes` 新工作树；后续 PR #17/#18/#19 合并交接分支，正式分发由 PR #20 进入主干。旧交接分支不包含全部正式分发实现。
+- 原主工作区保持不变；测试使用隔离 TODOCUE_HOME。本机依赖、服务、临时数据库和构建文件不会随 Git 转移。
+- 用户已明确授权本轮 merge 与 Win/Mac 正式 release；此前阶段顺序中的生产切换限制已被本次发布指令更新。下面未实现/未验收项目继续保留，发布并不意味着全部 SwiftUI 效果或硬件验收完成。
 
-先阅读仓库 `AGENTS.md`、本文、[实现与验收记录](desktop-migration.md)、[Dial 设计与动效规范](design/dial.md)、[桌面预览启动说明](../apps/desktop/README.md)。比较 UI 时以现有 SwiftUI 源码和实际画面为准，不能把新前端自身当作对照基准。
+先阅读仓库 `AGENTS.md`、本文、[实现与验收记录](desktop-migration.md)、[Dial 设计与动效规范](design/dial.md)、[桌面启动说明](../apps/desktop/README.md)。比较 UI 时以现有 SwiftUI 源码和实际画面为准。
 
 ## 已确定的产品方向
 
 1. React + TypeScript + CSS/Motion 负责共享前端，Rust + Tauri 2 负责窗口与系统接入；任务引擎、SQLite、API、CLI/MCP 继续复用。
 2. 保留现有设计、交互和动效；SwiftUI 源码需移植，但用户不接受重新设计成另一套 UI。优先视觉和使用体感一致，弹簧参数按原版校准。
-3. 最终两端共享前端，先交付 Windows，再完成正式 macOS 切换。当前 macOS Preview 用于对照，原 SwiftUI 生产客户端仍保留。
+3. 两端正式分发共享前端；原 SwiftUI 源码与 v0.5.3 回退保留，用于尚未接入的 Apple 同步及功能/视觉对照。
 4. Windows 10/11 x64、Windows 11 ARM64；macOS 14+、Intel 和 Apple Silicon。ARM64 验收包含 Node、SQLite、通知程序，不能只检查外壳。
 5. Windows 使用顶部虚拟刘海，顶部任务栏时按工作区顶部定位。macOS 保留原生玻璃和原生能力；Apple 同步只在 Mac 提供，本次不新增云同步或 Windows 日历集成。
 6. 数据仍本机保存并兼容 `TODOCUE_HOME`；Windows 默认 `%USERPROFILE%\.todocue`。提醒由独立后台服务投递，退出 UI 后仍有效。
@@ -106,11 +107,11 @@ P0 验收：
 - [ ] 多运行时互斥和注册失败恢复的真实系统故障注入；已有模型回归不能替代系统故障检查。
 - [ ] 四条周期提醒、claim/receipt 失败/超时、系统回退、6 秒收拢、稍后/暂停、休眠补偿，无重复或吞提醒。
 
-### P3：Windows 完整验收后完成正式 Mac 迁移
+### P3：Mac 正式分发与剩余原生迁移
 
 - [x] 共享 Mac Apple Silicon/Intel 预览包的 release 构建、架构、ad-hoc 签名、归档与下载校验通过；仍需外部隔离运行时。
 - [ ] 接入真实硬件刘海、安全区、空间/菜单栏、原生玻璃与浮窗完整行为。
-- [ ] 共享 Mac 的正式运行时打包/bootstrap、Developer ID 签名与公证；现有 SwiftUI 公证 DMG 不替代此项。
+- [x] 共享 Mac 正式运行时打包/bootstrap、Developer ID 签名、公证及安装回归：v0.6.0 的 ARM64/Intel 均通过。完整硬件行为另行验收。
 - [ ] 从旧 UI 模型解耦 EventKit 同步，通过桥接接入新客户端，保留同步关联。
 - [ ] 导入语言、尺寸、快捷键与同步偏好；支持 macOS 14+、Intel/Apple Silicon。
 - [ ] 保持同一数据目录只有一个生产客户端，提供旧版回退；达到功能和视觉验收后再停止维护 SwiftUI 页面。
@@ -119,11 +120,11 @@ P0 验收：
 
 macOS：Node 24+（CI 固定 26.7.0；本地 26.8.2）、Rust、Xcode 26/Swift 6；Windows：Node、Rust、MSVC C++/Windows SDK，ARM64 对应工具链。无需复制本机 `/Users/nanmi` 路径。
 
-已有仓库中先 fetch，再检查继续分支和 worktree；优先复用适合的隔离工作树。下一位接手应使用最新交接分支。若同名分支已存在，检查后复用或选择另一个 `codex/` 分支，不重置已有修改。以下命令仅适用于本地分支尚不存在时：
+已有仓库中先 fetch，再检查继续分支和 worktree；优先复用适合的隔离工作树。下一位接手应使用包含正式共享客户端的最新 main。若同名分支已存在，检查后复用或选择另一个 `codex/` 分支，不重置已有修改。以下命令仅适用于本地分支尚不存在时：
 
 ```sh
 git fetch origin
-git worktree add -b codex/desktop-next ../TodoCue-desktop-next origin/codex/desktop-migration-handoff
+git worktree add -b codex/desktop-next ../TodoCue-desktop-next origin/main
 cd ../TodoCue-desktop-next
 npm ci
 TODOCUE_HOME=/tmp/todocue-desktop-next npm run desktop:dev

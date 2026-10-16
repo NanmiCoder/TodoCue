@@ -646,13 +646,18 @@ fn explicit_home() -> Option<PathBuf> {
 fn home() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
-        let profile = (!cfg!(debug_assertions))
+        let profile = bundled_macos_runtime()
             .then(macos_home::profile_path)
             .flatten();
-        macos_home::resolve_home(
+        macos_home::resolve_launch_home(
             explicit_home(),
             profile.as_deref(),
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .expect("User home directory")
+                .join(".todocue"),
             std::env::temp_dir().join("todocue-desktop-development"),
+            bundled_macos_runtime(),
         )
     }
     #[cfg(not(target_os = "macos"))]
@@ -671,10 +676,23 @@ fn home() -> PathBuf {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn bundled_macos_runtime() -> bool {
+    !cfg!(debug_assertions)
+        && std::env::current_exe()
+            .ok()
+            .and_then(|exe| {
+                exe.parent()?
+                    .parent()
+                    .map(|contents| contents.join("Resources/runtime/bin/node"))
+            })
+            .is_some_and(|node| node.is_file())
+}
+
 pub fn run() {
     let context = tauri::generate_context!();
     let launch_home = home();
-    let startup_name = "TodoCue Preview".to_string();
+    let startup_name = "TodoCue".to_string();
     #[cfg(windows)]
     let (context, launch_home, startup_name) = {
         let mut context = context;
@@ -708,7 +726,7 @@ pub fn run() {
             .config_mut()
             .identifier
             .push_str(&format!(".home{id}"));
-        (context, launch_home, format!("TodoCue Preview {id}"))
+        (context, launch_home, format!("TodoCue {id}"))
     };
     let startup_args = vec![
         "--background".to_string(),
@@ -765,9 +783,11 @@ pub fn run() {
         .setup(move |app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            #[cfg(target_os = "macos")]
+            platform::check_legacy_client().map_err(std::io::Error::other)?;
             let home = launch_home.clone();
             #[cfg(target_os = "macos")]
-            if !cfg!(debug_assertions) && explicit_home().is_some() {
+            if bundled_macos_runtime() && explicit_home().is_some() {
                 if let Some(profile) = macos_home::profile_path() {
                     if let Err(error) = macos_home::remember(&profile, &home) {
                         eprintln!("Unable to remember Preview data directory: {error}");
@@ -801,36 +821,46 @@ pub fn run() {
                     eprintln!("Global shortcut unavailable: {error}");
                 }
             }
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             {
-                use std::os::windows::process::CommandExt;
                 let resources = app.path().resource_dir()?;
                 let runtime = resources.join("runtime");
-                if runtime.join("bin/node.exe").exists() {
+                let node = runtime.join(if cfg!(windows) {
+                    "bin/node.exe"
+                } else {
+                    "bin/node"
+                });
+                if node.exists() {
                     let data = app.state::<Desktop>().home.clone();
                     let handle = app.handle().clone();
                     std::thread::spawn(move || {
-                        let output = std::process::Command::new(runtime.join("bin/node.exe"))
+                        let mut command = std::process::Command::new(node);
+                        command
                             .arg(runtime.join("packages/cli/dist/index.js"))
                             .arg("--home")
                             .arg(data)
                             .arg("--json")
-                            .arg("bootstrap")
-                            .creation_flags(0x08000000)
-                            .output();
-                        if let Ok(output) = output {
-                            if !output.status.success() {
-                                let _ = handle.emit(
-                                    "runtime:state",
-                                    Status {
-                                        online: false,
-                                        message: Some(
-                                            String::from_utf8_lossy(&output.stderr).into_owned(),
-                                        ),
-                                        generation: None,
-                                    },
-                                );
-                            }
+                            .arg("bootstrap");
+                        #[cfg(windows)]
+                        {
+                            use std::os::windows::process::CommandExt;
+                            command.creation_flags(0x08000000);
+                        }
+                        let error = match command.output() {
+                            Ok(output) if output.status.success() => None,
+                            Ok(output) => Some(format!(
+                                "{}{}",
+                                String::from_utf8_lossy(&output.stdout),
+                                String::from_utf8_lossy(&output.stderr)
+                            )),
+                            Err(error) => Some(error.to_string()),
+                        };
+                        if let Some(message) = error {
+                            eprintln!("Runtime bootstrap failed: {message}");
+                            let runtime = handle.state::<Arc<Runtime>>().inner().clone();
+                            tauri::async_runtime::block_on(
+                                runtime.bootstrap_failed(&handle, message),
+                            );
                         }
                     });
                 }
@@ -873,7 +903,7 @@ pub fn run() {
             let open =
                 tauri::menu::MenuItem::with_id(app, "open", "Open TodoCue", true, None::<&str>)?;
             let quit =
-                tauri::menu::MenuItem::with_id(app, "quit", "Quit preview", true, None::<&str>)?;
+                tauri::menu::MenuItem::with_id(app, "quit", "Quit TodoCue", true, None::<&str>)?;
             let menu = tauri::menu::Menu::with_items(app, &[&open, &quit])?;
             tauri::tray::TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
@@ -1064,8 +1094,19 @@ pub fn run() {
                 }
             }
         })
-        .run(context)
-        .expect("TodoCue desktop host failed");
+        .build(context)
+        .expect("TodoCue desktop host failed")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { ref urls } = event {
+                for url in urls {
+                    if let Some(target) = parse_target(url.as_str()) {
+                        route_target(app, target);
+                    }
+                }
+            }
+            let _ = (app, event);
+        });
 }
 
 #[cfg(test)]

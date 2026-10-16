@@ -48,9 +48,8 @@ fn run() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
             .map(|pair| pair[1].as_str())
             .unwrap_or("")
     };
-    let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(
-        "com.todocue.desktop.preview",
-    ))?;
+    let notifier =
+        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from("com.todocue.app"))?;
     let enabled = notifier.Setting()? == NotificationSetting::Enabled;
     match args.first().map(String::as_str) {
         Some("status" | "request") => Ok(
