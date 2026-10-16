@@ -8,6 +8,8 @@
 
 同日合并后构建：Windows x64/ARM64 的 NSIS 与各十组安装检查、原 SwiftUI Apple Silicon/Intel 的 Developer ID 公证 DMG 均通过。[PR #18](https://github.com/NanmiCoder/TodoCue/pull/18) 补齐共享 Mac 双架构 release App ZIP，四目标 Desktop 和三项 Quality CI 通过后合并交接分支（`3bb8ceb`）。[产物、源码与验收边界](qa/desktop-builds/README.md)明确区分共享 Mac 的 ad-hoc / 外部运行时条件和原 SwiftUI 独立 DMG；没有合并 main 或正式发布。
 
+2026-10-16：修复 Mac 从应用程序/Finder 直接打开时丢失隔离数据目录，导致后台健康但 UI 持续离线。release Preview 记住显式选择的目录，后续直接打开复用；配置损坏时保留临时预览默认，不回退生产目录。7 项新回归、本机直接启动及真实创建/落库通过，见[本轮记录](qa/desktop-macos-runtime/README.md)。任务引擎/API/数据库没有改动。
+
 ## 实现边界
 
 | 部分 | 当前实现 |

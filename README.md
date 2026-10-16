@@ -142,6 +142,8 @@ The [independent review fixes](docs/qa/desktop-review-fixes/README.md) correct C
 
 [Merged build results and downloads](docs/qa/desktop-builds/README.md) include all four shared Preview targets and two Developer ID signed, notarized SwiftUI DMGs. All CI checks pass. Shared Mac previews use ad-hoc signing and require an external isolated runtime; these CI artifacts are separate from the official release.
 
+The shared Mac release preview now remembers an explicitly selected isolated runtime directory, so reopening it from Finder or the Dock keeps the connection. [Fix and native verification](docs/qa/desktop-macos-runtime/README.md) cover the offline startup regression; external runtime packaging remains pending.
+
 ## License
 
 [MIT](LICENSE) © 2026 NanmiCoder. Contributions welcome.

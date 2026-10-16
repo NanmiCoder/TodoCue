@@ -142,6 +142,8 @@ DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的�
 
 [合并后构建与下载](docs/qa/desktop-builds/README.md)提供四种共享 Preview 和两种 Developer ID 签名、公证的 SwiftUI DMG，相关 CI 全通过。共享 Mac 预览为 ad-hoc 签名并需要外部隔离运行时；这些 CI 产物与正式 Release 分开。
 
+共享 Mac release 预览现在记住显式选定的隔离运行时目录，从 Finder/Dock 重开仍能连接。[修复与原生实测](docs/qa/desktop-macos-runtime/README.md)覆盖直接启动后一直离线的回归；外部运行时正式打包仍待完成。
+
 ## 许可证
 
 [MIT](LICENSE) © 2026 NanmiCoder。欢迎使用、修改和贡献。

@@ -8,6 +8,8 @@
 
 **合并后构建：** [PR #18](https://github.com/NanmiCoder/TodoCue/pull/18) 补齐共享 Mac 双架构 release App，七项 CI 通过后合并到交接分支（`3bb8ceb`）。Windows x64/ARM64 NSIS、共享 Mac Apple Silicon/Intel App ZIP、原 SwiftUI 双架构 Developer ID 公证 DMG 均已生成。[六种产物下载、源码记录、测试和边界](qa/desktop-builds/README.md)已整理。共享 Mac 仍需要外部隔离运行时；main 和正式 Release 未改变。
 
+**2026-10-16 Mac 直接打开离线修复：** 后台健康，但直接打开 App 未携带隔离目录参数，旧版回到临时开发目录并一直显示“后台服务未连接”。release Preview 现在记住显式选定的目录，Finder/Dock 重开自动复用；开发 debug 保持隔离默认。已在本机替换修复版，确认无参数/无环境变量直接打开恢复原任务，回车创建只持久化一次。见[原因、7 项新回归及实测](qa/desktop-macos-runtime/README.md)。这不替代 Mac 运行时正式打包。
+
 ## 代码从哪里继续
 
 - 仓库：<https://github.com/NanmiCoder/TodoCue>。
