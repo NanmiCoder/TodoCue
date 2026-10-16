@@ -8,11 +8,12 @@ export default defineConfig({
     alias: {
       "@todocue/shared": r("./packages/shared/src/index.ts"),
       "@todocue/engine": r("./packages/engine/src/index.ts"),
+      "@todocue/client": r("./packages/client/src/index.ts"),
       "@todocue/server": r("./packages/server/src/index.ts"),
     },
   },
   test: {
-    include: ["packages/*/test/**/*.test.ts"],
+    include: ["packages/*/test/**/*.test.ts", "apps/desktop/test/**/*.test.ts"],
     environment: "node",
     testTimeout: 20000,
   },

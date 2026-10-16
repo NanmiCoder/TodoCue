@@ -16,18 +16,22 @@ import {
   resolveHome,
   runtimePaths,
   startRuntime,
+  runtimeRoot,
   type RuntimePaths,
 } from "@todocue/server";
 import { bootstrapRuntime, installCliWrapper } from "../bootstrap.js";
 import { print, type OutputOptions } from "../output.js";
+import { windowsProductIntegration, windowsSpec } from "../windows-service.js";
+import { registerWindowsHome } from "../windows-integration.js";
 import {
+  serviceLabel,
   installLaunchAgent,
   launchAgentStatus,
   restartLaunchAgent,
   startLaunchAgent,
   stopLaunchAgent,
   uninstallLaunchAgent,
-} from "../launchagent.js";
+} from "../service.js";
 
 const execFileP = promisify(execFile);
 type Ctx = { client: () => TodoCueClient; out: () => OutputOptions; home: () => string | undefined };
@@ -63,6 +67,11 @@ async function waitForRuntime(paths: RuntimePaths, timeoutMs: number): Promise<b
 }
 
 export function registerOpsCommands(program: Command, ctx: Ctx): void {
+  program.command("windows-integration <action>", { hidden: true })
+    .action(async (action: string) => {
+      if (process.platform !== "win32" || !["stop", "start", "uninstall"].includes(action)) throw new Error("Invalid Windows installer action");
+      await windowsProductIntegration(runtimeRoot(), action as "stop" | "start" | "uninstall");
+    });
   program.command("bootstrap", { hidden: true }).description("prepare the packaged app runtime")
     .action(async () => {
       const result = await bootstrapRuntime(resolveHome(ctx.home()));
@@ -70,9 +79,13 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
     });
   program
     .command("serve")
-    .description("run the runtime in the foreground (used by the LaunchAgent)")
+    .description("run the runtime in the foreground (also used by the background service)")
     .option("--port <n>")
     .action(async (opts) => {
+      if (process.platform === "win32" && packagedHelper()) {
+        const paths = runtimePaths(resolveHome(ctx.home()));
+        registerWindowsHome(windowsSpec(paths, { nodePath: process.execPath, cliEntry: cliEntryPath() }));
+      }
       const rt = await startRuntime({ home: ctx.home(), port: opts.port ? Number.parseInt(opts.port, 10) : undefined });
       const shutdown = async (sig: string) => {
         process.stdout.write(`received ${sig}, stopping\n`);
@@ -85,10 +98,10 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
       await new Promise(() => {});
     });
 
-  const service = program.command("service").description("manage the background runtime (launchd user agent)");
+  const service = program.command("service").description(`manage the background runtime (${serviceLabel})`);
   service
     .command("install")
-    .description("install and start the LaunchAgent")
+    .description(`install and start the ${serviceLabel}`)
     .option("--port <n>")
     .action(async (opts) => {
       const paths = runtimePaths(resolveHome(ctx.home()));
@@ -101,10 +114,10 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
       const up = await waitForRuntime(paths, 10_000);
       print(ctx.out(), { plist, running: up }, () => `installed ${plist}\nruntime ${up ? "is running" : "did not report healthy within 10s; check " + paths.logs}`);
     });
-  service.command("uninstall").description("stop and remove the LaunchAgent (task data is kept)").action(async () => {
+  service.command("uninstall").description(`stop and remove the ${serviceLabel} (task data is kept)`).action(async () => {
     const paths = runtimePaths(resolveHome(ctx.home()));
     const removed = await uninstallLaunchAgent(paths);
-    print(ctx.out(), { removed }, () => (removed ? `removed ${paths.launchAgentPlist}; data kept in ${paths.home}` : "service was not installed"));
+    print(ctx.out(), { removed }, () => (removed ? `removed ${serviceLabel}; data kept in ${paths.home}` : "service was not installed"));
   });
   service.command("start").action(async () => {
     const paths = runtimePaths(resolveHome(ctx.home()));
@@ -131,7 +144,7 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
     const alive = await isRuntimeAlive(paths);
     print(ctx.out(), { launchAgent: la, runtime: alive }, () =>
       [
-        `launch agent: ${la.detail}`,
+        `${serviceLabel}: ${la.detail}`,
         alive ? `runtime: reachable at ${alive.baseUrl} (pid ${alive.pid}, v${alive.runtimeVersion})` : "runtime: not reachable",
       ].join("\n"),
     );
@@ -139,7 +152,7 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
 
   program
     .command("install")
-    .description("install everything for this Mac: home dir, notifier helper, app, LaunchAgent, notification permission")
+    .description(process.platform === "win32" ? "prepare the installed Windows app runtime, CLI and current-user background task" : "install everything for this Mac: home dir, notifier helper, app, LaunchAgent, notification permission")
     .option("--skip-apps", "do not copy the macOS app bundles")
     .option("--skip-notifications", "do not request notification authorization")
     .option("--port <n>")
@@ -147,7 +160,7 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
       const paths = runtimePaths(resolveHome(ctx.home()));
       ensureHome(paths);
       const steps: { step: string; ok: boolean; detail: string }[] = [];
-      if (appBundle()) {
+      if (appBundle() || process.platform === "win32") {
         const result = await bootstrapRuntime(paths.home);
         const authorization = opts.skipNotifications ? null : await ctx.client().requestNotificationAuthorization();
         print(ctx.out(), { ...result, authorization }, () => `TodoCue installed; data: ${paths.home}`);
@@ -217,7 +230,7 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
   program
     .command("doctor")
     .description("diagnose installation, runtime, notifications and reminders")
-    .option("--request-notifications", "trigger the system notification permission prompt (macOS only ever prompts once per app)")
+    .option("--request-notifications", "request or inspect system notification authorization")
     .option("--open-notification-settings", "open System Settings › Notifications so the helper can be enabled by hand")
     .action(async (opts) => {
       const home = resolveHome(ctx.home());
@@ -253,7 +266,7 @@ export function registerOpsCommands(program: Command, ctx: Ctx): void {
             add(
               "notificationSettings",
               false,
-              "macOS will not prompt again — enable TodoCueNotifier in System Settings › Notifications, or run `todocue doctor --open-notification-settings`",
+              process.platform === "win32" ? "Enable TodoCue in Settings > Notifications, or run `todocue doctor --open-notification-settings`" : "macOS will not prompt again — enable TodoCueNotifier in System Settings › Notifications, or run `todocue doctor --open-notification-settings`",
             );
           }
           add("notificationRequest", auth.authorization === "authorized" || auth.authorization === "provisional", `authorization now: ${auth.authorization}`);

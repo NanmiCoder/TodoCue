@@ -5,10 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const packageFiles = ['package.json', ...['cli', 'engine', 'server', 'shared'].map(name => `packages/${name}/package.json`)];
+const packageFiles = directory => ['package.json', ...['cli', 'engine', 'server', 'shared'].map(name => `packages/${name}/package.json`),
+  ...['packages/client/package.json', 'apps/desktop/package.json'].filter(file => fs.existsSync(path.join(directory, file)))];
 const runtimeFile = 'packages/shared/src/index.ts';
 const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const runtimeVersion = /export const RUNTIME_VERSION = "([^"]+)";/;
+const nativeFiles = directory => ['apps/desktop/src-tauri/tauri.conf.json', 'apps/desktop/src-tauri/Cargo.toml', 'apps/desktop/src-tauri/Cargo.lock'].filter(file => fs.existsSync(path.join(directory, file)));
+const cargoVersion = /(^\[package\]\r?\n(?:(?!^\[)[\s\S])*?^version = ")([^"]+)(")/m;
+const cargoLockVersion = /(\[\[package\]\]\r?\nname = "todocue-desktop"\r?\nversion = ")([^"]+)(")/;
 const json = (directory, file) => JSON.parse(fs.readFileSync(path.join(directory, file), 'utf8'));
 const git = (directory, args) => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
 
@@ -42,7 +46,7 @@ export function checkVersions(directory = root) {
     if (actual !== version) throw new Error(`${label}: expected ${version}, found ${actual}`);
   };
   assertVersion(lock.version, 'package-lock.json');
-  for (const file of packageFiles) {
+  for (const file of packageFiles(directory)) {
     const pkg = json(directory, file);
     const key = path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file);
     assertVersion(pkg.version, file);
@@ -55,6 +59,11 @@ export function checkVersions(directory = root) {
     }
   }
   assertVersion(fs.readFileSync(path.join(directory, runtimeFile), 'utf8').match(runtimeVersion)?.[1], runtimeFile);
+  for (const file of nativeFiles(directory)) {
+    const text = fs.readFileSync(path.join(directory, file), 'utf8');
+    const actual = file.endsWith('.json') ? JSON.parse(text).version : text.match(file.endsWith('.lock') ? cargoLockVersion : cargoVersion)?.[2];
+    assertVersion(actual, file);
+  }
   return version;
 }
 
@@ -77,7 +86,7 @@ export function prepareRelease(directory, bump, dry = false) {
   const version = nextVersion(current, bump);
   const notes = releaseNotes(directory, version);
   const tag = `v${version}`;
-  const files = [...packageFiles, 'package-lock.json', runtimeFile, notes];
+  const files = [...packageFiles(directory), ...nativeFiles(directory), 'package-lock.json', runtimeFile, notes];
   if (git(directory, ['tag', '--list', tag])) throw new Error(`Tag already exists: ${tag}`);
   const branch = git(directory, ['branch', '--show-current']);
   if (!branch) throw new Error('Release preparation requires a branch, not detached HEAD.');
@@ -91,7 +100,7 @@ export function prepareRelease(directory, bump, dry = false) {
   if (dirty) throw new Error('Commit or stash existing changes before preparing a release. Only the target release notes may be uncommitted.');
   const lock = json(directory, 'package-lock.json');
   lock.version = version;
-  for (const file of packageFiles) {
+  for (const file of packageFiles(directory)) {
     const pkg = json(directory, file);
     pkg.version = version;
     const key = path.posix.dirname(file) === '.' ? '' : path.posix.dirname(file);
@@ -108,6 +117,11 @@ export function prepareRelease(directory, bump, dry = false) {
   fs.writeFileSync(path.join(directory, 'package-lock.json'), JSON.stringify(lock, null, 2) + '\n');
   const runtimePath = path.join(directory, runtimeFile);
   fs.writeFileSync(runtimePath, fs.readFileSync(runtimePath, 'utf8').replace(runtimeVersion, `export const RUNTIME_VERSION = "${version}";`));
+  for (const file of nativeFiles(directory)) {
+    const target = path.join(directory, file);
+    if (file.endsWith('.json')) fs.writeFileSync(target, JSON.stringify({ ...json(directory, file), version }, null, 2) + '\n');
+    else fs.writeFileSync(target, fs.readFileSync(target, 'utf8').replace(file.endsWith('.lock') ? cargoLockVersion : cargoVersion, `$1${version}$3`));
+  }
   checkRelease(directory, tag);
   git(directory, ['add', '--', ...files]);
   if (git(directory, ['diff', '--cached', '--name-only'])) git(directory, ['commit', '-m', `release: ${tag}`]);

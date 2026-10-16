@@ -1,5 +1,7 @@
 **English** · [简体中文](README.zh-CN.md)
 
+> **v0.6.0 desktop release:** macOS and Windows now use the shared React/Tauri client. Installers bundle Node, SQLite and notifications; no separate runtime is required. Choose macOS Apple Silicon/Intel or Windows x64/ARM64 from [Releases](https://github.com/NanmiCoder/TodoCue/releases/latest). Mac installers are Developer ID signed and notarized; Windows installers are unsigned. [Upgrade details, rollback and known limits](release-notes/v0.6.0.md). Apple Calendar/Reminders sync and hardware-notch adaptation remain available in the legacy v0.5.3 SwiftUI client; they are not yet supported by the shared client. The older screenshots and descriptions below document that legacy experience where indicated.
+
 <p align="center">
   <img src="assets/readme/hero.webp" width="100%" alt="TodoCue — A little cue. A clearer day. A large signal-orange open ring behind a Dial panel on a glass tray, with a reminder dropping from the notch.">
 </p>
@@ -7,21 +9,21 @@
 <p align="center">
   <strong>Turn your Agent conversations into things that get done.</strong><br>
   Create and manage tasks and reminders with natural language, through Skills.<br>
-  TodoCue keeps them visible on your Mac and reminds you when it's time.
+  TodoCue keeps them visible on your desktop and reminds you when it's time.
 </p>
 
 <p align="center">
-  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>Download for macOS</strong></a> ·
+  <a href="https://github.com/NanmiCoder/TodoCue/releases/latest"><strong>Download for macOS & Windows</strong></a> ·
   <a href="#install-the-skill">Install the Skill</a> ·
   <a href="release-notes/">Release notes</a> ·
   <a href="LICENSE">MIT</a>
 </p>
 
-## Plan in the conversation. See it on your Mac.
+## Plan in the conversation. See it on your desktop.
 
-While you code, discuss ideas, or work across projects with an Agent, little follow-ups come up: check a release tomorrow, send a draft, revisit a decision. Ask your Agent to save them in TodoCue and keep the conversation going. The tasks appear in the native macOS panel; set a reminder and TodoCue will notify you when it's time.
+While you code, discuss ideas, or work across projects with an Agent, little follow-ups come up: check a release tomorrow, send a draft, revisit a decision. Ask your Agent to save them in TodoCue and keep the conversation going. The tasks appear in the desktop panel; set a reminder and TodoCue will notify you when it's time.
 
-**Your Agent is the main way to use TodoCue.** The same Skill lets Claude Code, Codex, Cursor, WorkBuddy, and other Agents that support Skills and local commands create, find, update, and complete tasks. Across projects and Agents, they work with the same task list on your Mac.
+**Your Agent is the main way to use TodoCue.** The same Skill lets Claude Code, Codex, Cursor, WorkBuddy, and other Agents that support Skills and local commands create, find, update, and complete tasks. Across projects and Agents, they work with the same task list on your computer.
 
 | Say something like… | What happens |
 | --- | --- |
@@ -53,11 +55,11 @@ Drag the empty area in the top bar to move the panel; dragging in titles and not
 
 - **See what you finished.** Completed work is kept: open Completed from the panel menu, or from the day's completed list, to review by day and search back through it. Reopen anything with one click.
 - **Look further ahead.** Open the calendar from the panel header (⌘⇧K) to see what you have done, what is in flight, and what is scheduled months out. Switch between a month grid and a week list; pick a day to work through it. Drag a task onto another day to reschedule it — the time of day is kept, the deadline and reminder are not touched — and add straight to the day you are looking at. Repeating tasks beyond the 30-day generation horizon show as not-yet-created placeholders rather than an empty month.
-- **Carry it to your iPhone.** Turn on **Sync to Calendar** or **Sync to Reminders** in Settings and dated tasks appear in a "TodoCue" calendar or reminder list that iCloud brings to your iPhone. Changes go both ways: reschedule, rename, or check off there and TodoCue follows; deleting an item deletes its task. Reminders alone is the recommended setup — dated reminders also appear in Calendar on iOS 18 and macOS 15. Sync runs while the app is open and adds no alerts of its own. [Details (中文)](docs/apple-sync.md)
+- **Legacy v0.5.3: carry it to your iPhone.** Turn on **Sync to Calendar** or **Sync to Reminders** in Settings and dated tasks appear in a "TodoCue" calendar or reminder list that iCloud brings to your iPhone. Changes go both ways: reschedule, rename, or check off there and TodoCue follows; deleting an item deletes its task. Reminders alone is the recommended setup — dated reminders also appear in Calendar on iOS 18 and macOS 15. Sync runs while the app is open and adds no alerts of its own. [Details (中文)](docs/apple-sync.md)
 - **Reorder as you go.** Drag a task and its neighbors move out of the way. Move between projects in All or dates in Upcoming; reorder within a group in Today. Undo a move or restore automatic sorting.
 - **Choose your language.** English and Simplified Chinese are available in Settings. The first launch follows your system language, with English as the fallback. Task content stays in its original language.
-- **Keep it close.** A native SwiftUI and AppKit floating panel in light and dark appearances. Graphite tiles stay dark; frosted tiles follow your system and blur the desktop behind them.
-- **A glance at the notch.** On MacBooks with a notch, see the remaining count beside it. Hover to expand today's tasks, then complete, snooze, reschedule, or add a task. Click to pin and type; Esc collapses it. With the lid closed or on external displays, TodoCue draws a notch in the middle of the menu bar that follows the pointer to whichever screen you are using; turn it off in Settings.
+- **Keep it close.** A shared React/Tauri floating panel with native system effects in light and dark appearances. Graphite tiles stay dark; frosted tiles follow your system and blur the desktop behind them.
+- **A glance at the notch.** A virtual notch at the top of the screen shows the remaining count. Hover to expand today's tasks, then complete, snooze, reschedule, or add a task. Click to pin and type; Esc collapses it. With the lid closed or on external displays, TodoCue draws a notch in the middle of the menu bar that follows the pointer to whichever screen you are using; turn it off in Settings.
 - **Reminders that follow through.** Repeat tasks, set reminders, snooze, and undo completion. Closing the panel leaves the background reminder service running.
 - **Your data stays yours.** Tasks live in `~/.todocue/todocue.sqlite`. Replacing, removing, or reinstalling the app keeps that directory intact.
 
@@ -77,16 +79,18 @@ todocue --json periodic add 'Move a little' --every 30m --weekdays mon,wed,sat -
 
 Current version: **[v0.5.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.5.1)**. Requires **macOS 14 or later**. Both architectures are distributed as Developer ID–signed, Apple-notarized apps and DMGs.
 
-| Your Mac | Installer |
+| Computer | Installer |
 | --- | --- |
 | Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/TodoCue-0.5.1-macOS-arm64.dmg) |
-| Intel | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/TodoCue-0.5.1-macOS-x64.dmg) |
+| Intel Mac | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/TodoCue-0.5.1-macOS-x64.dmg) |
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
 The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
 [Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+
+Windows: choose `Windows-x64-setup.exe` or `Windows-arm64-setup.exe`. The current-user installer includes offline WebView2 and the runtime. Windows packages are unsigned; verify `SHA256SUMS` from the release. Quit and uninstall an older Preview before installing the production client; task data is retained.
 
 ## Install the Skill
 
@@ -100,7 +104,7 @@ For WorkBuddy or clients not listed by the installer, import the repository's [`
 
 Then ask: “Use TodoCue to add a task to summarize this week's progress, plan it for today, put it under Work, and estimate 25 minutes.” Keep using natural language to query, reschedule, set reminders, and complete tasks.
 
-The Agent must have access to the same Mac where TodoCue is installed and permission to run local commands. Loading the Skill in a remote or cloud-only environment does not give it access to this Mac's tasks. The app's quick-add field saves a task title; dates and reminders can be set in the form.
+The Agent must have access to the same computer where TodoCue is installed and permission to run local commands. Loading the Skill in a remote or cloud-only environment does not give it access to this computer's tasks. The app's quick-add field saves a task title; dates and reminders can be set in the form.
 
 MCP is an optional entry point via `todocue mcp`. For custom integrations, see the [Local API documentation](docs/api.md).
 
@@ -114,24 +118,27 @@ npm ci
 npm run build
 npm test
 swift test --package-path apps/macos
-npm run macos:dmg
+npm run desktop:macos
 ```
 
-The DMG is written to `apps/macos/build/`. Local packaging downloads and verifies a pinned official Node runtime, installs locked production dependencies, and checks that the bundled Node, SQLite, and MCP run correctly.
+The shared DMG is written to `apps/desktop/build/`. On Windows use `npm run windows:build` on the matching architecture. Local packaging downloads and verifies a pinned official Node runtime, installs locked production dependencies, and checks that the bundled Node, SQLite, and MCP run correctly.
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/macos` | SwiftUI / AppKit client and notification helper |
+| `apps/macos` | Legacy SwiftUI / AppKit client and current Mac notification helper |
+| `apps/desktop`, `packages/client` | Production Tauri 2 frontend and portable client |
 | `packages/engine` | Task rules, recurring occurrences, reminders, and SQLite |
 | `packages/server` | Local API, authentication, and SSE updates |
 | `packages/cli`, `packages/shared` | CLI / MCP interfaces and shared contracts |
 | `skills/todocue` | Distributable Agent Skill |
 
-Use `npm run dev:serve` for development and `TODOCUE_HOME` to isolate development data. Pushing a `vX.Y.Z` tag triggers GitHub Actions to build, sign, notarize, and release both architectures.
+Use `npm run dev:serve` for development and `TODOCUE_HOME` to isolate development data. Pushing a `vX.Y.Z` tag triggers GitHub Actions to build, sign, notarize, and release both Mac and both Windows architectures.
 
 [Release guide (中文)](docs/github-release.md) · [Implementation and QA (中文)](docs/implementation-plan.md) · [Open an issue](https://github.com/NanmiCoder/TodoCue/issues)
 
 </details>
+
+The shared desktop client is now the production build. Use `npm run desktop:dev` with isolated data for development. The `Release desktop (Mac and Windows)` workflow checks all four installers before publication. [Setup](apps/desktop/README.md), [migration/QA status](docs/desktop-migration.md), and [handoff](docs/desktop-handoff.md) distinguish tested behavior from outstanding hardware acceptance. Earlier preview evidence remains in [UI comparison](docs/qa/desktop-p1-ui/README.md), [independent review fixes](docs/qa/desktop-review-fixes/README.md), and [offline startup fix](docs/qa/desktop-macos-runtime/README.md).
 
 ## License
 

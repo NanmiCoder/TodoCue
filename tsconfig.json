@@ -4,10 +4,23 @@
     "composite": false,
     "noEmit": true,
     "paths": {
-      "@todocue/shared": ["./packages/shared/src/index.ts"],
-      "@todocue/engine": ["./packages/engine/src/index.ts"],
-      "@todocue/server": ["./packages/server/src/index.ts"]
+      "@todocue/shared": [
+        "./packages/shared/src/index.ts"
+      ],
+      "@todocue/engine": [
+        "./packages/engine/src/index.ts"
+      ],
+      "@todocue/server": [
+        "./packages/server/src/index.ts"
+      ],
+      "@todocue/client": [
+        "./packages/client/src/index.ts"
+      ]
     }
   },
-  "include": ["packages/*/src", "packages/*/test", "vitest.config.ts"]
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "vitest.config.ts"
+  ]
 }

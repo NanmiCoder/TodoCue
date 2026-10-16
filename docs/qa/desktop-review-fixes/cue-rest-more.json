@@ -1,0 +1,11 @@
+{
+  "rest": {
+    "rows": 3,
+    "featured": 0,
+    "more": "+1"
+  },
+  "more": {
+    "rows": 4,
+    "focus": "Quick add to today"
+  }
+}

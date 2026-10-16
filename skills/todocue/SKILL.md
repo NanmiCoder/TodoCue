@@ -5,11 +5,13 @@ description: 通过 TodoCue CLI 管理本机持久化待办、今日计划、截
 
 # TodoCue
 
-Use TodoCue to manage the user's persistent tasks on this Mac. The CLI and macOS app share a local runtime. A reminder produces a macOS notification and, when enabled on a notched Mac, an actionable Cue card; it does not wake an agent or execute the task.
+Use TodoCue to manage the user's persistent tasks on this computer. The CLI and desktop app share a local runtime. A reminder produces a system notification and, when enabled, an actionable notch Cue card; it does not wake an agent or execute the task.
 
 ## Connect
 
 Use `todocue --json <command>`. If it is missing from PATH, check the installed wrapper at `${TODOCUE_HOME:-$HOME/.todocue}/bin/todocue` and invoke its absolute path. For a source checkout with built packages, `node /absolute/path/to/TodoCue/packages/cli/dist/index.js --json <command>` is equivalent and requires Node 24+.
+
+On Windows, the installed launcher is `todocue.exe`. If PATH is not refreshed, use `%USERPROFILE%\.todocue\bin\todocue.exe` (or `TODOCUE_HOME\bin\todocue.exe` for a custom home). In PowerShell invoke a quoted executable path with `&`. The Windows preview installer carries Node, native SQLite, the notifier, CLI and this Skill; first app launch installs a current-user background task. Check `service status` or open the app once if it has not started. The runtime data remains outside the installation directory.
 
 Run `context` when first connecting and before interpreting relative dates. It returns `now`, `today`, `localNow`, `weekday`, and `timezone`. Use this runtime context rather than the conversation's date. Commands connect automatically; there is no need to read or display the token.
 
@@ -17,7 +19,7 @@ The DMG app contains its runtime and CLI. Its first launch from Applications ins
 
 If unavailable, run `--json doctor` and `--json service status`. For an already installed but stopped service, `service start` starts the runtime; retry `context` once. If startup still fails, open the installed App to repair its setup and report the specific error if it persists. Source-only development uses `todocue serve` or `todocue install` after building. Task data lives in `~/.todocue/todocue.sqlite`, outside the App, and remains after the App is removed or replaced.
 
-Honor a user-selected `--home <directory>` or `TODOCUE_HOME` consistently. A different home selects a different data store. Local CLI access requires the same machine/user environment as the app; a remote agent cannot reach the user's Mac merely by loading this skill.
+Honor a user-selected `--home <directory>` or `TODOCUE_HOME` consistently. A different home selects a different data store. Local CLI access requires the same machine/user environment as the app; a remote agent cannot reach the user's computer merely by loading this skill.
 
 ## Choose the operation
 

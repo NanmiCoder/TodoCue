@@ -1,0 +1,141 @@
+{
+  "writeAfter": 423.30000019073486,
+  "responseAfter": 475.5,
+  "samples": [
+    {
+      "at": -55.99999980926532,
+      "present": true,
+      "check": "matrix(0.990354, 0, 0, 0.990354, 0, 0)",
+      "digits": [
+        [
+          {
+            "text": "3",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ],
+        [
+          {
+            "text": "7",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ]
+      ],
+      "tip": {
+        "x": 59.25163899010278,
+        "y": 8.141752080842018
+      }
+    },
+    {
+      "at": 944.3000001907349,
+      "present": true,
+      "check": "none",
+      "digits": [
+        [
+          {
+            "text": "3",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ],
+        [
+          {
+            "text": "7",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ]
+      ],
+      "tip": {
+        "x": 59.25163899010278,
+        "y": 8.141752080842018
+      }
+    },
+    {
+      "at": 1977.600000190735,
+      "present": false,
+      "check": null,
+      "digits": [
+        [
+          {
+            "text": "3",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ],
+        [
+          {
+            "text": "7",
+            "transform": "none",
+            "opacity": "1"
+          },
+          {
+            "text": "6",
+            "transform": "matrix(1, 0, 0, 1, 0, -38.25)",
+            "opacity": "0"
+          }
+        ]
+      ],
+      "tip": {
+        "x": 64.33583958711398,
+        "y": 11.257354213751995
+      }
+    },
+    {
+      "at": 3012.400000190735,
+      "present": false,
+      "check": null,
+      "digits": [
+        [
+          {
+            "text": "3",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ],
+        [
+          {
+            "text": "7",
+            "transform": "none",
+            "opacity": "0"
+          },
+          {
+            "text": "6",
+            "transform": "matrix(1, 0, 0, 1, 0, -38.25)",
+            "opacity": "1"
+          }
+        ]
+      ],
+      "tip": {
+        "x": 64.33583958711398,
+        "y": 11.257354213751995
+      }
+    },
+    {
+      "at": 4077.800000190735,
+      "present": false,
+      "check": null,
+      "digits": [
+        [
+          {
+            "text": "3",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ],
+        [
+          {
+            "text": "6",
+            "transform": "none",
+            "opacity": "1"
+          }
+        ]
+      ],
+      "tip": {
+        "x": 64.33583958711398,
+        "y": 11.257354213751995
+      }
+    }
+  ]
+}

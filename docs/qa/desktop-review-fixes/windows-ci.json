@@ -1,0 +1,42 @@
+{
+  "source": "50762d4146b0f804ee6ae54f7958363c995e6503",
+  "run": 38604992823,
+  "matrix": [
+    {
+      "architecture": "x64",
+      "job": 115993478426,
+      "installerArtifact": 11916550344,
+      "reportArtifact": 11916060470,
+      "passed": [
+        "silent NSIS install, packaged Node architecture and native SQLite SQL",
+        "custom home bootstrap, current-user scheduled runtime and installed CLI shim",
+        "packaged CLI and ordinary custom-home shim context/add/read without home flag or environment",
+        "ordinary installed MCP without home flag/environment initializes, discovers and reads its task",
+        "background stop/start preserves SQLite task and attachment",
+        "GUI runtime bootstrap retains the existing non-default port and installed shim connection",
+        "silent reinstall stops and resumes the registered custom-home runtime",
+        "disabled scheduled task makes installer fail nonzero, retaining data/recovery state for successful retry",
+        "acknowledged but unhealthy restart fails installation and keeps recovery until a healthy retry",
+        "uninstall removes service, CLI and PATH while preserving the database"
+      ]
+    },
+    {
+      "architecture": "arm64",
+      "job": 115993478110,
+      "installerArtifact": 11916905405,
+      "reportArtifact": 11916950323,
+      "passed": [
+        "silent NSIS install, packaged Node architecture and native SQLite SQL",
+        "custom home bootstrap, current-user scheduled runtime and installed CLI shim",
+        "packaged CLI and ordinary custom-home shim context/add/read without home flag or environment",
+        "ordinary installed MCP without home flag/environment initializes, discovers and reads its task",
+        "background stop/start preserves SQLite task and attachment",
+        "GUI runtime bootstrap retains the existing non-default port and installed shim connection",
+        "silent reinstall stops and resumes the registered custom-home runtime",
+        "disabled scheduled task makes installer fail nonzero, retaining data/recovery state for successful retry",
+        "acknowledged but unhealthy restart fails installation and keeps recovery until a healthy retry",
+        "uninstall removes service, CLI and PATH while preserving the database"
+      ]
+    }
+  ]
+}

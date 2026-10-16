@@ -1,0 +1,7298 @@
+[
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "标题",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "备注",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "提醒标题",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "zh-CN",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 300,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 340,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 480,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "today",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "all",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "detail",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "completed",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "light",
+    "motion": "reduce",
+    "width": 600,
+    "page": "settings",
+    "actualDark": false,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 300,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 340,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 480,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 49,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "no-preference",
+    "width": 600,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": false,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 300,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 300,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 74,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 68,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 340,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 340,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 480,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 480,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "today",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "upcoming",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "all",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "detail",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "edit-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 50,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 51,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "long-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "schedule-popover",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Title",
+        "height": 99,
+        "line": 24.7,
+        "max": "98.8px"
+      },
+      {
+        "label": "Notes",
+        "height": 101,
+        "line": 16.9,
+        "max": "101.4px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-month",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-collapsed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "calendar-week",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "completed",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "periodic-form",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": [
+      {
+        "label": "Reminder title",
+        "height": 50,
+        "line": null,
+        "max": "95.2px"
+      }
+    ]
+  },
+  {
+    "language": "en",
+    "theme": "dark",
+    "motion": "reduce",
+    "width": 600,
+    "page": "settings",
+    "actualDark": true,
+    "actualReduced": true,
+    "scrollWidth": 600,
+    "outside": [],
+    "footerVisible": true,
+    "textareas": []
+  }
+]

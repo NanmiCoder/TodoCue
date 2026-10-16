@@ -90,6 +90,7 @@ export async function startRuntime(opts: RuntimeOptions = {}): Promise<RunningRu
   const notifier =
     opts.notifier ??
     new HelperNotifier({
+      home: paths.home,
       searchPaths: [packagedHelper() ?? "", ...defaultHelperCandidates(paths.home), repoHelperCandidate() ?? ""].filter(Boolean),
       log: (m) => logger.info(m),
     });
@@ -108,10 +109,10 @@ export async function startRuntime(opts: RuntimeOptions = {}): Promise<RunningRu
     doctorInfo: () => ({ home: paths.home, databasePath: opened.path, schemaVersion: opened.schemaVersion, baseUrl }),
     extraChecks: () => [
       {
-        name: "launchAgent",
-        ok: fs.existsSync(paths.launchAgentPlist),
-        level: fs.existsSync(paths.launchAgentPlist) ? "ok" : "warn",
-        detail: fs.existsSync(paths.launchAgentPlist)
+        name: process.platform === "win32" ? "windowsUserTask" : "launchAgent",
+        ok: fs.existsSync(process.platform === "win32" ? path.join(paths.home, "windows-runtime.json") : paths.launchAgentPlist),
+        level: fs.existsSync(process.platform === "win32" ? path.join(paths.home, "windows-runtime.json") : paths.launchAgentPlist) ? "ok" : "warn",
+        detail: process.platform === "win32" ? "Windows user runtime; use todocue service status for live state" : fs.existsSync(paths.launchAgentPlist)
           ? `installed at ${paths.launchAgentPlist}`
           : "not installed; run `todocue service install` so reminders work without a terminal",
       },

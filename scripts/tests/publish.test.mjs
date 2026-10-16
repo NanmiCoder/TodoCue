@@ -3,14 +3,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
+import { verifyReleaseAssets } from '../verify-release-assets.mjs';
 import { spawnSync } from 'node:child_process';
 
 for (const scenario of ['new', 'draft', 'public', 'api-error', 'upload-error']) {
-  test(`publishing ${scenario}: a release becomes public only after successful upload`, t => {
+  test(`publishing ${scenario}: a release becomes public only after successful upload`, { skip: process.platform === "win32" }, t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'todocue-publish-test-'));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     fs.mkdirSync(path.join(directory, 'release-notes'));
     fs.writeFileSync(path.join(directory, 'release-notes/v0.1.0.md'), '# TodoCue v0.1.0\n');
+    fs.mkdirSync(path.join(directory, 'release-assets'));
+    for (const suffix of ['macOS-arm64.dmg', 'macOS-x64.dmg', 'Windows-arm64-setup.exe', 'Windows-x64-setup.exe']) {
+      const name = `TodoCue-0.1.0-${suffix}`;
+      const bytes = Buffer.from(name);
+      fs.writeFileSync(path.join(directory, 'release-assets', name), bytes);
+      fs.writeFileSync(path.join(directory, 'release-assets', `${name}.sha256`), `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`);
+    }
     fs.mkdirSync(path.join(directory, 'bin'));
     const mock = `#!${process.execPath}
 const fs = require('node:fs');
@@ -38,5 +47,22 @@ if (args[1] === 'upload' && process.env.SCENARIO === 'upload-error') process.exi
       if (scenario === 'new') assert.ok(calls.find(args => args[1] === 'create').includes('--draft'));
     }
     if (['public', 'api-error'].includes(scenario)) assert.equal(calls.length, 1);
+  });
+}
+
+for (const scenario of ['missing-windows', 'tampered-mac']) {
+  test(`asset verification refuses ${scenario} before publishing`, t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'todocue-assets-test-'));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    for (const suffix of ['macOS-arm64.dmg', 'macOS-x64.dmg', 'Windows-arm64-setup.exe', 'Windows-x64-setup.exe']) {
+      const name = `TodoCue-0.1.0-${suffix}`;
+      const bytes = Buffer.from(name);
+      fs.writeFileSync(path.join(directory, name), bytes);
+      fs.writeFileSync(path.join(directory, `${name}.sha256`), `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`);
+    }
+    if (scenario === 'missing-windows') fs.unlinkSync(path.join(directory, 'TodoCue-0.1.0-Windows-arm64-setup.exe'));
+    else fs.appendFileSync(path.join(directory, 'TodoCue-0.1.0-macOS-arm64.dmg'), 'tampered');
+    assert.throws(() => verifyReleaseAssets(directory, '0.1.0'));
+    assert.equal(fs.existsSync(path.join(directory, 'SHA256SUMS')), false);
   });
 }

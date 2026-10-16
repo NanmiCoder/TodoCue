@@ -1,4 +1,4 @@
-name: Release macOS
+name: Release desktop (Mac and Windows)
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-macos-${{ github.ref }}
+  group: release-desktop-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -89,7 +89,17 @@ jobs:
           xcodebuild -version
           xcrun --sdk macosx --show-sdk-version
           swift --version
+      - run: rustup update stable
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: desktop-stable-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml') }}
+          restore-keys: desktop-rust-v3-${{ runner.os }}-${{ runner.arch }}-
       - run: npm ci
+      - run: npm run desktop:check
       - run: swift test --package-path apps/macos
       - name: Import Developer ID and notarization credentials
         env:
@@ -102,14 +112,18 @@ jobs:
       - name: Package signed and notarized DMG
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run macos:dmg -- --release
+        run: npm run desktop:macos -- --release
+      - name: Installed standalone runtime smoke (isolated CI user)
+        run: node scripts/smoke-macos-install.mjs
+        env:
+          TODOCUE_MACOS_APP: ${{ github.workspace }}/apps/desktop/build/TodoCue.app
       - name: Upload verified installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: macos-release-${{ matrix.arch }}
+          name: desktop-release-macos-${{ matrix.arch }}
           path: |
-            apps/macos/build/TodoCue-${{ needs.validate.outputs.version }}-macOS-${{ matrix.arch }}.dmg
-            apps/macos/build/TodoCue-${{ needs.validate.outputs.version }}-macOS-${{ matrix.arch }}.dmg.sha256
+            apps/desktop/build/TodoCue-${{ needs.validate.outputs.version }}-macOS-${{ matrix.arch }}.dmg
+            apps/desktop/build/TodoCue-${{ needs.validate.outputs.version }}-macOS-${{ matrix.arch }}.dmg.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -118,7 +132,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: notarization-${{ matrix.arch }}
-          path: apps/macos/build/notarization/*.json
+          path: apps/desktop/build/notarization/*.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Delete temporary signing credentials
@@ -129,10 +143,64 @@ jobs:
           fi
           rm -f "$RUNNER_TEMP/todocue-signing.p12"
 
+  windows:
+    name: Windows installer and installed regression (${{ matrix.arch }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '26.7.0'
+          architecture: ${{ matrix.arch }}
+          cache: npm
+      - run: rustup update stable
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: desktop-stable-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'apps/desktop/src-tauri/Cargo.toml') }}
+          restore-keys: desktop-rust-v2-${{ runner.os }}-${{ runner.arch }}-
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run desktop:build
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: npm run windows:build -- --release
+      - run: node scripts/smoke-windows-install.mjs
+        env:
+          TODOCUE_INSTALL_SMOKE_REPORT: ${{ runner.temp }}/todocue-install-smoke.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: windows-install-smoke-${{ matrix.arch }}
+          path: ${{ runner.temp }}/todocue-install-smoke.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: desktop-release-windows-${{ matrix.arch }}
+          path: |
+            apps/desktop/build/TodoCue-${{ needs.validate.outputs.version }}-Windows-${{ matrix.arch }}-setup.exe
+            apps/desktop/build/TodoCue-${{ needs.validate.outputs.version }}-Windows-${{ matrix.arch }}-setup.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
   publish:
     name: Publish complete release
     if: github.event_name == 'push'
-    needs: [validate, build]
+    needs: [validate, build, windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -143,7 +211,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: macos-release-*
+          pattern: desktop-release-*
           path: release-assets
           merge-multiple: true
       - name: Verify complete asset set and checksums
@@ -157,7 +225,13 @@ jobs:
             test -s "$file.sha256"
             sha256sum --check "$file.sha256"
           done
-          sha256sum "TodoCue-${RELEASE_VERSION}-macOS-arm64.dmg" "TodoCue-${RELEASE_VERSION}-macOS-x64.dmg" > SHA256SUMS
+          for arch in arm64 x64; do
+            file="TodoCue-${RELEASE_VERSION}-Windows-${arch}-setup.exe"
+            test -s "$file"
+            test -s "$file.sha256"
+            sha256sum --check "$file.sha256"
+          done
+          sha256sum "TodoCue-${RELEASE_VERSION}-macOS-"*.dmg "TodoCue-${RELEASE_VERSION}-Windows-"*-setup.exe > SHA256SUMS
       - name: Upload to a draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}

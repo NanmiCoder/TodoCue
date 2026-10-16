@@ -4,6 +4,18 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src"],
-  "references": [{ "path": "../shared" }, { "path": "../engine" }]
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../engine"
+    },
+    {
+      "path": "../client"
+    }
+  ]
 }

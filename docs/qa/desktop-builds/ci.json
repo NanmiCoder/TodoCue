@@ -1,0 +1,262 @@
+{
+  "date": "2026-10-15",
+  "version": "0.5.3",
+  "branch": "codex/desktop-migration-handoff",
+  "mergeCommits": {
+    "pr17": "a57d012101737cb2f2772c3a11bdd7dd24c1280f",
+    "pr18": "3bb8ceb382af14b84423f9d07caf0c82af09a1d2"
+  },
+  "sharedPreviewSource": {
+    "head": "1e33ef73a29407eed7e3418a2872e82936a3c4b9",
+    "checkout": "6ae5d28238ab78d8cb9bb50d5c0ccf761b45153c",
+    "verifiedTree": "eccb1cae0f5ca985214cf81b86fd66f1605a339c",
+    "signing": "ad-hoc",
+    "requiresExternalRuntime": true
+  },
+  "formalReleasePublished": false,
+  "runs": [
+    {
+      "label": "merged-desktop",
+      "id": 38622020315,
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38622020315",
+      "jobs": [
+        {
+          "id": 116051670344,
+          "name": "macos",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116051670451,
+          "name": "windows (windows-latest, x64)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116051670509,
+          "name": "windows (windows-11-arm, arm64)",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "label": "swiftui-signed",
+      "id": 38622022217,
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38622022217",
+      "jobs": [
+        {
+          "id": 116060305346,
+          "name": "Build, sign and notarize (x64)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116060306547,
+          "name": "Validate version, notes and signing configuration",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116060307961,
+          "name": "Build, sign and notarize (arm64)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116065833889,
+          "name": "Publish complete release",
+          "status": "completed",
+          "conclusion": "skipped"
+        }
+      ]
+    },
+    {
+      "label": "shared-desktop",
+      "id": 38624606756,
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756",
+      "jobs": [
+        {
+          "id": 116060460457,
+          "name": "macos (arm64)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116060460825,
+          "name": "windows (windows-latest, x64)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116060460899,
+          "name": "macos (x64)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116060460933,
+          "name": "windows (windows-11-arm, arm64)",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "label": "quality",
+      "id": 38624606726,
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606726",
+      "jobs": [
+        {
+          "id": 116060509645,
+          "name": "TypeScript, integration, CLI and MCP smoke",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116060509983,
+          "name": "Swift UI logic and compatibility (Intel)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 116060509984,
+          "name": "Swift UI logic and compatibility",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 11924328690,
+      "name": "todocue-macos-x64-desktop-preview",
+      "runId": 38624606756,
+      "headSha": "1e33ef73a29407eed7e3418a2872e82936a3c4b9",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11924328690",
+      "artifactZipDigest": "sha256:18d8ca6531a642e9b358d5c9fffc01ef8bbaa1e06f48ede1fd7e3e0e1dd5e7ce",
+      "expiresAt": "2026-10-28T19:50:01Z"
+    },
+    {
+      "id": 11924179248,
+      "name": "todocue-windows-x64-preview",
+      "runId": 38624606756,
+      "headSha": "1e33ef73a29407eed7e3418a2872e82936a3c4b9",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11924179248",
+      "artifactZipDigest": "sha256:e9a5c64f8388fc3dd80bd2b216a94a7af49f9c7de53187f694c3bdb47419ad3a",
+      "expiresAt": "2027-01-12T19:32:58Z"
+    },
+    {
+      "id": 11924138417,
+      "name": "todocue-windows-arm64-preview",
+      "runId": 38624606756,
+      "headSha": "1e33ef73a29407eed7e3418a2872e82936a3c4b9",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11924138417",
+      "artifactZipDigest": "sha256:adb9a578d7bc84453b602a22a3c212e1890f6bd3809509a5eebf20e538f7b15f",
+      "expiresAt": "2027-01-12T19:32:58Z"
+    },
+    {
+      "id": 11923959348,
+      "name": "todocue-windows-x64-install-smoke",
+      "runId": 38624606756,
+      "headSha": "1e33ef73a29407eed7e3418a2872e82936a3c4b9",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11923959348",
+      "artifactZipDigest": "sha256:b6bc4260d69e48290f2cf9f0b2713dadf94959a0879bf870a4a4af536bb0407e",
+      "expiresAt": "2027-01-12T19:32:58Z"
+    },
+    {
+      "id": 11923743325,
+      "name": "todocue-windows-arm64-install-smoke",
+      "runId": 38624606756,
+      "headSha": "1e33ef73a29407eed7e3418a2872e82936a3c4b9",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11923743325",
+      "artifactZipDigest": "sha256:bec0bb138772ef87428059cde100ab175bc68d8f351fadcefb1373f5f543c7c1",
+      "expiresAt": "2027-01-12T19:32:58Z"
+    },
+    {
+      "id": 11923262615,
+      "name": "todocue-macos-arm64-desktop-preview",
+      "runId": 38624606756,
+      "headSha": "1e33ef73a29407eed7e3418a2872e82936a3c4b9",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38624606756/artifacts/11923262615",
+      "artifactZipDigest": "sha256:f5a8712e3d9094deced887df1c3437b43f646c724db3378ba47ad0ca75737232",
+      "expiresAt": "2026-10-28T19:38:55Z"
+    },
+    {
+      "id": 11922939591,
+      "name": "macos-release-x64",
+      "runId": 38622022217,
+      "headSha": "a57d012101737cb2f2772c3a11bdd7dd24c1280f",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38622022217/artifacts/11922939591",
+      "artifactZipDigest": "sha256:acdb3afc9ec0e3dae986ec5ae9703f4df7460155b3f0a0a71d227effc95ac4c6",
+      "expiresAt": "2026-10-28T19:44:09Z"
+    },
+    {
+      "id": 11921719565,
+      "name": "macos-release-arm64",
+      "runId": 38622022217,
+      "headSha": "a57d012101737cb2f2772c3a11bdd7dd24c1280f",
+      "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38622022217/artifacts/11921719565",
+      "artifactZipDigest": "sha256:04e06870b0765248e20798c37018110a25b2c396261216cd3f17cd8e6c56d862",
+      "expiresAt": "2026-10-28T19:21:59Z"
+    }
+  ],
+  "windowsInstalledSmoke": [
+    {
+      "architecture": "x64",
+      "installer": "TodoCue Preview_0.5.3_x64-setup.exe",
+      "passed": [
+        "silent NSIS install, packaged Node architecture and native SQLite SQL",
+        "custom home bootstrap, current-user scheduled runtime and installed CLI shim",
+        "packaged CLI and ordinary custom-home shim context/add/read without home flag or environment",
+        "ordinary installed MCP without home flag/environment initializes, discovers and reads its task",
+        "background stop/start preserves SQLite task and attachment",
+        "GUI runtime bootstrap retains the existing non-default port and installed shim connection",
+        "silent reinstall stops and resumes the registered custom-home runtime",
+        "disabled scheduled task makes installer fail nonzero, retaining data/recovery state for successful retry",
+        "acknowledged but unhealthy restart fails installation and keeps recovery until a healthy retry",
+        "uninstall removes service, CLI and PATH while preserving the database"
+      ]
+    },
+    {
+      "architecture": "arm64",
+      "installer": "TodoCue Preview_0.5.3_arm64-setup.exe",
+      "passed": [
+        "silent NSIS install, packaged Node architecture and native SQLite SQL",
+        "custom home bootstrap, current-user scheduled runtime and installed CLI shim",
+        "packaged CLI and ordinary custom-home shim context/add/read without home flag or environment",
+        "ordinary installed MCP without home flag/environment initializes, discovers and reads its task",
+        "background stop/start preserves SQLite task and attachment",
+        "GUI runtime bootstrap retains the existing non-default port and installed shim connection",
+        "silent reinstall stops and resumes the registered custom-home runtime",
+        "disabled scheduled task makes installer fail nonzero, retaining data/recovery state for successful retry",
+        "acknowledged but unhealthy restart fails installation and keeps recovery until a healthy retry",
+        "uninstall removes service, CLI and PATH while preserving the database"
+      ]
+    }
+  ],
+  "localDownloadedVerification": {
+    "sharedMacArm64": [
+      "artifact digest",
+      "inner SHA-256",
+      "ZIP CRC",
+      "BUILD.json",
+      "extracted App architecture",
+      "complete signature"
+    ],
+    "sharedMacX64": [
+      "artifact digest",
+      "inner SHA-256",
+      "ZIP CRC",
+      "BUILD.json",
+      "extracted App architecture",
+      "complete signature"
+    ],
+    "swiftuiMacArm64": [
+      "DMG SHA-256",
+      "DMG signature"
+    ],
+    "swiftuiMacX64": "CI only"
+  }
+}
