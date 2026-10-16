@@ -77,18 +77,20 @@ todocue --json periodic add '起来活动一下' --every 30m --weekdays mon,wed,
 
 ## 下载与安装
 
-当前版本 **[v0.5.1](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.5.1)**，最低要求 **macOS 14**。两个架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证。
+当前版本 **[v0.6.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.6.0)**，支持 **macOS 14+**、**Windows 10/11 x64**、**Windows 11 ARM64**。两个 Mac 架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证；Windows 安装包未签名。
 
-| 你的 Mac | 安装包 |
+| 你的电脑 | 安装包 |
 | --- | --- |
-| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/TodoCue-0.5.1-macOS-arm64.dmg) |
-| Intel | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/TodoCue-0.5.1-macOS-x64.dmg) |
+| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-macOS-arm64.dmg) |
+| Intel Mac | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-macOS-x64.dmg) |
+| Windows x64 | [下载 x64 安装包](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-Windows-x64-setup.exe) |
+| Windows ARM64 | [下载 ARM64 安装包](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-Windows-arm64-setup.exe) |
 
 打开 DMG → 将 **TodoCue.app 拖入 Applications** → 从应用程序中启动。
 
 App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无需另装运行时。需要提醒时，在设置中允许通知。更新时下载新 DMG 并替换 App；当前尚无 App 内自动更新。
 
-[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
+[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
 Windows：选择 `Windows-x64-setup.exe` 或 `Windows-arm64-setup.exe`。当前用户安装包包含离线 WebView2 与运行时。Windows 包未签名，请核对 Release 的 `SHA256SUMS`。使用过 Preview 时先退出并卸载 Preview，再安装正式版；任务数据保留。
 

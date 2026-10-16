@@ -1,8 +1,8 @@
 # TodoCue 跨平台迁移：实现与验收记录
 
-**2026-10-16 正式分发推进（用户已授权 merge / CI / Mac + Win release）：** v0.6.0 改用共享 Tauri 正式客户端。Mac 独立包内置 Node/SQLite/通知辅助程序/Skill，并复用原 CLI bootstrap 自动安装与启动后台；修复自定义目录 CLI 和端口保留。正式标识为 `com.todocue.app`，Mac 注册通知链接，旧 SwiftUI 正在运行时提示退出。正式流水线构建 Mac arm64/x64 签名公证 DMG、Windows x64/ARM64 NSIS；安装回归与四包校验通过后才允许公开。手动流水线只预检。实现不等于全部硬件验收；Apple 同步、硬件刘海、偏好迁移与原生 GUI 清单仍保留。发布与实测结果追加在下方，未取得结果前不标成通过。旧 Preview 外部运行时说明均为历史状态。
+**2026-10-16 正式分发已完成：** [v0.6.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.6.0) 已作为公开、非预发布的 Latest 发布，源码 `62a4d16` 已合并 main。正式客户端为共享 React / Tauri，Mac ARM64/Intel 与 Windows x64/ARM64 四包及 SHA256SUMS 齐全；[正式流水线](https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661)第 2 次执行全通过。Mac App/DMG 的 Developer ID、公证、staple、验证和 Gatekeeper 通过；两个 Mac runner 的独立运行时回归及两个 Windows runner 的各十组真实 NSIS 安装检查通过。Windows 安装包未做 Authenticode 签名。当前本机已安装与公开校验和相同的 Mac ARM 通用版，无参数重开恢复原隔离任务与自定义端口。详见[正式分发验证](qa/desktop-stable-release/README.md)。Apple 同步、硬件刘海、全部偏好导入及完整原生 GUI/逐帧验收仍保留；以下旧 Preview/外部后台说明属于历史。
 
-2026-10-14。当前为可运行的迁移预览，目标是保留 Dial 设计与交互。Windows 双架构构建与安装/后台冒烟已在 CI 完成，GUI 实机验收仍未完成；完成验收前不切换正式 macOS 客户端，也不宣称四个阶段已经全部交付。后续工作按 [交接任务与继续开发说明](desktop-handoff.md)执行。
+历史记录（2026-10-14）：当时为可运行的迁移预览，目标是保留 Dial 设计与交互。Windows 双架构构建与安装/后台冒烟已在 CI 完成，GUI 实机验收仍未完成；完成验收前不切换正式 macOS 客户端，也不宣称四个阶段已经全部交付。后续工作按 [交接任务与继续开发说明](desktop-handoff.md)执行。
 
 本轮 `codex/desktop-native-ui-fixes` 的 [PR #17](https://github.com/NanmiCoder/TodoCue/pull/17) 已按用户授权合并到原交接分支（`a57d012`）。代码 `7ad1b95` 的 Windows x64/ARM64 与 macOS CI 全通过。见 [P0 输入证据](qa/desktop-native-ui-fixes/README.md) 和 [P1 原版对照、632 条布局测量、安装包及质量记录](qa/desktop-p1-ui/README.md)。真实外部鼠标/候选窗口、完整原生主题矩阵和逐帧对照仍未完成。
 
@@ -26,7 +26,7 @@
 | Windows 宿主 | 原生命中区域随形状/窗口尺寸变化，非固定时 NOACTIVATE，Acrylic 尝试与自绘降级，按工作区顶部定位、鼠标跨屏跟随、全屏安静 |
 | Windows 后台 | 当前用户计划任务、命名互斥、Job Object 监督与重启、独立 WinRT 通知辅助程序、CLI 参数和 stdio 转发 |
 | 安装与 CI | x64/ARM64 原生构建脚本、官方 Node 校验、SQLite 实际启动检查、离线 WebView2、NSIS、Skill、版本同步与 SHA-256 |
-| macOS 预览 | 原生 NSGlassEffectView / NSVisualEffectView 背板；保留原 SwiftUI/AppKit 生产客户端与 Swift 测试 |
+| macOS 共享客户端 | 原生 NSGlassEffectView / NSVisualEffectView 背板、独立运行时与 CLI bootstrap；保留 SwiftUI/AppKit 源码、Swift 测试与 v0.5.3 回退 |
 
 ## 原生对照与体验修正
 
