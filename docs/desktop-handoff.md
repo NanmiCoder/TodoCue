@@ -14,14 +14,13 @@
 
 ## 代码从哪里继续
 
-- 仓库：<https://github.com/NanmiCoder/TodoCue>。
-- 交接分支：`codex/desktop-migration-handoff`，从 `3058f01379d1cf965445ca5f3bb3b826020e2686` 建立。
-- 本轮最初已先 `git fetch origin`，明确从 `origin/codex/desktop-migration-handoff` 的 `2bf7349` 创建新工作树；原主工作区未覆盖。修复和构建配置已合并，现在应从最新 `origin/codex/desktop-migration-handoff` 继续；不要从默认分支或旧交接提交开始。
-- 继续分支可使用新的 `codex/desktop-next`。若同名分支已存在，先检查其状态，复用或选择另一个 `codex/` 分支，不能覆盖已有分支或工作树。
-- PR #17/#18 已合并交接分支；未合并主分支、未发布正式版本。Windows 两架构各十组安装检查通过，Mac 两架构共享预览和原 SwiftUI 公证包均已构建；GUI 与正式共享 Mac 迁移另列。
-- 本机临时数据、依赖、编译产物、日志和运行中的进程不会随 Git 转移；新电脑需要重新安装依赖并启动隔离运行时。
+- 仓库：<https://github.com/NanmiCoder/TodoCue>；共享正式客户端已由 [PR #20](https://github.com/NanmiCoder/TodoCue/pull/20) 合并 main（`1050bb1`）。初始候选 tag `v0.6.0` 曾指向该提交，Intel 票据网络失败后将纳入 CI 修复重建；最终源码、构建/安装与发布结果见[正式分发验证](qa/desktop-stable-release/README.md)。
+- 后续功能或修复从最新 `origin/main` 建立新的隔离 `codex/` 分支；需要精确复现 0.6.0 时从 `v0.6.0` 建立。若用户明确指定其他基准，遵从该指令。同名分支存在时先检查并复用或换名，不重置已有修改。
+- 原交接 `origin/codex/desktop-migration-handoff` 与提交 `2bf7349` 保留历史。本轮最初确实先 fetch、从用户指定交接基准建立 `codex/desktop-native-ui-fixes` 新工作树；后续 PR #17/#18/#19 合并交接分支，正式分发由 PR #20 进入主干。旧交接分支不包含全部正式分发实现。
+- 原主工作区保持不变；测试使用隔离 TODOCUE_HOME。本机依赖、服务、临时数据库和构建文件不会随 Git 转移。
+- 用户已明确授权本轮 merge 与 Win/Mac 正式 release；此前阶段顺序中的生产切换限制已被本次发布指令更新。下面未实现/未验收项目继续保留，发布并不意味着全部 SwiftUI 效果或硬件验收完成。
 
-先阅读仓库 `AGENTS.md`、本文、[实现与验收记录](desktop-migration.md)、[Dial 设计与动效规范](design/dial.md)、[桌面预览启动说明](../apps/desktop/README.md)。比较 UI 时以现有 SwiftUI 源码和实际画面为准，不能把新前端自身当作对照基准。
+先阅读仓库 `AGENTS.md`、本文、[实现与验收记录](desktop-migration.md)、[Dial 设计与动效规范](design/dial.md)、[桌面启动说明](../apps/desktop/README.md)。比较 UI 时以现有 SwiftUI 源码和实际画面为准。
 
 ## 已确定的产品方向
 
@@ -121,11 +120,11 @@ P0 验收：
 
 macOS：Node 24+（CI 固定 26.7.0；本地 26.8.2）、Rust、Xcode 26/Swift 6；Windows：Node、Rust、MSVC C++/Windows SDK，ARM64 对应工具链。无需复制本机 `/Users/nanmi` 路径。
 
-已有仓库中先 fetch，再检查继续分支和 worktree；优先复用适合的隔离工作树。下一位接手应使用最新交接分支。若同名分支已存在，检查后复用或选择另一个 `codex/` 分支，不重置已有修改。以下命令仅适用于本地分支尚不存在时：
+已有仓库中先 fetch，再检查继续分支和 worktree；优先复用适合的隔离工作树。下一位接手应使用包含正式共享客户端的最新 main。若同名分支已存在，检查后复用或选择另一个 `codex/` 分支，不重置已有修改。以下命令仅适用于本地分支尚不存在时：
 
 ```sh
 git fetch origin
-git worktree add -b codex/desktop-next ../TodoCue-desktop-next origin/codex/desktop-migration-handoff
+git worktree add -b codex/desktop-next ../TodoCue-desktop-next origin/main
 cd ../TodoCue-desktop-next
 npm ci
 TODOCUE_HOME=/tmp/todocue-desktop-next npm run desktop:dev

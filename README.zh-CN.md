@@ -111,7 +111,7 @@ MCP 为可选入口，可通过 `todocue mcp` 接入；自建集成见 [Local AP
 <details>
 <summary><strong>从源码构建与参与开发</strong></summary>
 
-需要 macOS 14+、Node 24+、Xcode 26 / Swift 6 工具链。
+需要 Node 24+、Rust 1.90+；Mac 构建还需 macOS 14+、Xcode 26 / Swift 6，Windows 构建还需 MSVC C++ 工具与 Windows SDK。
 
 ```bash
 npm ci

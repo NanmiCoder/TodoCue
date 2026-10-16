@@ -90,7 +90,8 @@ jobs:
           xcrun --sdk macosx --show-sdk-version
           swift --version
       - run: rustup update stable
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: rust-cache
         with:
           path: |
             ~/.cargo/registry
@@ -100,6 +101,7 @@ jobs:
           restore-keys: desktop-rust-v3-${{ runner.os }}-${{ runner.arch }}-
       - run: npm ci
       - run: npm run desktop:check
+        id: rust-check
       - run: swift test --package-path apps/macos
       - name: Import Developer ID and notarization credentials
         env:
@@ -142,6 +144,14 @@ jobs:
             security delete-keychain "$RUNNER_TEMP/todocue-signing.keychain-db"
           fi
           rm -f "$RUNNER_TEMP/todocue-signing.p12"
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.rust-check.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
 
   windows:
     name: Windows installer and installed regression (${{ matrix.arch }})
@@ -166,7 +176,8 @@ jobs:
           architecture: ${{ matrix.arch }}
           cache: npm
       - run: rustup update stable
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: rust-cache
         with:
           path: |
             ~/.cargo/registry
@@ -178,6 +189,7 @@ jobs:
       - run: npm run check
       - run: npm run desktop:build
       - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+        id: rust-check
       - run: npm run windows:build -- --release
       - run: node scripts/smoke-windows-install.mjs
         env:
@@ -196,6 +208,14 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: always() && steps.rust-check.outcome == 'success' && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != ''
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
 
   publish:
     name: Publish complete release

@@ -111,7 +111,7 @@ MCP is an optional entry point via `todocue mcp`. For custom integrations, see t
 <details>
 <summary><strong>Build from source & contribute</strong></summary>
 
-Requires macOS 14+, Node 24+, and an Xcode 26 / Swift 6 toolchain.
+Requires Node 24+ and Rust 1.90+. Mac builds need macOS 14+ and Xcode 26 / Swift 6; Windows builds need MSVC C++ tools and the Windows SDK.
 
 ```bash
 npm ci
