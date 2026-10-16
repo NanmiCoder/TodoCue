@@ -29,6 +29,8 @@ TODOCUE_HOME=/tmp/todocue-desktop-dev "apps/desktop/src-tauri/target/debug/bundl
 
 产物在 `src-tauri/target/debug/bundle/macos/TodoCue Preview.app`。macOS 预览默认仍使用临时目录；没有接入 EventKit、旧版偏好迁移和真实硬件刘海，不替代当前 SwiftUI App。
 
+macOS release 配置的 Preview 首次通过 `--home` 或 `TODOCUE_HOME` 选择隔离运行时后，会把目录记在 `~/Library/Application Support/TodoCue Preview/launch-home.json`。以后从应用程序、Dock 或 Finder 直接打开仍连接该目录，避免误回到没有后台的临时目录。显式参数/环境仍优先；debug 开发预览不读取或更新这个选择。记录仅含目录和版本，不含 token；外部后台仍需正常运行。见[直接打开后离线的修复与实测](../../docs/qa/desktop-macos-runtime/README.md)。
+
 桌面 CI 的 macOS matrix 在 Apple Silicon 与 Intel runner 分别构建 release 配置的共享 Preview App，验证 Mach-O 架构和 ad-hoc 签名，上传 `todocue-macos-arm64-desktop-preview` / `todocue-macos-x64-desktop-preview`。Artifact 含 App ZIP、SHA-256 和 `BUILD.json`，记录版本、架构与源码提交。两架构已在 CI 实测通过，下载后架构/整包签名/校验和亦通过；见[下载与构建记录](../../docs/qa/desktop-builds/README.md)。这些共享 App 尚需外部隔离运行时；现有 `Release macOS` 手动 Action 另行构建带运行时、Developer ID 签名及公证的 SwiftUI DMG，两类产物应分别使用。
 
 ## Windows 构建

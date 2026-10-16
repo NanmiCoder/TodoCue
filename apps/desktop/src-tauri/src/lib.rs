@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+mod macos_home;
 mod notch_geometry;
 #[cfg(any(target_os = "macos", test))]
 mod panel_geometry;
@@ -630,25 +632,43 @@ fn notch_metrics(window: WebviewWindow) -> Result<NotchMetrics, String> {
         band_height: notch_layout(&monitor, 0).band_height,
     })
 }
-fn home() -> PathBuf {
+fn explicit_home() -> Option<PathBuf> {
     #[cfg(not(windows))]
     {
         let args: Vec<_> = std::env::args().collect();
         if let Some(pair) = args.windows(2).find(|pair| pair[0] == "--home") {
-            return PathBuf::from(&pair[1]);
+            return Some(PathBuf::from(&pair[1]));
         }
     }
-    if let Some(value) = std::env::var_os("TODOCUE_HOME") {
-        return PathBuf::from(value);
+    std::env::var_os("TODOCUE_HOME").map(PathBuf::from)
+}
+
+fn home() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        let profile = (!cfg!(debug_assertions))
+            .then(macos_home::profile_path)
+            .flatten();
+        macos_home::resolve_home(
+            explicit_home(),
+            profile.as_deref(),
+            std::env::temp_dir().join("todocue-desktop-development"),
+        )
     }
-    #[cfg(windows)]
-    if !cfg!(debug_assertions) {
-        if let Some(profile) = std::env::var_os("USERPROFILE") {
-            return PathBuf::from(profile).join(".todocue");
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(value) = explicit_home() {
+            return value;
         }
+        #[cfg(windows)]
+        if !cfg!(debug_assertions) {
+            if let Some(profile) = std::env::var_os("USERPROFILE") {
+                return PathBuf::from(profile).join(".todocue");
+            }
+        }
+        // Preview builds never attach to or create the user's production task database.
+        std::env::temp_dir().join("todocue-desktop-development")
     }
-    // Preview builds never attach to or create the user's production task database.
-    std::env::temp_dir().join("todocue-desktop-development")
 }
 
 pub fn run() {
@@ -746,6 +766,14 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let home = launch_home.clone();
+            #[cfg(target_os = "macos")]
+            if !cfg!(debug_assertions) && explicit_home().is_some() {
+                if let Some(profile) = macos_home::profile_path() {
+                    if let Err(error) = macos_home::remember(&profile, &home) {
+                        eprintln!("Unable to remember Preview data directory: {error}");
+                    }
+                }
+            }
             let settings = std::fs::read(home.join("desktop-preview-settings.json"))
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<Settings>(&bytes).ok())
