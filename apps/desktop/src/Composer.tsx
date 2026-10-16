@@ -14,7 +14,9 @@ import { client } from "./bridge.js";
 import { DatePicker } from "./DatePicker.js";
 import { dateOf, dayLabel, shiftDate, weekdayLabels } from "./dates.js";
 import { Icon, type IconName } from "./icons.js";
-import { draftPayload, newDraft, type TaskDraft } from "./drafts.js";
+import { draftPayload, newDraft, startRepeat, validateDraft, type TaskDraft } from "./drafts.js";
+import { describeError } from "./errors.js";
+import { chord, isPrimaryModifier } from "./platform.js";
 import { motionTokens } from "./tokens.js";
 import { isCompositionKey } from "./quickAdd.js";
 import { useTextAreaSize } from "./useTextAreaSize.js";
@@ -121,7 +123,11 @@ export function Composer({
       if (!propertyText.trim()) return;
       update({ project: propertyText.trim() });
     } else if (popover === "estimate") {
-      if (!propertyText.trim() || !Number.isInteger(Number(propertyText)) || Number(propertyText) < 0) return;
+      if (!propertyText.trim()) return;
+      if (!Number.isInteger(Number(propertyText)) || Number(propertyText) < 0) {
+        setError(label("预计耗时需要是非负整数分钟", "Estimate must be a whole number of minutes"));
+        return;
+      }
       update({ estimate: propertyText });
     }
     setPopover(null);
@@ -186,6 +192,12 @@ export function Composer({
   }
   async function save() {
     if (savePending.current || reading || !online) return;
+    const invalid = validateDraft(current.current, language);
+    if (invalid) {
+      setError(invalid);
+      if (!current.current.title.trim()) titleInput.current?.focus();
+      return;
+    }
     savePending.current = true;
     setBusy(true);
     setError(null);
@@ -204,9 +216,8 @@ export function Composer({
       onSaved(saved, submitted);
     } catch (error) {
       if (mounted.current) {
-        const value = error as { code?: string; message?: string };
-        setConflict(value.code === "VERSION_CONFLICT");
-        setError(value.message ?? String(error));
+        setConflict((error as { code?: string }).code === "VERSION_CONFLICT");
+        setError(describeError(error, language));
       }
     } finally {
       savePending.current = false;
@@ -276,7 +287,7 @@ export function Composer({
       onKeyDown={(event) => {
         if (
           !event.defaultPrevented &&
-          (event.metaKey || event.ctrlKey) &&
+          isPrimaryModifier(event) &&
           event.key === "Enter" &&
           !isCompositionKey(event.nativeEvent)
         ) {
@@ -450,7 +461,6 @@ export function Composer({
                         {label("提醒", "Reminder")}
                         <input
                           type="datetime-local"
-                          step="1"
                           value={draft.reminder}
                           onChange={(event) =>
                             update({ reminder: event.target.value })
@@ -512,7 +522,7 @@ export function Composer({
                   )}
                   {popover === "estimate" && (
                     <div className="estimate-presets">
-                      {[5, 15, 30, 60, 90].map((minutes) => (
+                      {[15, 25, 45, 60].map((minutes) => (
                         <button
                           className="pill secondary"
                           type="button"
@@ -560,7 +570,12 @@ export function Composer({
                                 draft.repeat === repeat ? "selected" : ""
                               }
                               disabled={!!task}
-                              onClick={() => update({ repeat })}
+                              onClick={() =>
+                                update({
+                                  repeat,
+                                  ...(draft.repeat === "none" && repeat !== "none" ? startRepeat(draft) : {}),
+                                })
+                              }
                             >
                               {zh ? ["不重复", "每天", "每周"][index] : repeat}
                             </button>
@@ -621,6 +636,45 @@ export function Composer({
                               }
                             />
                           </label>
+                          <div className="field-row repeat-time">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={draft.repeatTimeOn}
+                                onChange={(event) => update({ repeatTimeOn: event.target.checked })}
+                              />
+                              {label("固定时间", "At a fixed time")}
+                            </label>
+                            {draft.repeatTimeOn && (
+                              <input
+                                type="time"
+                                aria-label={label("固定时间", "Fixed time")}
+                                value={draft.repeatTime.slice(0, 5)}
+                                onChange={(event) => update({ repeatTime: event.target.value })}
+                              />
+                            )}
+                          </div>
+                          <div className="field-row repeat-time">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={draft.repeatReminderOn}
+                                onChange={(event) => update({ repeatReminderOn: event.target.checked })}
+                              />
+                              {label("每次提醒", "Remind each time")}
+                            </label>
+                            {draft.repeatReminderOn && (
+                              <input
+                                type="time"
+                                aria-label={label("提醒时间", "Reminder time")}
+                                value={draft.repeatReminderTime.slice(0, 5)}
+                                onChange={(event) => update({ repeatReminderTime: event.target.value })}
+                              />
+                            )}
+                          </div>
+                          <p className="settings-hint">
+                            {label("按所选日期自动重复，每次可单独编辑或跳过。", "Repeats on the chosen days; each one can be edited or skipped.")}
+                          </p>
                         </>
                       )}
                     </>
@@ -741,13 +795,13 @@ export function Composer({
             : label("离线，草稿已保留", "Offline. Draft kept")}
         </span>
         <span className="save-hint">
-          {navigator.platform.includes("Mac") ? "⌘↵" : "Ctrl ↵"}
+          {chord("↵")}
         </span>
         <button
           type="submit"
           className="pill"
           disabled={
-            !online || busy || reading > 0 || !draft.title.trim() || conflict
+            !online || busy || reading > 0 || conflict
           }
         >
           {busy
@@ -817,7 +871,6 @@ function TimeField({
             {mode === "time" && (
               <input
                 type="time"
-                step="1"
                 value={time}
                 onChange={(event) => onTime(event.target.value)}
               />

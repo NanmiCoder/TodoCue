@@ -3,7 +3,9 @@ import { useIsPresent } from "motion/react";
 import type { Reminder, Series, Task } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { Icon, type IconName } from "./icons.js";
-import { dayLabel, reschedule, shiftDate, taskOverdue } from "./dates.js";
+import { dayLabel, reschedule, ruleLabel, shiftDate, taskOverdue } from "./dates.js";
+import { describeError, isVersionConflict } from "./errors.js";
+import type { NotifyInput } from "./toast.js";
 import { estimateLabel, timeLabel } from "./metadata.js";
 import { AttachmentGallery, AttachmentPreview, type FilePreview } from "./Attachments.js";
 
@@ -20,6 +22,7 @@ export function Detail({
   onDeleted,
   onChanged,
   onError,
+  onNotify,
 }: {
   task: Task;
   language: string;
@@ -33,6 +36,7 @@ export function Detail({
   onDeleted: () => void;
   onChanged: () => Promise<void>;
   onError: (error: string) => void;
+  onNotify: (input: NotifyInput) => void;
 }) {
   const mounted = useRef(true);
   const present = useIsPresent();
@@ -77,17 +81,20 @@ export function Detail({
   async function act(
     action: () => Promise<{ task?: Task } | unknown>,
     close = false,
+    done?: (result: any) => void,
   ) {
     if (disabled) return;
     setWorking(true);
     try {
       const result = (await action()) as { task?: Task };
       if (result?.task) onUpdated(result.task);
+      done?.(result);
       await onChanged();
       if (close && mounted.current && visible.current) onDeleted();
       setConfirm(null);
     } catch (error) {
-      onError(error instanceof Error ? error.message : String(error));
+      onError(describeError(error, language));
+      if (isVersionConflict(error)) void onChanged();
     } finally {
       setWorking(false);
     }
@@ -202,10 +209,7 @@ export function Detail({
               <Icon name="repeat" />
               <span>
                 {series
-                  ? text(
-                      series.rule.kind === "daily" ? "每天" : "每周",
-                      series.rule.kind,
-                    )
+                  ? ruleLabel(series.rule, language)
                   : text("重复任务", "Repeating task")}
                 {series?.scheduledTime && ` · ${series.scheduledTime}`}
                 {series?.status === "stopped" &&
@@ -274,11 +278,17 @@ export function Detail({
                     disabled={disabled}
                     key={minutes}
                     onClick={() =>
-                      void act(() =>
-                        client.snoozeTask(task.id, {
-                          minutes,
-                          expectedVersion: task.version,
-                        }),
+                      void act(
+                        () =>
+                          client.snoozeTask(task.id, {
+                            minutes,
+                            expectedVersion: task.version,
+                          }),
+                        false,
+                        () =>
+                          onNotify({
+                            message: text(`将在 ${minutes} 分钟后提醒`, `Reminding you in ${minutes} minutes`),
+                          }),
                       )
                     }
                   >
@@ -298,11 +308,25 @@ export function Detail({
                   <button
                     disabled={disabled}
                     onClick={() =>
-                      void act(() =>
-                        client.updateTask(
-                          task.id,
-                          reschedule(task, shiftDate(today, 1)),
-                        ),
+                      void act(
+                        () =>
+                          client.updateTask(
+                            task.id,
+                            reschedule(task, shiftDate(today, 1)),
+                          ),
+                        false,
+                        (result: { task: Task }) =>
+                          onNotify({
+                            message: text("已改期到明天", "Moved to tomorrow"),
+                            undo: {
+                              kind: "reschedule",
+                              taskId: task.id,
+                              scheduledDate: task.scheduledDate,
+                              scheduledAt: task.scheduledAt,
+                              timezone: task.timezone,
+                              expectedVersion: result.task.version,
+                            },
+                          }),
                       )
                     }
                   >
@@ -406,6 +430,16 @@ export function Detail({
                         expectedVersion: series?.version,
                       }),
                 confirm === "delete",
+                (result: { cancelledTaskIds?: string[] }) =>
+                  onNotify({
+                    message:
+                      confirm === "delete"
+                        ? text(`已删除「${task.title}」`, `Deleted “${task.title}”`)
+                        : text(
+                            `已停止系列，取消了 ${result?.cancelledTaskIds?.length ?? 0} 个未来实例`,
+                            `Series stopped; ${result?.cancelledTaskIds?.length ?? 0} future instances cancelled`,
+                          ),
+                  }),
               )
             }
           >

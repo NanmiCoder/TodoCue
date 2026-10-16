@@ -77,13 +77,74 @@ export function taskOverdue(task: Task, today: string, now = Date.now()): boolea
     ? Date.parse(task.dueAt) < now
     : !!task.dueDate && task.dueDate < today);
 }
-export function dayLabel(date: string, language: string, today?: string) {
-  if (!date) return language === "en" ? "Unscheduled" : "未安排";
-  if (date === today) return language === "en" ? "Today" : "今天";
+/** Local calendar date of the machine, "YYYY-MM-DD". */
+export function localToday(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * Relative wording near today, otherwise "MMM d EEE" (zh: 10月19日周一, en: Mon, Oct 19), with the
+ * year whenever it is not the current one — the same rule as the native client's `TCDate.dateLabel`.
+ */
+export function dayLabel(date: string, language: string, today: string = localToday()) {
+  const en = language === "en";
+  if (!date) return en ? "Unscheduled" : "未安排";
+  if (date === today) return en ? "Today" : "今天";
+  if (DATE_PATTERN.test(today)) {
+    if (date === shiftDate(today, 1)) return en ? "Tomorrow" : "明天";
+    if (date === shiftDate(today, -1)) return en ? "Yesterday" : "昨天";
+  }
+  const value = new Date(`${date}T12:00:00Z`);
+  if (!DATE_PATTERN.test(date) || Number.isNaN(value.getTime())) return date;
   return new Intl.DateTimeFormat(language, {
+    year: date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
     month: "short",
     day: "numeric",
-  }).format(new Date(`${date}T12:00:00`));
+    weekday: "short",
+    timeZone: "UTC",
+  }).format(value);
+}
+/** Hour cycle follows the system region, not the UI language: zh/en choose words, the OS chooses 12/24h. */
+export function systemHour12(region: string | undefined = globalThis.navigator?.language): boolean {
+  try {
+    return new Intl.DateTimeFormat(region, { hour: "numeric" }).resolvedOptions().hour12 === true;
+  } catch {
+    return false;
+  }
+}
+export function clockTime(instant: string, timezone: string, language: string, hour12 = systemHour12()): string {
+  return new Intl.DateTimeFormat(language, {
+    timeZone: timezone,
+    hour: hour12 ? "numeric" : "2-digit",
+    minute: "2-digit",
+    hour12,
+  }).format(new Date(instant));
+}
+/**
+ * Label for an instant: today shows only the time, tomorrow "明天 HH:mm", anything else the
+ * month and day (and year when not this one) before the time.
+ */
+export function instantLabel(instant: string, timezone: string, language: string, today: string = localToday(), hour12?: boolean): string {
+  const en = language === "en";
+  const time = clockTime(instant, timezone, language, hour12);
+  const day = dateOf(instant, timezone);
+  if (day === today) return time;
+  if (DATE_PATTERN.test(today) && day === shiftDate(today, 1)) return `${en ? "Tomorrow" : "明天"} ${time}`;
+  const label = new Intl.DateTimeFormat(language, {
+    year: day.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${day}T12:00:00Z`));
+  return `${label} ${time}`;
+}
+/** "每日" / "每周 一、三" — weekly rules name their weekdays. */
+export function ruleLabel(rule: Series["rule"], language: string): string {
+  const en = language === "en";
+  if (rule.kind === "daily") return en ? "Daily" : "每日";
+  const names = en ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] : weekdayLabels(language, 1, false);
+  const days = [...rule.weekdays].sort((a, b) => a - b).map((day) => names[day - 1]).filter(Boolean);
+  return `${en ? "Weekly" : "每周"} ${days.join(en ? ", " : "、")}`;
 }
 export function reschedule(task: Task, date: string): UpdateTaskInput {
   if (!task.scheduledAt)

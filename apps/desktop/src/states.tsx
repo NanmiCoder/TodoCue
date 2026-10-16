@@ -1,0 +1,110 @@
+import { Icon, type IconName } from "./icons.js";
+
+/** Shared empty / offline / missing states, so every page speaks the same way. */
+export function OfflineBanner({
+  language,
+  message,
+  retrying,
+  onRetry,
+}: {
+  language: string;
+  message?: string;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const en = language === "en";
+  return (
+    <div className="offline-banner" role="status">
+      <div className="offline-banner-text">
+        <strong>{en ? "Can’t reach the TodoCue service" : "无法连接 TodoCue 后台服务"}</strong>
+        <span>{message || (en ? "Showing the last data. Changes are paused." : "显示上次数据，已暂停写入")}</span>
+      </div>
+      <button type="button" className="offline-retry" disabled={retrying} onClick={onRetry}>
+        {en ? "Retry" : "重试"}
+      </button>
+    </div>
+  );
+}
+
+export function EmptyState({
+  title,
+  hint,
+  icon,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  hint?: string;
+  icon: IconName;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="empty-state">
+      <div className="empty-ring">
+        <span className="orange-disc">
+          <Icon name={icon} size={22} />
+        </span>
+      </div>
+      <h2>{title}</h2>
+      {hint && <p>{hint}</p>}
+      {actionLabel && onAction && (
+        <button type="button" className="pill" onClick={onAction}>
+          <span className="orange-disc">
+            <Icon name="plus" />
+          </span>
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function NotFoundPage({ language, loading, onBack }: { language: string; loading: boolean; onBack: () => void }) {
+  const en = language === "en";
+  return (
+    <section className="tile frost not-found-page">
+      {loading && <div className="skeleton" aria-hidden="true" />}
+      <p>{en ? "Task not found" : "未找到该任务"}</p>
+      <button type="button" className="pill secondary" onClick={onBack}>
+        {en ? "Back" : "返回"}
+      </button>
+    </section>
+  );
+}
+
+type View = "today" | "upcoming" | "all";
+/** Empty-list wording per tab, as the native client words it. */
+export function emptyCopy(view: View, searching: boolean, completedToday: number, language: string) {
+  const en = language === "en";
+  const actionLabel = en ? "Write something down" : "记下一件事";
+  if (view === "upcoming")
+    return { icon: "calendar" as IconName, title: en ? "Nothing coming up" : "没有即将到来的任务" };
+  if (view === "all") {
+    if (searching)
+      return {
+        icon: "search" as IconName,
+        title: en ? "No matching tasks" : "没有找到相关任务",
+        hint: en ? "Try other keywords." : "试试其他关键词。",
+      };
+    return {
+      icon: "check" as IconName,
+      title: en ? "Everything is in order" : "所有事情，都已妥当",
+      hint: en ? "Jot down new ideas any time." : "有新想法时，随时记下来。",
+      actionLabel,
+    };
+  }
+  return completedToday > 0
+    ? {
+        icon: "check" as IconName,
+        title: en ? "Today is clear" : "今天已清空",
+        hint: en ? `You finished ${completedToday}. Take some time for yourself.` : `完成了 ${completedToday} 件事，留点时间给自己。`,
+        actionLabel,
+      }
+    : {
+        icon: "plus" as IconName,
+        title: en ? "Start with one small thing" : "从一件小事开始",
+        hint: en ? "Write it down, and let it go." : "记下来，就不用一直惦记。",
+        actionLabel,
+      };
+}

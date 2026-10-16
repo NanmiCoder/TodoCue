@@ -183,3 +183,58 @@ export function resizePanelMac(input: {
 }) {
   return invoke<void>("panel_resize_macos", input);
 }
+
+// --- Cross-platform notification and data-folder abstractions -----------------------------
+//
+// Both work through the runtime's HTTP API, which already speaks to the macOS notifier helper and
+// the Windows toast helper, so they need no host command. Opening the data folder does need one;
+// until the host provides `open_data_dir` the page shows the path and offers to copy it.
+import {
+  notificationStatus,
+  requestResultLabel,
+  testResultLabel,
+  type NotificationStatus,
+} from "./notification.js";
+import { platform } from "./platform.js";
+
+export { platform } from "./platform.js";
+export type { NotificationStatus } from "./notification.js";
+
+export async function loadNotificationStatus(language: string): Promise<NotificationStatus & { doctor: Awaited<ReturnType<typeof client.doctor>> }> {
+  const doctor = await client.doctor();
+  return { ...notificationStatus(doctor.notifier, platform, language), doctor };
+}
+export async function requestNotificationPermission(language: string): Promise<string> {
+  return requestResultLabel(await client.requestNotificationAuthorization(), platform, language);
+}
+export async function openNotificationSettings(language: string): Promise<string> {
+  const { ok } = await client.openNotificationSettings();
+  if (ok) return language === "en" ? "Opened the system notification settings" : "已打开系统通知设置";
+  return platform === "windows"
+    ? language === "en" ? "Open Windows Settings › System › Notifications yourself" : "无法自动打开，请手动前往 Windows 设置 › 系统 › 通知"
+    : language === "en" ? "Open System Settings › Notifications yourself" : "无法自动打开，请手动前往系统设置 › 通知";
+}
+export async function sendTestNotification(language: string): Promise<string> {
+  return testResultLabel(await client.testNotification(), language);
+}
+
+const missingCommand = (error: unknown) => /not found|unknown command|not allowed/i.test(String(error));
+/** `opened: false` means this host cannot open folders yet — show the path instead. */
+export async function openDataFolder(path: string): Promise<{ opened: boolean }> {
+  if (!native) return { opened: false };
+  try {
+    await invoke("open_data_dir", { path });
+    return { opened: true };
+  } catch (error) {
+    if (missingCommand(error)) return { opened: false };
+    throw error;
+  }
+}
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
