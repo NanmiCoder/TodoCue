@@ -1,0 +1,98 @@
+{
+  "tag": "v0.6.0",
+  "source": "62a4d16c97d0c4bf40ea62062781ba2c290eb539",
+  "tagObject": "3d49765178c1e679187d2ea519c1a089a0645e51",
+  "url": "https://github.com/NanmiCoder/TodoCue/releases/tag/v0.6.0",
+  "publishedAt": "2026-10-16T15:16:26Z",
+  "draft": false,
+  "prerelease": false,
+  "latest": true,
+  "workflow": {
+    "run": 38916287661,
+    "attempt": 2,
+    "conclusion": "success",
+    "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661",
+    "jobs": [
+      {
+        "name": "Build, sign and notarize (x64)",
+        "id": 117038550716,
+        "conclusion": "success",
+        "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661/job/117038550716"
+      },
+      {
+        "name": "Windows installer and installed regression (x64)",
+        "id": 117038552758,
+        "conclusion": "success",
+        "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661/job/117038552758"
+      },
+      {
+        "name": "Windows installer and installed regression (arm64)",
+        "id": 117038553919,
+        "conclusion": "success",
+        "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661/job/117038553919"
+      },
+      {
+        "name": "Validate version, notes and signing configuration",
+        "id": 117038593469,
+        "conclusion": "success",
+        "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661/job/117038593469"
+      },
+      {
+        "name": "Build, sign and notarize (arm64)",
+        "id": 117038613912,
+        "conclusion": "success",
+        "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661/job/117038613912"
+      },
+      {
+        "name": "Publish complete release",
+        "id": 117045744908,
+        "conclusion": "success",
+        "url": "https://github.com/NanmiCoder/TodoCue/actions/runs/38916287661/job/117045744908"
+      }
+    ]
+  },
+  "assets": [
+    {
+      "name": "SHA256SUMS",
+      "size": 396,
+      "sha256": "1a3093c308fafa5f572156c1869fdc1b1f9f6bfa782ccbca4b7a0e11498cf9ff",
+      "url": "https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/SHA256SUMS"
+    },
+    {
+      "name": "TodoCue-0.6.0-macOS-arm64.dmg",
+      "size": 84105708,
+      "sha256": "c2c8abb765ad424aaf4f8520fa301217d123f4821bf29ddce563c2c2f0d831df",
+      "url": "https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-macOS-arm64.dmg"
+    },
+    {
+      "name": "TodoCue-0.6.0-macOS-x64.dmg",
+      "size": 81239651,
+      "sha256": "4b8ffd32d0458f7c3218a36bacfaaf06b6598ba931959637b7e871c74eab8402",
+      "url": "https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-macOS-x64.dmg"
+    },
+    {
+      "name": "TodoCue-0.6.0-Windows-arm64-setup.exe",
+      "size": 222970482,
+      "sha256": "6879e5bda0a0bdd04effd706fa5fc7bfde1becf5e2a2dc7e21e789192b40a5c7",
+      "url": "https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-Windows-arm64-setup.exe"
+    },
+    {
+      "name": "TodoCue-0.6.0-Windows-x64-setup.exe",
+      "size": 251883139,
+      "sha256": "59bb511a33943737b65046155b2a1196dae8ed0948ea8fb47948bcde057f88e0",
+      "url": "https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-Windows-x64-setup.exe"
+    }
+  ],
+  "localMac": {
+    "architecture": "arm64",
+    "client": "shared-tauri",
+    "source": "62a4d16c97d0c4bf40ea62062781ba2c290eb539",
+    "installerSha256": "c2c8abb765ad424aaf4f8520fa301217d123f4821bf29ddce563c2c2f0d831df",
+    "appSignature": "Notarized Developer ID",
+    "nativeTaskRestoration": true,
+    "isolatedDataHome": true,
+    "preservedCustomPort": true,
+    "ordinaryCliVersion": "0.6.0",
+    "fullHardwareAcceptance": false
+  }
+}

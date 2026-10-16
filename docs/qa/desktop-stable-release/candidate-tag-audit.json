@@ -1,0 +1,36 @@
+{
+  "tag": "v0.6.0",
+  "oldTagOid": "949e46e2056f002b043823282b3d3bd68cf33031",
+  "oldSource": "1050bb1e82321a0e13dd3559a88e820188b0263b",
+  "newSource": "62a4d16c97d0c4bf40ea62062781ba2c290eb539",
+  "newTagOid": "3d49765178c1e679187d2ea519c1a089a0645e51",
+  "mainQualityRun": 38915500812,
+  "reason": "Repeated Apple CloudKit NSURLErrorDomain -1005 / stapler validate Error 68; CI retry and cache fix merged before public release",
+  "initialCandidateWasUnpublished": true,
+  "oldWorkflowCancelled": true,
+  "updateGuard": "Exact force-with-lease against original session-created tag; public/draft Release absence checked",
+  "coreSourceUnchanged": [
+    "apps",
+    "packages",
+    "skills",
+    "package.json",
+    "package-lock.json",
+    ".cargo",
+    "scripts/build-macos.sh",
+    "scripts/stage-runtime.mjs"
+  ],
+  "finalSourceFirstAttempt": {
+    "run": 38916287661,
+    "job": 117024874033,
+    "architecture": "x64",
+    "appNotarization": {
+      "id": "21bab60f-70e0-498c-b1b4-8957fb531265",
+      "status": "Accepted",
+      "message": "Processing complete"
+    },
+    "failure": "stapler staple: CloudKit NSURLErrorDomain -1005 / Error 68",
+    "receiptSha256": "995a20f4091c85ffd58ad9202bfbe430f525d363afe63e1ba11134ebec574500",
+    "diagnosticArtifactArchivedLocallyBeforeRerun": true,
+    "successfulInstallerArtifactsRetained": true
+  }
+}
