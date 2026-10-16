@@ -6,6 +6,7 @@ import { motionTokens } from "./tokens.js";
 import { Icon } from "./icons.js";
 import { dateOf } from "./dates.js";
 import { TaskMetadata } from "./metadata.js";
+import { menuTriggers, type MenuAnchor } from "./ContextMenu.js";
 
 export function Mark() {
   return (
@@ -159,7 +160,10 @@ export function TaskRow({
   showProject = true,
   today,
   trailingActions,
+  onMenu,
 }: {
+  /** Opens the row's context menu (right-click, long-press, ContextMenu key, Shift+F10). */
+  onMenu?: (task: Task, anchor: MenuAnchor) => void;
   trailingActions?: ReactNode;
   dragging?: boolean;
   showProject?: boolean;
@@ -207,6 +211,7 @@ export function TaskRow({
     <motion.div
       data-task-id={task.id}
       data-group={group}
+      {...(onMenu ? menuTriggers((anchor) => onMenu(task, anchor)) : {})}
       layout={!reduced}
       className={`task-row ${completing || completingExternal ? "completing" : ""} ${dragging ? "drag-placeholder" : ""} ${task.status === "done" ? "is-completed" : ""}`}
       initial={{ opacity: 0 }}

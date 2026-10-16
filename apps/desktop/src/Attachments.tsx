@@ -3,6 +3,8 @@ import type { Attachment } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { Icon } from "./icons.js";
 import { isCompositionKey } from "./quickAdd.js";
+import { menuTriggers, useContextMenu } from "./ContextMenu.js";
+import { attachmentMenuItems } from "./taskMenu.js";
 
 export type PreviewFile = Pick<Attachment, "name" | "mediaType">;
 export interface FilePreview { file: PreviewFile; data: string }
@@ -29,6 +31,12 @@ function AttachmentTile({ taskId, file, online, language, onOpen, onError, onRem
 }) {
   const [data, setData] = useState<string | null>(null);
   const image = file.mediaType.startsWith("image/");
+  const menu = useContextMenu();
+  // Save-as reuses the preview's download path (an `<a download>` click). The WebViews differ in
+  // how they honour it, so a host save command should replace this call when one exists.
+  const save = () => data
+    ? download(file, data)
+    : void client.getAttachment(taskId, file.id).then(result => download(file, result.dataBase64)).catch(error => onError(String(error)));
   useEffect(() => {
     if (!online || !image) return;
     let stopped = false;
@@ -37,7 +45,9 @@ function AttachmentTile({ taskId, file, online, language, onOpen, onError, onRem
     }).catch(error => { if (!stopped) onError(String(error)); });
     return () => { stopped = true; };
   }, [taskId, file.id, file.sha256, online, image, onError]);
-  return <div className={`attachment-tile ${image ? "attachment-image" : "attachment-file"}`}>
+  return <div className={`attachment-tile ${image ? "attachment-image" : "attachment-file"}`}
+    {...menuTriggers(anchor => menu.open(anchor, attachmentMenuItems({ language, available: online || !!data, save }), file.name))}>
+    {menu.node}
     <button type="button" disabled={!online && !data} aria-label={`${language === "en" ? "Preview attachment" : "预览附件"} ${file.name}`}
       onClick={() => data ? onOpen({ file, data }) : void client.getAttachment(taskId, file.id).then(result => onOpen({ file, data: result.dataBase64 })).catch(error => onError(String(error)))}>
       {data && image ? <img src={`data:${file.mediaType};base64,${data}`} alt={file.name} /> : <Icon name="paperclip" size={22} />}

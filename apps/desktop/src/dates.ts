@@ -103,6 +103,44 @@ export function reschedule(task: Task, date: string): UpdateTaskInput {
     timezone: task.timezone,
   };
 }
+/**
+ * "Move to tomorrow" from a task's menu, ported from the native client's
+ * `TaskRescheduling.tomorrow`. Unlike `reschedule` (the calendar's drag semantics, which leave
+ * the deadline alone), this also moves a deadline that falls before tomorrow, so an overdue or
+ * due-today task actually leaves Today. Future deadlines are kept. Times of day are preserved
+ * and resolved once, in the task's own zone.
+ */
+export function rescheduleToTomorrow(task: Task, today: string): UpdateTaskInput {
+  const tomorrow = shiftDate(today, 1);
+  const zone = task.timezone;
+  const moved = (value: string): string => {
+    const time = DateTime.fromISO(value).setZone(zone).toFormat("HH:mm:ss.SSS");
+    const instant = DateTime.fromISO(`${tomorrow}T${time}`, { zone }).toUTC().toISO();
+    if (!instant) throw new Error("Invalid planned date");
+    return instant;
+  };
+  const patch: UpdateTaskInput = { expectedVersion: task.version };
+  if (task.scheduledAt) {
+    patch.scheduledAt = moved(task.scheduledAt);
+    patch.scheduledDate = null;
+    patch.timezone = zone;
+  } else {
+    patch.scheduledDate = tomorrow;
+    patch.scheduledAt = null;
+  }
+  const tomorrowStart = DateTime.fromISO(tomorrow, { zone }).toMillis();
+  if (task.dueAt) {
+    if (Date.parse(task.dueAt) < tomorrowStart) {
+      patch.dueAt = moved(task.dueAt);
+      patch.dueDate = null;
+      patch.timezone = zone;
+    }
+  } else if (task.dueDate && task.dueDate < tomorrow) {
+    patch.dueDate = tomorrow;
+    patch.dueAt = null;
+  }
+  return patch;
+}
 export function landsAfterDeadline(task: Task, date: string): boolean {
   const day = task.dueDate ?? (task.dueAt ? dateOf(task.dueAt, task.timezone) : null);
   if (!day) return false;

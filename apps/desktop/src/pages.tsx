@@ -19,6 +19,7 @@ import type {
 import { client } from "./bridge.js";
 import { Icon } from "./icons.js";
 import { TaskRow } from "./components.js";
+import { menuTriggers, type MenuAnchor } from "./ContextMenu.js";
 import {
   dayLabel,
   dateOf,
@@ -46,6 +47,8 @@ interface PageProps {
   eventRevision: number;
   onOpen: (task: Task) => void;
   onComplete: (task: Task) => Promise<unknown>;
+  /** Opens a task's context menu; the panel owns the menu and its commands. */
+  onMenu?: (task: Task, anchor: MenuAnchor) => void;
   onError: (message: string) => void;
 }
 export interface CalendarState {
@@ -60,6 +63,7 @@ export function CalendarPage({
   eventRevision,
   onOpen,
   onComplete,
+  onMenu,
   onError,
   today,
   onQuickDate,
@@ -367,6 +371,7 @@ export function CalendarPage({
                   today={today}
                   disabled={!online || !["todo", "done"].includes(task.status)}
                   onOpen={onOpen}
+                  onMenu={onMenu}
                   onComplete={async (task) => {
                     const result = await onComplete(task);
                     if (result !== false) setRevision((value) => value + 1);
@@ -388,6 +393,7 @@ export function CalendarPage({
                     today={today}
                     disabled={!online}
                     onOpen={onOpen}
+                    onMenu={onMenu}
                     onComplete={onComplete}
                   />
                 ))}
@@ -410,7 +416,7 @@ export function CalendarPage({
                 {zh ? "已完成" : "Completed"} <span>{history(day).length}</span>
               </button>
               {showsHistory(day) && history(day).map(task => <TaskRow key={task.id} task={task} today={today}
-                disabled={!online || task.status !== "done"} onOpen={onOpen}
+                disabled={!online || task.status !== "done"} onOpen={onOpen} onMenu={onMenu}
                 onComplete={async task => { const result = await onComplete(task); if (result !== false) setRevision(value => value + 1); return result; }} />)}
             </div>}
           </section>
@@ -458,6 +464,7 @@ export function CompletedPage({
   online,
   eventRevision,
   onOpen,
+  onMenu,
   onError,
   query,
   onQuery,
@@ -519,7 +526,8 @@ export function CompletedPage({
                   : task.updatedAt.startsWith(date),
               )
               .map((task) => (
-                <div className="completed-row" key={task.id}>
+                <div className="completed-row" key={task.id}
+                  {...(onMenu ? menuTriggers((anchor) => onMenu(task, anchor)) : {})}>
                   <button
                     className="check is-done"
                     aria-label={`${zh ? "重新打开" : "Reopen"} ${task.title}`}

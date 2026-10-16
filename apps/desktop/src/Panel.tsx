@@ -23,6 +23,9 @@ import {
 import { translate } from "./i18n.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
+import { useContextMenu, type MenuAnchor } from "./ContextMenu.js";
+import { deleteConfirmText, taskMenuItems, type TaskMenuCommands } from "./taskMenu.js";
+import { taskCommands } from "./taskCommands.js";
 import { Detail } from "./Detail.js";
 import { afterSave, composerDraft, newDraft, type TaskDraft } from "./drafts.js";
 import { Icon } from "./icons.js";
@@ -107,6 +110,11 @@ export function Panel() {
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [undo, setUndo] = useState<Task | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
+  const contextMenu = useContextMenu();
+  const deleteCancel = useRef<HTMLButtonElement>(null);
+  // Deleting is permanent, so the safe answer is the one under the keyboard.
+  useEffect(() => { if (pendingDelete) deleteCancel.current?.focus(); }, [pendingDelete]);
   const drafts = useRef(new Map<string, TaskDraft>());
   const quickRequest = useRef(new QuickAddRequest());
   const quickFocusRevision = useRef(0);
@@ -254,6 +262,7 @@ export function Panel() {
       if (event.defaultPrevented || isCompositionKey(event)) return;
       if (event.key === "Escape") {
         if (menuOpen) setMenuOpen(false);
+        else if (pendingDelete) setPendingDelete(null);
         else if (route !== "list") back();
         else if (search) setSearch("");
         else if (!panelPinned) void hidePanel();
@@ -298,6 +307,7 @@ export function Panel() {
     route,
     panelPinned,
     menuOpen,
+    pendingDelete,
     search,
     quick,
     calendarState.selected,
@@ -480,6 +490,44 @@ export function Panel() {
       setFinishing(new Set(finishingRef.current));
     }
   }
+  // The row menu. Every command looks the task up again, so a menu that stayed open while the
+  // board refreshed still writes against the current version.
+  const latestTask = (task: Task) =>
+    liveBoard?.all.find((item) => item.id === task.id) ??
+    liveBoard?.today.completed.find((item) => item.id === task.id) ??
+    task;
+  const planToday = liveBoard?.context.today ?? calendarState.anchor;
+  const menuCommands: TaskMenuCommands = {
+    complete: (task) => void complete(latestTask(task), false),
+    reopen: (task) => void run(() => taskCommands.reopen(latestTask(task))),
+    snooze: (task) => void run(() => taskCommands.snooze(latestTask(task))),
+    tomorrow: (task) => void run(() => taskCommands.tomorrow(latestTask(task), planToday)),
+    edit: (task) => edit(latestTask(task)),
+    cancel: (task) => void run(() => taskCommands.cancel(latestTask(task))),
+    skip: (task) => void run(() => taskCommands.skip(latestTask(task))),
+    requestDelete: (task) => setPendingDelete(latestTask(task)),
+  };
+  function openTaskMenu(task: Task, anchor: MenuAnchor) {
+    contextMenu.open(
+      anchor,
+      taskMenuItems(task, {
+        language: settings.language,
+        online: connection.online,
+        busy: saving || finishingRef.current.has(task.id),
+        commands: menuCommands,
+      }),
+      task.title,
+    );
+  }
+  // A menu belongs to the page it was opened on, and its items were built for one connection state.
+  useEffect(() => contextMenu.close(), [route, connection.online]);
+  async function confirmDelete(task: Task) {
+    await run(async () => {
+      await taskCommands.remove(latestTask(task));
+      setPendingDelete(null);
+      if (route === "detail" && selected?.id === task.id) back();
+    });
+  }
   return (
     <main className="panel-shell"
       onPointerDownCapture={(event) => {
@@ -541,6 +589,22 @@ export function Panel() {
             onOpen={() => {}}
             onComplete={async () => {}}
           />
+        </div>
+      )}
+      {pendingDelete && (
+        <div className="confirmation frost" role="alertdialog" aria-label={deleteConfirmText(settings.language).title}>
+          <h3>{deleteConfirmText(settings.language).title}</h3>
+          <p>{deleteConfirmText(settings.language).body}</p>
+          <button
+            className="pill danger"
+            disabled={!connection.online || saving}
+            onClick={() => void confirmDelete(pendingDelete)}
+          >
+            {deleteConfirmText(settings.language).confirm}
+          </button>
+          <button className="text-button" ref={deleteCancel} onClick={() => setPendingDelete(null)}>
+            {deleteConfirmText(settings.language).cancel}
+          </button>
         </div>
       )}
       {pendingMove && (
@@ -835,6 +899,7 @@ export function Panel() {
                     }
                     onQuickDate={setQuickDate}
                     onOpen={openTask}
+                    onMenu={openTaskMenu}
                     onComplete={async (task) => {
                       return complete(task, true);
                     }}
@@ -1036,6 +1101,7 @@ export function Panel() {
                                       return complete(task, true);
                                     }}
                                     onOpen={openTask}
+                                    onMenu={openTaskMenu}
                                   />
                                 ))}
                               </AnimatePresence>
@@ -1089,6 +1155,7 @@ export function Panel() {
                                 today={board.context.today}
                                 disabled={!connection.online || saving}
                                 onOpen={openTask}
+                                onMenu={openTaskMenu}
                                 onComplete={(task) => complete(task, true)}
                               />
                             ))}
@@ -1238,6 +1305,7 @@ export function Panel() {
                 query={completedQuery}
                 onQuery={setCompletedQuery}
                 onOpen={openTask}
+                onMenu={openTaskMenu}
                 onComplete={async (task) => {
                   return complete(task, true);
                 }}
@@ -1331,6 +1399,7 @@ export function Panel() {
                   )
                 }
                 onDeleted={back}
+                onRequestDelete={setPendingDelete}
                 onChanged={refresh}
                 onError={setError}
               />
@@ -1611,6 +1680,7 @@ export function Panel() {
           )}
         </aside>
       )}
+      {contextMenu.node}
     </main>
   );
 }

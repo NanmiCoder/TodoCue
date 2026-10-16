@@ -183,3 +183,5 @@ export function resizePanelMac(input: {
 }) {
   return invoke<void>("panel_resize_macos", input);
 }
+
+export { platform, type Platform } from "./platform.js";

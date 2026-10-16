@@ -3,7 +3,8 @@ import { useIsPresent } from "motion/react";
 import type { Reminder, Series, Task } from "@todocue/shared";
 import { client } from "./bridge.js";
 import { Icon, type IconName } from "./icons.js";
-import { dayLabel, reschedule, shiftDate, taskOverdue } from "./dates.js";
+import { dayLabel, taskOverdue } from "./dates.js";
+import { taskCommands } from "./taskCommands.js";
 import { estimateLabel, timeLabel } from "./metadata.js";
 import { AttachmentGallery, AttachmentPreview, type FilePreview } from "./Attachments.js";
 
@@ -18,6 +19,7 @@ export function Detail({
   onComplete,
   onUpdated,
   onDeleted,
+  onRequestDelete,
   onChanged,
   onError,
 }: {
@@ -31,6 +33,8 @@ export function Detail({
   onComplete: (task: Task) => Promise<boolean>;
   onUpdated: (task: Task) => void;
   onDeleted: () => void;
+  /** Deleting is confirmed by the panel, which also confirms it from the row menu. */
+  onRequestDelete: (task: Task) => void;
   onChanged: () => Promise<void>;
   onError: (error: string) => void;
 }) {
@@ -47,7 +51,7 @@ export function Detail({
   const zh = language !== "en";
   const text = (chinese: string, english: string) => (zh ? chinese : english);
   const [working, setWorking] = useState(false);
-  const [confirm, setConfirm] = useState<"delete" | "stop" | null>(null);
+  const [confirm, setConfirm] = useState<"stop" | null>(null);
   const [series, setSeries] = useState<Series | null>(null);
   const [reminder, setReminder] = useState<Reminder | null>(null);
   const [viewing, setViewing] = useState<FilePreview | null>(null);
@@ -275,10 +279,7 @@ export function Detail({
                     key={minutes}
                     onClick={() =>
                       void act(() =>
-                        client.snoozeTask(task.id, {
-                          minutes,
-                          expectedVersion: task.version,
-                        }),
+                        taskCommands.snooze(task, minutes),
                       )
                     }
                   >
@@ -299,10 +300,7 @@ export function Detail({
                     disabled={disabled}
                     onClick={() =>
                       void act(() =>
-                        client.updateTask(
-                          task.id,
-                          reschedule(task, shiftDate(today, 1)),
-                        ),
+                        taskCommands.tomorrow(task, today),
                       )
                     }
                   >
@@ -313,10 +311,7 @@ export function Detail({
                       disabled={disabled}
                       onClick={() =>
                         void act(
-                          () =>
-                            client.skipTask(task.id, {
-                              expectedVersion: task.version,
-                            }),
+                          () => taskCommands.skip(task),
                           true,
                         )
                       }
@@ -329,10 +324,7 @@ export function Detail({
                     disabled={disabled}
                     onClick={() =>
                       void act(
-                        () =>
-                          client.cancelTask(task.id, {
-                            expectedVersion: task.version,
-                          }),
+                        () => taskCommands.cancel(task),
                         true,
                       )
                     }
@@ -344,7 +336,7 @@ export function Detail({
               <button
                 className="danger"
                 disabled={disabled}
-                onClick={() => setConfirm("delete")}
+                onClick={() => onRequestDelete(task)}
               >
                 {text("删除任务…", "Delete task…")}
               </button>
@@ -361,7 +353,7 @@ export function Detail({
                     onDeleted();
                 })
               : void act(() =>
-                  client.reopenTask(task.id, { expectedVersion: task.version }),
+                  taskCommands.reopen(task),
                 )
           }
         >
@@ -376,43 +368,25 @@ export function Detail({
       </footer>
       {confirm && (
         <div className="confirmation frost" role="alertdialog">
-          <h3>
-            {text(
-              confirm === "delete" ? "删除这个任务？" : "停止这个重复系列？",
-              confirm === "delete" ? "Delete this task?" : "Stop this series?",
-            )}
-          </h3>
+          <h3>{text("停止这个重复系列？", "Stop this series?")}</h3>
           <p>
             {text(
-              confirm === "delete"
-                ? "任务、提醒和附件会被永久删除。"
-                : "今天之后尚未开始的实例会被取消，历史记录保留。",
-              confirm === "delete"
-                ? "The task, reminders and attachments will be permanently removed."
-                : "Future instances are cancelled. History is kept.",
+              "今天之后尚未开始的实例会被取消，历史记录保留。",
+              "Future instances are cancelled. History is kept.",
             )}
           </p>
           <button
             className="pill danger"
             disabled={disabled}
             onClick={() =>
-              void act(
-                () =>
-                  confirm === "delete"
-                    ? client.deleteTask(task.id, {
-                        expectedVersion: task.version,
-                      })
-                    : client.stopSeries(task.seriesId!, {
-                        expectedVersion: series?.version,
-                      }),
-                confirm === "delete",
+              void act(() =>
+                client.stopSeries(task.seriesId!, {
+                  expectedVersion: series?.version,
+                }),
               )
             }
           >
-            {text(
-              confirm === "delete" ? "删除任务" : "停止系列",
-              confirm === "delete" ? "Delete task" : "Stop series",
-            )}
+            {text("停止系列", "Stop series")}
           </button>
           <button className="text-button" onClick={() => setConfirm(null)}>
             {text("取消", "Cancel")}
