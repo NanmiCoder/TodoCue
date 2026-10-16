@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Task } from "@todocue/shared";
-import { rescheduleToTomorrow } from "../src/dates.js";
+import { rescheduleToTomorrow, rescheduleUndo } from "../src/dates.js";
 import { edgeEnabled, keepsNativeMenu, nextEnabled, placeMenu, type MenuItem } from "../src/menuModel.js";
-import { detectPlatform, formatShortcut } from "../src/platform.js";
+import { detectPlatform, formatMenuShortcut } from "../src/platform.js";
 import {
   attachmentMenuItems,
   deleteConfirmText,
@@ -164,17 +164,17 @@ describe("the native menu is suppressed except where editing needs it", () => {
 
 describe("shortcut text follows the platform", () => {
   it("identifies the platform from the WebView's own report", () => {
-    expect(detectPlatform({ platform: "MacIntel" })).toBe("mac");
-    expect(detectPlatform({ platform: "macOS" })).toBe("mac");
+    expect(detectPlatform({ platform: "MacIntel" })).toBe("macos");
+    expect(detectPlatform({ platform: "macOS" })).toBe("macos");
     expect(detectPlatform({ platform: "Win32" })).toBe("windows");
     expect(detectPlatform({ platform: "Windows" })).toBe("windows");
     expect(detectPlatform({ platform: "Linux x86_64" })).toBe("other");
   });
   it("uses symbols on macOS and words elsewhere", () => {
-    expect(formatShortcut(["mod", "shift", "K"], "mac")).toBe("⇧⌘K");
-    expect(formatShortcut(["mod", "shift", "K"], "windows")).toBe("Ctrl+Shift+K");
-    expect(formatShortcut(["mod", "alt", "n"], "mac")).toBe("⌥⌘N");
-    expect(formatShortcut(["shift", "F10"], "windows")).toBe("Shift+F10");
+    expect(formatMenuShortcut(["mod", "shift", "K"], "macos")).toBe("⇧⌘K");
+    expect(formatMenuShortcut(["mod", "shift", "K"], "windows")).toBe("Ctrl+Shift+K");
+    expect(formatMenuShortcut(["mod", "alt", "n"], "macos")).toBe("⌥⌘N");
+    expect(formatMenuShortcut(["shift", "F10"], "windows")).toBe("Shift+F10");
   });
 });
 
@@ -228,5 +228,20 @@ describe("rescheduleToTomorrow ports the native TaskRescheduling.tomorrow", () =
   it("leaves the reminder alone and never sends fields it did not change", () => {
     const patch = rescheduleToTomorrow(task({ scheduledDate: today, dueDate: "2026-10-30", reminderAt: "2026-10-14T01:00:00.000Z" }), today);
     expect(Object.keys(patch).sort()).toEqual(["expectedVersion", "scheduledAt", "scheduledDate"]);
+  });
+});
+
+describe("rescheduleUndo", () => {
+  it("restores only the plan when the deadline stayed put", () => {
+    const before = task({ scheduledDate: "2026-10-17", dueDate: "2026-10-30", version: 3 });
+    const after = task({ scheduledDate: "2026-10-18", dueDate: "2026-10-30", version: 4 });
+    const undo = rescheduleUndo(before, after);
+    expect(undo).toMatchObject({ kind: "reschedule", scheduledDate: "2026-10-17", expectedVersion: 4 });
+    expect("dueDate" in undo).toBe(false);
+  });
+  it("also restores a deadline that “move to tomorrow” pulled along", () => {
+    const before = task({ scheduledDate: "2026-10-17", dueDate: "2026-10-17", version: 3 });
+    const after = task({ scheduledDate: "2026-10-18", dueDate: "2026-10-18", version: 4 });
+    expect(rescheduleUndo(before, after)).toMatchObject({ dueDate: "2026-10-17", dueAt: before.dueAt });
   });
 });

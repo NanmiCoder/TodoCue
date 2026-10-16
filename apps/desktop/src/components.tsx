@@ -5,7 +5,7 @@ import type { Task } from "@todocue/shared";
 import { motionTokens } from "./tokens.js";
 import { checkPress, pulse as pulseRing } from "./motionKit.js";
 import { Icon } from "./icons.js";
-import { dateOf } from "./dates.js";
+import { clockTime, dateOf } from "./dates.js";
 import { TaskMetadata } from "./metadata.js";
 import { menuTriggers, type MenuAnchor } from "./ContextMenu.js";
 
@@ -206,12 +206,7 @@ export function TaskRow({
   }
   const time =
     task.scheduledAt && dateOf(task.scheduledAt, task.timezone) === today
-      ? new Intl.DateTimeFormat(undefined, {
-          timeZone: task.timezone,
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).format(new Date(task.scheduledAt))
+      ? clockTime(task.scheduledAt, task.timezone, document.documentElement.lang)
       : null;
   return (
     <motion.div
@@ -236,6 +231,7 @@ export function TaskRow({
         <button
           className="drag-handle"
           aria-label={`${document.documentElement.lang === "en" ? "Move" : "拖动"} ${task.title}`}
+          title={document.documentElement.lang === "en" ? "Drag to reorder; across groups to change project or date" : "拖动调整执行顺序；跨分组可修改项目或计划日期"}
           disabled={disabled}
           onPointerDown={(event) => onDrag(task, event)}
         >

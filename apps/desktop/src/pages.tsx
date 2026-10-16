@@ -39,6 +39,19 @@ import {
 import { motionTokens, spring } from "./tokens.js";
 import { pageDirection } from "./motionKit.js";
 import { LatestRequest } from "./model.js";
+import { describeError } from "./errors.js";
+import type { NotifyInput } from "./toast.js";
+import { EmptyState } from "./states.js";
+import {
+  completedDays,
+  growWindow,
+  hasMore,
+  matchingCompleted,
+  probe,
+  COMPLETED_MAX,
+  COMPLETED_PAGE,
+} from "./completed.js";
+import { nextFireLabel, nextWindow, periodicStateLabel, validatePeriodic, WEEKDAY_PRESETS } from "./periodic.js";
 import { isCompositionKey } from "./quickAdd.js";
 import { useTextAreaSize } from "./useTextAreaSize.js";
 
@@ -68,10 +81,12 @@ export function CalendarPage({
   onError,
   today,
   onQuickDate,
+  onNotify,
   state,
   setState,
   activeTasks,
 }: PageProps & {
+  onNotify: (input: NotifyInput) => void;
   today: string;
   activeTasks: Task[];
   state: CalendarState;
@@ -129,6 +144,28 @@ export function CalendarPage({
   const [confirm, setConfirm] = useState<{ task: Task; date: string } | null>(
     null,
   );
+  // The task being dragged and the day it hovers: the landing day is outlined while it is a real change.
+  const [dragging, setDragging] = useState<{ id: string; from: string | null } | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const landing = (day: string) => !!dragging && over === day && dragging.from !== day;
+  const dropProps = (day: string) => ({
+    onDragOver: (event: import("react").DragEvent) => {
+      if (!online) return;
+      event.preventDefault();
+      if (over !== day) setOver(day);
+    },
+    onDragLeave: (event: import("react").DragEvent) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver((current) => (current === day ? null : current));
+    },
+    onDrop: (event: import("react").DragEvent) => {
+      event.preventDefault();
+      const id = event.dataTransfer.getData("application/x-todocue-task");
+      const task = visible.find((task) => task.id === id);
+      setOver(null);
+      setDragging(null);
+      if (task) void move(task, day);
+    },
+  });
   const zh = language !== "en";
   const firstDay = calendarFirstWeekday(language, globalThis.navigator.language);
   const days = calendarDays(span, anchor, firstDay);
@@ -188,6 +225,8 @@ export function CalendarPage({
     ghostDates(rule, from, to, existing).map((date) => ({
       date,
       title: rule.title,
+      time: rule.scheduledTime,
+      project: rule.project,
     })),
   );
   const planned = (day: string) =>
@@ -215,11 +254,25 @@ export function CalendarPage({
       return;
     }
     try {
-      await client.updateTask(task.id, reschedule(task, date));
+      const { task: moved } = await client.updateTask(task.id, reschedule(task, date));
       setRevision((value) => value + 1);
       setConfirm(null);
+      onNotify({
+        message: zh
+          ? `已改期至 ${dayLabel(date, language, today)}，截止与提醒保持原值`
+          : `Moved to ${dayLabel(date, language, today)}; deadline and reminder unchanged`,
+        undo: {
+          kind: "reschedule",
+          taskId: task.id,
+          scheduledDate: task.scheduledDate,
+          scheduledAt: task.scheduledAt,
+          timezone: task.timezone,
+          expectedVersion: moved.version,
+        },
+      });
     } catch (error) {
-      onError(String(error));
+      setConfirm(null);
+      onError(describeError(error, language));
     }
   }
   return (
@@ -285,25 +338,12 @@ export function CalendarPage({
                 <button
                   style={{ height: cellHeight }}
                   key={day}
-                  className={`${selected === day ? "selected" : ""} ${day.slice(0, 7) !== anchor.slice(0, 7) ? "other-month" : ""} ${day === today ? "is-today" : ""} ${bucket(day).some(task => taskOverdue(task, today)) ? "has-overdue" : ""}`}
+                  className={`${selected === day ? "selected" : ""} ${day.slice(0, 7) !== anchor.slice(0, 7) ? "other-month" : ""} ${day === today ? "is-today" : ""} ${bucket(day).some(task => taskOverdue(task, today)) ? "has-overdue" : ""} ${landing(day) ? "drop-target" : ""}`}
                   onClick={() => {
                     setSelected(day);
                     onQuickDate(day);
                   }}
-                  onDragOver={(event) => {
-                    if (online) event.preventDefault();
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const task = visible.find(
-                      (task) =>
-                        task.id ===
-                        event.dataTransfer.getData(
-                          "application/x-todocue-task",
-                        ),
-                    );
-                    if (task) void move(task, day);
-                  }}
+                  {...dropProps(day)}
                   aria-label={day}
                   aria-pressed={selected === day}
                   aria-description={`${dayLabel(day, language, today)} · ${planned(day).length} ${zh ? "待办" : "planned"} · ${deadlines(day).length} ${zh ? "截止" : "due"} · ${history(day).length} ${zh ? "历史" : "completed"}`}
@@ -336,24 +376,13 @@ export function CalendarPage({
         <CalendarSwap className="calendar-agenda-days" key={span === "week" ? `week:${from}` : `day:${selected}`} direction={direction} swap={swapKind} distance={span === "week" ? 24 : 0}>
         {(span === "week" ? days : [selected]).map((day) => (
           <section
-            className={`day-agenda ${day === selected ? "selected" : ""}`}
+            className={`day-agenda ${day === selected ? "selected" : ""} ${landing(day) ? "drop-target" : ""}`}
             key={day}
             onClick={(event) => {
               if ((event.target as Element).closest("button, input, a, summary")) return;
               setSelected(day); onQuickDate(day);
             }}
-            onDragOver={(event) => {
-              if (online) event.preventDefault();
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              const task = visible.find(
-                (task) =>
-                  task.id ===
-                  event.dataTransfer.getData("application/x-todocue-task"),
-              );
-              if (task) void move(task, day);
-            }}
+            {...dropProps(day)}
           >
             <h3 className={day === today ? "is-today" : ""}>
               <button type="button" aria-pressed={day === selected} onClick={() => { setSelected(day); onQuickDate(day); }}>{dayLabel(day, language, today)}</button> {planned(day).length > 0 && <span>{planned(day).length}</span>}
@@ -362,19 +391,26 @@ export function CalendarPage({
               history(day).length === 0 &&
               !ghosts.some((ghost) => ghost.date === day) && (
                 <p className="muted">
-                  {zh ? "这天没有安排" : "Nothing planned"}
+                  {!online
+                    ? zh ? "离线，只显示待办" : "Offline. Showing open tasks only"
+                    : zh ? "这天没有安排" : "Nothing planned"}
                 </p>
               )}
             {planned(day).map((task) => (
               <div
                 key={task.id}
                 draggable={online && task.status === "todo"}
-                onDragStart={(event) =>
+                onDragStart={(event) => {
                   event.dataTransfer.setData(
                     "application/x-todocue-task",
                     task.id,
-                  )
-                }
+                  );
+                  setDragging({ id: task.id, from: planDate(task) });
+                }}
+                onDragEnd={() => {
+                  setDragging(null);
+                  setOver(null);
+                }}
               >
                 <TaskRow
                   task={task}
@@ -415,6 +451,9 @@ export function CalendarPage({
                 <div key={i} className="ghost-row">
                   <Icon name="repeat" />
                   {ghost.title}
+                  {(ghost.time || ghost.project) && (
+                    <small>{[ghost.time?.slice(0, 5), ghost.project].filter(Boolean).join(" · ")}</small>
+                  )}
                   <span>{zh ? "待生成" : "Not generated"}</span>
                 </div>
               ))}
@@ -439,8 +478,8 @@ export function CalendarPage({
           <h3>{zh ? "计划晚于截止时间" : "Plan is past the deadline"}</h3>
           <p>
             {zh
-              ? "截止日期和提醒时间将保持原值。"
-              : "Deadline and reminder will be kept."}
+              ? `将「${confirm.task.title}」改期到 ${dayLabel(confirm.date, language, today)}，会晚于原截止时间。截止日期和提醒时间将保持原值。`
+              : `Moving “${confirm.task.title}” to ${dayLabel(confirm.date, language, today)} lands after its deadline. The deadline and reminder keep their values.`}
           </p>
           <button
             className="pill"
@@ -489,40 +528,58 @@ export function CompletedPage({
   language,
   online,
   eventRevision,
+  today,
+  timezone,
   onOpen,
   onMenu,
+  onComplete,
   onError,
   query,
   onQuery,
-}: PageProps & { query: string; onQuery: (query: string) => void }) {
-  const [tasks, setTasks] = useState<Task[]>([]);
+}: PageProps & {
+  query: string;
+  onQuery: (query: string) => void;
+  today?: string;
+  timezone?: string;
+}) {
   const zh = language !== "en";
+  const zone = timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [windowSize, setWindowSize] = useState(COMPLETED_PAGE);
+  const [more, setMore] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const history = useRef(new LatestRequest());
-  const reload = () => history.current.run(
-    () => client.listTasks({ status: "done", limit: 1000 }),
-    (result) => setTasks(result.tasks),
-    (error) => onError(String(error)),
-  );
+  const reload = (size = windowSize) => {
+    setLoading(true);
+    return history.current.run(
+      () => client.listTasks({ status: "done", limit: probe(size) }),
+      (result) => {
+        setTasks(result.tasks.slice(0, size));
+        setMore(hasMore(size, result.tasks.length));
+        setFailed(false);
+        setLoaded(true);
+        setLoading(false);
+      },
+      () => {
+        setFailed(true);
+        setLoading(false);
+      },
+    );
+  };
   useEffect(() => {
-    void reload();
+    if (online) void reload();
     return () => history.current.invalidate();
   }, [online, eventRevision]);
-  const matching = tasks.filter((task) =>
-    [task.title, task.project ?? "", task.notes ?? ""].some((text) =>
-      text.toLowerCase().includes(query.trim().toLowerCase()),
-    ),
-  );
-  const dates = [
-    ...new Set(
-      matching.map((task) =>
-        task.completedAt
-          ? dateOf(task.completedAt, task.timezone)
-          : task.updatedAt.slice(0, 10),
-      ),
-    ),
-  ]
-    .sort()
-    .reverse();
+  const searching = query.trim().length > 0;
+  const matching = matchingCompleted(tasks, query);
+  const days = completedDays(matching, zone);
+  const loadMore = () => {
+    const size = growWindow(windowSize);
+    setWindowSize(size);
+    void reload(size);
+  };
   return (
     <>
       <section className="tile frost completed-search">
@@ -534,51 +591,96 @@ export function CompletedPage({
             placeholder={zh ? "搜索已完成的任务" : "Search completed tasks"}
             aria-label={zh ? "搜索已完成" : "Search completed"}
           />
+          {query && (
+            <button
+              type="button"
+              className="search-clear"
+              aria-label={zh ? "清除搜索" : "Clear search"}
+              title={zh ? "清除搜索" : "Clear search"}
+              onClick={() => onQuery("")}
+            >
+              <Icon name="close" size={10} />
+            </button>
+          )}
         </div>
         <span className="muted">
           {matching.length} {zh ? "件已完成" : "completed"}
         </span>
       </section>
-      <section className="tile graphite completed-list">
-        {dates.map((date) => (
-          <section key={date}>
-            <h3>
-              {dayLabel(date, language)} <span>{date}</span>
-            </h3>
-            {matching
-              .filter((task) =>
-                task.completedAt
-                  ? dateOf(task.completedAt, task.timezone) === date
-                  : task.updatedAt.startsWith(date),
-              )
-              .map((task) => (
-                <div className="completed-row" key={task.id}
-                  {...(onMenu ? menuTriggers((anchor) => onMenu(task, anchor)) : {})}>
-                  <button
-                    className="check is-done"
-                    aria-label={`${zh ? "重新打开" : "Reopen"} ${task.title}`}
+      <section className="tile graphite completed-list" aria-busy={loading}>
+        {!loaded ? (
+          loading ? (
+            <p className="completed-status" role="status">
+              {zh ? "正在加载已完成的任务" : "Loading completed tasks"}
+            </p>
+          ) : (
+            <p className="completed-status" role="status">
+              {zh ? "离线，暂时读不到已完成的任务" : "Offline. Completed tasks can’t be read right now."}
+              <button type="button" className="text-button" disabled={loading} onClick={() => void reload()}>
+                {zh ? "重试" : "Retry"}
+              </button>
+            </p>
+          )
+        ) : tasks.length === 0 ? (
+          <EmptyState
+            icon="check"
+            title={zh ? "还没有完成的任务" : "Nothing finished yet"}
+            hint={zh ? "完成一件，这里就会记下来。" : "Finish one and it will be recorded here."}
+          />
+        ) : (
+          <>
+            {days.length === 0 && (
+              <p className="completed-status">{zh ? "没有找到相关任务" : "No matching tasks"}</p>
+            )}
+            {days.map((day) => (
+              <section key={day.date}>
+                <h3>
+                  {dayLabel(day.date, language, today)} <span>{day.tasks.length}</span>
+                </h3>
+                {day.tasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    today={today}
+                    onMenu={onMenu}
                     disabled={!online}
-                    onClick={() =>
-                      void client
-                        .reopenTask(task.id, { expectedVersion: task.version })
-                        .then(reload)
-                        .catch((error) => onError(String(error)))
-                    }
-                  >
-                    <Icon name="check" size={12} />
-                  </button>
-                  <button className="task-text" onClick={() => onOpen(task)}>
-                    <span>{task.title}</span>
-                    <span className="muted">{task.project}</span>
-                  </button>
-                </div>
-              ))}
-          </section>
-        ))}
-        {matching.length === 0 && (
-          <p className="empty">
-            {zh ? "这里会留下你做过的事。" : "Your finished work lives here."}
-          </p>
+                    onOpen={onOpen}
+                    onComplete={async (task) => {
+                      const result = await onComplete(task);
+                      if (result !== false) {
+                        setTasks((current) => current.filter((item) => item.id !== task.id));
+                        void reload();
+                      }
+                      return result;
+                    }}
+                  />
+                ))}
+              </section>
+            ))}
+            {searching && more && (
+              <p className="completed-status">
+                {zh ? `只搜索了已加载的 ${tasks.length} 件` : `Searched only the ${tasks.length} loaded`}
+              </p>
+            )}
+            {failed ? (
+              <p className="completed-status completed-failed" role="alert">
+                {zh ? "加载失败" : "Couldn’t load"}
+                <button type="button" className="text-button" disabled={loading} onClick={() => void reload()}>
+                  {zh ? "重试" : "Retry"}
+                </button>
+              </p>
+            ) : more ? (
+              <button type="button" className="pill secondary completed-more" disabled={loading} onClick={loadMore}>
+                {loading ? (zh ? "加载中…" : "Loading…") : zh ? "加载更早" : "Load earlier"}
+              </button>
+            ) : (
+              tasks.length >= COMPLETED_MAX && (
+                <p className="completed-status">
+                  {zh ? `已到可查看的上限，最近 ${COMPLETED_MAX} 件` : `Reached the limit: the latest ${COMPLETED_MAX}`}
+                </p>
+              )
+            )}
+          </>
         )}
       </section>
     </>
@@ -589,6 +691,8 @@ export function PeriodicPage({
   language,
   online,
   rules,
+  selectedId,
+  loadError,
   onEdit,
   onChanged,
   onError,
@@ -596,12 +700,22 @@ export function PeriodicPage({
   language: string;
   online: boolean;
   rules: PeriodicReminder[];
+  selectedId?: string;
+  loadError?: string | null;
   onEdit: (rule?: PeriodicReminder) => void;
   onChanged: () => Promise<void>;
   onError: (message: string) => void;
 }) {
   const zh = language !== "en";
   const [busy, setBusy] = useState<string | null>(null);
+  // Entering the page reads the rules fresh, and a reveal scrolls its rule into view.
+  useEffect(() => {
+    if (online) void onChanged();
+  }, [online]);
+  const selectedRow = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    selectedRow.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }, [selectedId, rules.length]);
   async function act(
     rule: PeriodicReminder,
     action: "pause" | "resume" | "pause_today" | "delete" | "complete",
@@ -638,7 +752,15 @@ export function PeriodicPage({
         </button>
       </div>
       <div className="page-scroll">
-        {rules.length === 0 && (
+        {loadError && (
+          <p className="completed-status completed-failed" role="alert">
+            {loadError}
+            <button type="button" className="text-button" onClick={() => void onChanged()}>
+              {zh ? "重试" : "Retry"}
+            </button>
+          </p>
+        )}
+        {rules.length === 0 && !loadError && (
           <div className="empty-state">
             <Icon name="clock" size={30} />
             <h2>
@@ -656,7 +778,12 @@ export function PeriodicPage({
           </div>
         )}
         {rules.map((rule) => (
-          <article className="surface-card periodic-row" key={rule.id}>
+          <article
+            className={`surface-card periodic-row ${rule.id === selectedId ? "selected" : ""}`}
+            key={rule.id}
+            aria-busy={busy === rule.id}
+            ref={rule.id === selectedId ? selectedRow : undefined}
+          >
             <div>
               <button className="periodic-title" onClick={() => onEdit(rule)}>
                 {rule.title}
@@ -679,15 +806,9 @@ export function PeriodicPage({
             </p>
             <div>
               <span className={rule.state === "waiting" ? "accent" : "muted"}>
-                {zh
-                  ? {
-                      waiting: "等待确认",
-                      scheduled: "已安排",
-                      paused: "已暂停",
-                      paused_today: "今天暂停",
-                    }[rule.state]
-                  : rule.state.replaceAll("_", " ")}
+                {periodicStateLabel(rule, language)}
               </span>
+              {busy === rule.id && <span className="muted periodic-busy">…</span>}
               <details className="action-menu">
                 <summary aria-label={zh ? "管理周期提醒" : "Manage reminder"}>
                   <Icon name="more" />
@@ -719,7 +840,9 @@ export function PeriodicPage({
                       ? rule.state === "paused_today"
                         ? "恢复提醒"
                         : "今天暂停"
-                      : "Pause / Resume today"}
+                      : rule.state === "paused_today"
+                        ? "Resume"
+                        : "Pause today"}
                   </button>
                   <button
                     className="danger"
@@ -731,6 +854,11 @@ export function PeriodicPage({
                 </div>
               </details>
             </div>
+            {rule.currentOccurrence?.delivery === "failed" && rule.currentOccurrence.lastError && (
+              <p className="error" role="alert">
+                {rule.currentOccurrence.lastError}
+              </p>
+            )}
           </article>
         ))}
       </div>
@@ -788,8 +916,14 @@ export function PeriodicForm({
     summary: string;
     nextFireAt: string | null;
   } | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const config = draft.config;
+  const errors = validatePeriodic(config, language);
+  const valid = Object.keys(errors).length === 0;
   useEffect(() => {
-    if (!online) return;
+    setPreview(null);
+    setPreviewError(null);
+    if (!online || !valid) return;
     let stopped = false;
     const timer = setTimeout(() => {
       void client
@@ -797,16 +931,39 @@ export function PeriodicForm({
         .then((result) => {
           if (!stopped) setPreview(result);
         })
-        .catch(() => {
-          if (!stopped) setPreview(null);
+        .catch((error) => {
+          if (!stopped) setPreviewError(describeError(error, language));
         });
     }, 250);
     return () => {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [draft.config, online]);
-  const config = draft.config;
+  }, [draft.config, online, valid]);
+  const fieldError = (field: keyof typeof errors) =>
+    errors[field] ? (
+      <p className="field-error" role="alert">
+        {errors[field]}
+      </p>
+    ) : null;
+  async function reloadLatest() {
+    const original = current.current.original;
+    if (!original || busy) return;
+    setBusy(true);
+    try {
+      const { reminder } = await client.getPeriodicReminder(original.id);
+      const next = { ...newPeriodicDraft(reminder, language), sessionId: current.current.sessionId };
+      current.current = next;
+      setDraft(next);
+      onChange(next);
+      setConflict(false);
+      setError(null);
+    } catch (error) {
+      setError(describeError(error, language));
+    } finally {
+      setBusy(false);
+    }
+  }
   const setConfig = (config: CreatePeriodicReminderInput) => {
     const next = { ...current.current, config, key: crypto.randomUUID() };
     current.current = next;
@@ -913,22 +1070,37 @@ export function PeriodicForm({
               setConfig({ ...config, title: event.target.value })
             }
           />
+          {fieldError("title")}
+          <div className="field-row interval-presets">
+            {[15, 30, 60].map((minutes) => (
+              <button
+                type="button"
+                key={minutes}
+                className={`pill secondary ${config.intervalMinutes === minutes ? "selected" : ""}`}
+                aria-pressed={config.intervalMinutes === minutes}
+                onClick={() => setConfig({ ...config, intervalMinutes: minutes })}
+              >
+                {minutes}
+              </button>
+            ))}
+          </div>
           <label className="field-row">
             {zh ? "提醒间隔" : "Interval"}
             <input
               type="number"
               min="1"
               max="1440"
-              value={config.intervalMinutes}
+              value={Number.isNaN(config.intervalMinutes) ? "" : config.intervalMinutes}
               onChange={(event) =>
                 setConfig({
                   ...config,
-                  intervalMinutes: Number(event.target.value),
+                  intervalMinutes: event.target.value === "" ? Number.NaN : Number(event.target.value),
                 })
               }
             />
             {zh ? "分钟" : "minutes"}
           </label>
+          {fieldError("interval")}
           <div className="weekday-picker">
             {(zh
               ? ["一", "二", "三", "四", "五", "六", "日"]
@@ -954,6 +1126,23 @@ export function PeriodicForm({
               </button>
             ))}
           </div>
+          <div className="field-row weekday-presets">
+            {([
+              ["everyday", zh ? "每天" : "Every day"],
+              ["workdays", zh ? "周一至周五" : "Weekdays"],
+              ["weekend", zh ? "周末" : "Weekend"],
+            ] as const).map(([key, name]) => (
+              <button
+                type="button"
+                key={key}
+                className="text-button"
+                onClick={() => setConfig({ ...config, weekdays: [...WEEKDAY_PRESETS[key]] })}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          {fieldError("weekdays")}
           {config.windows?.map((window, index) => (
             <div className="field-row" key={index}>
               <input
@@ -1001,18 +1190,26 @@ export function PeriodicForm({
           ))}
           <button
             className="text-button"
+            disabled={(config.windows?.length ?? 0) >= 24}
             onClick={() =>
               setConfig({
                 ...config,
-                windows: [
-                  ...(config.windows ?? []),
-                  { start: "19:00", end: "21:00" },
-                ],
+                windows: [...(config.windows ?? []), nextWindow(config.windows ?? [])],
               })
             }
           >
             + {zh ? "添加时段" : "Add window"}
           </button>
+          {fieldError("windows")}
+          <p className="periodic-preview" role="status">
+            {previewError
+              ? previewError
+              : !valid
+                ? ""
+                : preview
+                  ? nextFireLabel(preview.nextFireAt, config.timezone ?? "UTC", language)
+                  : zh ? "正在计算下一次提醒…" : "Working out the next reminder…"}
+          </p>
         </div>
         <details className="surface-card">
           <summary>{zh ? "更多设置" : "More settings"}</summary>
@@ -1033,6 +1230,11 @@ export function PeriodicForm({
               </option>
             </select>
           </label>
+          <p className="settings-hint">
+            {config.mode === "fixed"
+              ? zh ? "按时段起点提醒，完成不会改变后续时间。" : "Reminds from each window’s start; completing doesn’t shift later times."
+              : zh ? "确认完成后才计时；未确认则等待，下个生效日重新开始。" : "The timer starts once you confirm; unconfirmed it waits and restarts the next active day."}
+          </p>
           <label className="field-row">
             {zh ? "时区" : "Timezone"}
             <input
@@ -1042,8 +1244,17 @@ export function PeriodicForm({
               }
             />
           </label>
+          {fieldError("timezone")}
         </details>
-        {error && (
+        {conflict && (
+          <div className="conflict-banner" role="alert">
+            <p>{zh ? "规则已在别处修改。当前输入已保留，可重新载入最新规则。" : "This reminder changed elsewhere. Your input is kept; reload the latest rule."}</p>
+            <button type="button" disabled={busy} onClick={() => void reloadLatest()}>
+              {zh ? "重新载入最新规则（替换当前草稿）" : "Reload latest rule (replaces this draft)"}
+            </button>
+          </div>
+        )}
+        {error && !conflict && (
           <p role="alert" className="error">
             {error}
           </p>
@@ -1052,13 +1263,13 @@ export function PeriodicForm({
       <footer className="form-footer">
         <button
           className="pill"
-          disabled={!online || busy || conflict || !config.title.trim()}
+          disabled={!online || busy || conflict || !valid}
           onClick={() => void save()}
         >
           <span className="orange-disc">
             <Icon name="check" />
           </span>
-          {zh ? "保存" : "Save"}
+          {draft.original ? (zh ? "保存" : "Save") : zh ? "创建" : "Create"}
         </button>
       </footer>
     </section>

@@ -26,6 +26,12 @@ export interface TaskDraft {
   weekdays: number[];
   start: string;
   end: string;
+  /** Repeating tasks: a fixed time of day for every instance (off = date-level). */
+  repeatTimeOn: boolean;
+  repeatTime: string;
+  /** Repeating tasks: remind at this time of day on every instance. */
+  repeatReminderOn: boolean;
+  repeatReminderTime: string;
   uploads: AttachmentUpload[];
   removed: string[];
 }
@@ -58,6 +64,30 @@ export function afterSave(
     removed: [...latest.removed.filter((id) => !submitted.removed.includes(id)), ...removedUploads],
   };
 }
+/** ISO weekday, Monday = 1 … Sunday = 7. */
+export function isoWeekday(date: string): number {
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return Number.isNaN(day) ? 1 : day || 7;
+}
+/** "09:00" -> "09:00:00": inputs without a seconds step hand back HH:mm. */
+const withSeconds = (value: string) => (/^\d{2}:\d{2}$/.test(value) ? `${value}:00` : value);
+const dateTimeWithSeconds = (value: string) => (/T\d{2}:\d{2}$/.test(value) ? `${value}:00` : value);
+
+/** Why a draft cannot be saved yet, or null. The same checks and wording as the native form. */
+export function validateDraft(draft: TaskDraft, language: string): string | null {
+  const en = language === "en";
+  if (!draft.title.trim()) return en ? "Enter a title" : "请输入标题";
+  if (draft.estimate !== "" && (!Number.isInteger(Number(draft.estimate)) || Number(draft.estimate) < 0))
+    return en ? "Estimate must be a whole number of minutes" : "预计耗时需要是非负整数分钟";
+  if (!draft.original && draft.repeat === "weekly" && draft.weekdays.length === 0)
+    return en ? "Pick at least one day for a weekly repeat" : "每周重复至少选择一天";
+  return null;
+}
+/** Switching a repeat on starts it from the planned day, as the native form does. */
+export function startRepeat(draft: TaskDraft): Partial<TaskDraft> {
+  return draft.scheduledMode !== "none" ? { start: draft.scheduledDate } : {};
+}
+
 function local(instant: string | null, timezone: string) {
   if (!instant) return "";
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -107,9 +137,13 @@ export function newDraft(
     reminder: local(task?.reminderAt ?? null, timezone),
     timezone,
     repeat: "none",
-    weekdays: [1, 2, 3, 4, 5],
+    weekdays: [isoWeekday(date)],
     start: date,
     end: "",
+    repeatTimeOn: false,
+    repeatTime: "09:00",
+    repeatReminderOn: false,
+    repeatReminderTime: "08:50",
     uploads: [],
     removed: [],
   };
@@ -137,12 +171,12 @@ export function draftPayload(
     scheduledDate: draft.scheduledMode === "date" ? draft.scheduledDate : null,
     scheduledAt:
       draft.scheduledMode === "time"
-        ? `${draft.scheduledDate}T${draft.scheduledTime}`
+        ? `${draft.scheduledDate}T${withSeconds(draft.scheduledTime)}`
         : null,
     dueDate: draft.dueMode === "date" ? draft.dueDate : null,
     dueAt:
-      draft.dueMode === "time" ? `${draft.dueDate}T${draft.dueTime}` : null,
-    reminderAt: draft.reminder || null,
+      draft.dueMode === "time" ? `${draft.dueDate}T${withSeconds(draft.dueTime)}` : null,
+    reminderAt: draft.reminder ? dateTimeWithSeconds(draft.reminder) : null,
   };
   if (draft.original) {
     const baseline = newDraft(draft.original);
@@ -174,23 +208,22 @@ export function draftPayload(
       removeAttachmentIds: draft.removed.length ? draft.removed : undefined,
     });
   }
+  if (draft.repeat !== "none")
+    return CreateTaskInput.parse({
+      ...common,
+      attachments: draft.uploads.length ? draft.uploads : undefined,
+      repeat:
+        draft.repeat === "daily"
+          ? { kind: "daily" }
+          : { kind: "weekly", weekdays: [...draft.weekdays].sort((a, b) => a - b) },
+      startDate: draft.start,
+      endDate: draft.end || null,
+      scheduledTime: draft.repeatTimeOn ? draft.repeatTime.slice(0, 5) : undefined,
+      reminderTime: draft.repeatReminderOn ? draft.repeatReminderTime.slice(0, 5) : undefined,
+    });
   return CreateTaskInput.parse({
     ...common,
     ...times,
     attachments: draft.uploads.length ? draft.uploads : undefined,
-    ...(draft.repeat === "none"
-      ? {}
-      : {
-          repeat:
-            draft.repeat === "daily"
-              ? { kind: "daily" }
-              : { kind: "weekly", weekdays: draft.weekdays },
-          startDate: draft.start,
-          endDate: draft.end || null,
-          scheduledTime:
-            draft.scheduledMode === "time"
-              ? draft.scheduledTime.slice(0, 5)
-              : undefined,
-        }),
   });
 }

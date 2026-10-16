@@ -9,7 +9,7 @@ export type MenuItem =
       label: string;
       icon?: IconName;
       danger?: boolean;
-      /** Already formatted for the platform, e.g. `formatShortcut(["mod", "N"])`. */
+      /** Already formatted for the platform, e.g. `formatMenuShortcut(["mod", "N"])`. */
       shortcut?: string;
       disabled?: boolean;
       onSelect: () => void;

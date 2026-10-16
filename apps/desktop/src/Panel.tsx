@@ -1,5 +1,5 @@
 import { useReducedMotion } from "./useReducedMotion.js";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
@@ -23,6 +23,12 @@ import {
   defaults,
 } from "./bridge.js";
 import { translate } from "./i18n.js";
+import { describeError, isNotFound, isVersionConflict } from "./errors.js";
+import { isEditable, isPrimaryModifier, chord } from "./platform.js";
+import { moveMessage, undoForShortcut, type NotifyInput, type UndoAction } from "./toast.js";
+import { useToasts } from "./useToasts.js";
+import { EmptyState, emptyCopy, NotFoundPage, OfflineBanner } from "./states.js";
+import { SettingsPage } from "./SettingsPage.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
 import { useContextMenu, type MenuAnchor } from "./ContextMenu.js";
@@ -42,7 +48,7 @@ import {
   type PeriodicDraft,
 } from "./pages.js";
 import { projectGroups, useTaskDrag } from "./drag.js";
-import { dayLabel, planDate } from "./dates.js";
+import { dayLabel, planDate, reschedule, rescheduleUndo, shiftDate } from "./dates.js";
 import type { PeriodicReminder } from "@todocue/shared";
 import { motionTokens, spring } from "./tokens.js";
 import { HeaderSwap, TabSwap, VerticalSwap, tabDirection, useReveal, watchReveal } from "./motionKit.js";
@@ -89,7 +95,9 @@ export function Panel() {
     collapsed: false,
   });
   const [completedQuery, setCompletedQuery] = useState("");
-  const [orderUndo, setOrderUndo] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const listScroll = useRef<HTMLDivElement>(null);
+  const [retrying, setRetrying] = useState(false);
   const [periodicDraft, setPeriodicDraft] = useState<PeriodicDraft>(() =>
     newPeriodicDraft(),
   );
@@ -101,7 +109,6 @@ export function Panel() {
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [panelPinned, setPanelPinned] = useState(false);
-  const [recording, setRecording] = useState(false);
   const [quickFocused, setQuickFocused] = useState(false);
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const [quick, setQuick] = useState("");
@@ -110,14 +117,18 @@ export function Panel() {
   const [finishing, setFinishing] = useState<Set<string>>(new Set());
   const finishingRef = useRef(new Set<string>());
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [undo, setUndo] = useState<Task | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const contextMenu = useContextMenu();
   const deleteCancel = useRef<HTMLButtonElement>(null);
   // Deleting is permanent, so the safe answer is the one under the keyboard.
   useEffect(() => { if (pendingDelete) deleteCancel.current?.focus(); }, [pendingDelete]);
+  const { toast, state: toastState, notify, dismiss, clearErrors } = useToasts();
+  // Anything that used to set a sticky error line now raises an error toast; null clears it.
+  const setError = useCallback(
+    (message: string | null) => (message ? notify({ message, kind: "error" }) : clearErrors()),
+    [notify, clearErrors],
+  );
   const drafts = useRef(new Map<string, TaskDraft>());
   const quickRequest = useRef(new QuickAddRequest());
   const quickFocusRevision = useRef(0);
@@ -130,6 +141,10 @@ export function Panel() {
     if (route === "list" && !quickInput.current?.closest("[inert]")) quickInput.current?.focus();
   }, [route, quickFocusTick]);
   const t = translate(settings.language);
+  // Each tab starts at its top, as it did when every tab had its own scroller.
+  useEffect(() => {
+    listScroll.current?.scrollTo({ top: 0 });
+  }, [view]);
   const reduced = useReducedMotion();
   const [revealTick, setRevealTick] = useState(0);
   useEffect(() => watchReveal(() => setRevealTick((tick) => tick + 1), onPanelRevealed), []);
@@ -172,19 +187,26 @@ export function Panel() {
       !connection.online || saving || !!search.trim() || route !== "list",
     onError: setError,
     commit: async (id, input) => {
+      setMoving(true);
       try {
         const result = await client.moveTask(id, input, {
           idempotencyKey: crypto.randomUUID(),
         });
-        setOrderUndo(result.undoToken ?? null);
+        announceMove(input, result.undoToken);
       } catch (error) {
         if (
           (error as { code?: string }).code === "DEADLINE_CONFIRMATION_REQUIRED"
         ) {
-          setPendingMove({ id, input });
+          setPendingMove({
+            id,
+            input,
+            title: liveBoard?.all.find((task) => task.id === id)?.title ?? "",
+          });
           return;
         }
         throw error;
+      } finally {
+        setMoving(false);
       }
       await refresh();
       await new Promise((resolve) => setTimeout(resolve, 220));
@@ -193,7 +215,21 @@ export function Panel() {
   const [pendingMove, setPendingMove] = useState<{
     id: string;
     input: import("@todocue/shared").MoveTaskInput;
+    title: string;
   } | null>(null);
+  function announceMove(
+    input: import("@todocue/shared").MoveTaskInput,
+    token?: string | null,
+  ) {
+    notify({
+      message: moveMessage(
+        input,
+        settings.language,
+        dayLabel(input.targetGroup, settings.language, liveBoard?.context.today),
+      ),
+      undo: token ? { kind: "order", token } : undefined,
+    });
+  }
   const board = taskDrag.frozen ?? liveBoard;
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -277,26 +313,34 @@ export function Panel() {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.defaultPrevented || isCompositionKey(event)) return;
-      if (event.key === "Escape") {
+      const primary = isPrimaryModifier(event);
+      const key = event.key.toLowerCase();
+      if (event.key === "Escape" || (primary && !event.shiftKey && key === "w")) {
+        if (event.key !== "Escape") event.preventDefault();
         if (menuOpen) setMenuOpen(false);
         else if (pendingDelete) setPendingDelete(null);
+        else if (pendingMove) setPendingMove(null);
         else if (route !== "list") back();
         else if (search) setSearch("");
         else if (!panelPinned) void hidePanel();
       }
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "k"
-      ) {
+      if (primary && event.shiftKey && key === "k") {
         event.preventDefault();
         navigate(route === "calendar" ? "list" : "calendar");
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "n") {
+      if (primary && !event.shiftKey && key === "z") {
+        // A visible undo wins; inside a text field ⌘Z/Ctrl+Z stays the field's own undo.
+        const action = undoForShortcut(toastState.current, isEditable(event.target));
+        if (action) {
+          event.preventDefault();
+          void undoAction(action);
+        }
+      }
+      if (primary && key === "n") {
         event.preventDefault();
         edit();
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+      if (primary && key === "f") {
         event.preventDefault();
         void focusPanel().catch(error => setError(String(error)));
         pendingQuickFocus.current = true;
@@ -305,15 +349,15 @@ export function Panel() {
           navigate("list");
         }
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "r") {
+      if (primary && key === "r") {
         event.preventDefault();
         void refresh();
       }
-      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
+      if (primary && event.key === ",") {
         event.preventDefault();
         navigate("settings");
       }
-      if ((event.metaKey || event.ctrlKey) && event.key === "[") {
+      if (primary && event.key === "[") {
         event.preventDefault();
         back();
       }
@@ -331,20 +375,32 @@ export function Panel() {
     liveBoard?.context.today,
     selected?.id,
     settings.language,
+    pendingMove,
+    toast?.id,
   ]);
+  // Native `<details>` menus stay open until toggled again; close them on an outside press or a choice.
+  useEffect(() => {
+    const close = (event: Event) => {
+      const target = event.target as Element | null;
+      for (const menu of document.querySelectorAll<HTMLDetailsElement>("details.action-menu[open]")) {
+        if (!menu.contains(target)) menu.open = false;
+        else if (event.type === "click" && target?.closest(".action-menu > div button")) menu.open = false;
+      }
+    };
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("click", close, true);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("click", close, true);
+    };
+  }, []);
   useEffect(() => {
     document.documentElement.lang = settings.language;
   }, [settings.language]);
   useEffect(() => {
-    if (!undo) return;
-    const timer = setTimeout(() => setUndo(null), 10000);
-    return () => clearTimeout(timer);
-  }, [undo]);
-  useEffect(() => {
-    if (!orderUndo) return;
-    const timer = setTimeout(() => setOrderUndo(null), 10000);
-    return () => clearTimeout(timer);
-  }, [orderUndo]);
+    // Offline already has its own banner with a retry button; only report failures while connected.
+    if (runtimeError && connection.online) notify({ message: runtimeError, kind: "error" });
+  }, [runtimeError, connection.online, notify]);
   function navigate(next: Route) {
     if (next !== route)
       history.current.push({
@@ -387,7 +443,15 @@ export function Panel() {
                 : current,
             );
         })
-        .catch(() => {});
+        .catch((error) => {
+          // Deleted elsewhere while its page was open: leave the page and drop its draft.
+          if (stopped || !isNotFound(error)) return;
+          drafts.current.delete(selected.id);
+          if (activePage.current.route === "detail") {
+            notify({ message: settings.language === "en" ? "That task was deleted" : "这个任务已被删除" });
+            back();
+          }
+        });
     return () => {
       stopped = true;
     };
@@ -414,20 +478,48 @@ export function Panel() {
         newPeriodicDraft(rule, settings.language),
     );
   }
+  /** One place that turns a failed write into a toast; a version conflict also refreshes the board. */
+  function fail(error: unknown) {
+    notify({ message: describeError(error, settings.language), kind: "error" });
+    if (isVersionConflict(error)) {
+      setConflict(true);
+      void refresh();
+    }
+  }
   async function run(action: () => Promise<unknown>) {
-    if (!connection.online || saving) return;
+    if (!connection.online || saving) return false;
     setSaving(true);
     setError(null);
     try {
       await action();
       await refresh();
+      return true;
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
-      if (error instanceof TodoCueError && error.code === "VERSION_CONFLICT")
-        setConflict(true);
+      fail(error);
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+  async function undoAction(action: UndoAction) {
+    dismiss();
+    await run(async () => {
+      if (action.kind === "reopen")
+        await client.reopenTask(action.taskId, { expectedVersion: action.version });
+      else if (action.kind === "order")
+        await client.undoOrder({
+          token: action.token,
+          expectedRevision: boardRef.current!.ordering.revision,
+        });
+      else
+        await client.updateTask(action.taskId, {
+          expectedVersion: action.expectedVersion,
+          scheduledDate: action.scheduledDate,
+          scheduledAt: action.scheduledAt,
+          ...("dueDate" in action ? { dueDate: action.dueDate, dueAt: action.dueAt } : {}),
+          ...(action.scheduledAt || action.dueAt ? { timezone: action.timezone } : {}),
+        });
+    });
   }
   const listTasks = (view === "upcoming" ? board?.upcoming : board?.all) ?? [];
   const matching = listTasks.filter(
@@ -495,12 +587,16 @@ export function Panel() {
       const result = await (task.status === "done"
         ? client.reopenTask(task.id, { expectedVersion: task.version })
         : client.completeTask(task.id, { expectedVersion: task.version }));
-      setUndo(task.status === "done" ? null : result.task);
+      if (task.status !== "done")
+        notify({
+          message: settings.language === "en" ? `Completed “${result.task.title}”` : `已完成「${result.task.title}」`,
+          undo: { kind: "reopen", taskId: result.task.id, version: result.task.version },
+        });
       if (selected?.id === task.id) setSelected(result.task);
       await refresh();
       return true;
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      fail(error);
       return false;
     } finally {
       finishingRef.current.delete(task.id);
@@ -517,8 +613,20 @@ export function Panel() {
   const menuCommands: TaskMenuCommands = {
     complete: (task) => void complete(latestTask(task), false),
     reopen: (task) => void run(() => taskCommands.reopen(latestTask(task))),
-    snooze: (task) => void run(() => taskCommands.snooze(latestTask(task))),
-    tomorrow: (task) => void run(() => taskCommands.tomorrow(latestTask(task), planToday)),
+    snooze: (task) =>
+      void run(async () => {
+        await taskCommands.snooze(latestTask(task));
+        notify({ message: settings.language === "en" ? "Reminding you in 10 minutes" : "将在 10 分钟后提醒" });
+      }),
+    tomorrow: (task) =>
+      void run(async () => {
+        const before = latestTask(task);
+        const { task: after } = await taskCommands.tomorrow(before, planToday);
+        notify({
+          message: settings.language === "en" ? "Moved to tomorrow" : "已改期到明天",
+          undo: rescheduleUndo(before, after),
+        });
+      }),
     edit: (task) => edit(latestTask(task)),
     cancel: (task) => void run(() => taskCommands.cancel(latestTask(task))),
     skip: (task) => void run(() => taskCommands.skip(latestTask(task))),
@@ -542,6 +650,9 @@ export function Panel() {
     await run(async () => {
       await taskCommands.remove(latestTask(task));
       setPendingDelete(null);
+      notify({
+        message: settings.language === "en" ? `Deleted “${task.title}”` : `已删除「${task.title}」`,
+      });
       if (route === "detail" && selected?.id === task.id) back();
     });
   }
@@ -634,15 +745,21 @@ export function Panel() {
               ? "Plan is past the deadline"
               : "计划晚于截止时间"}
           </h3>
+          <p>
+            {settings.language === "en"
+              ? `Moving “${pendingMove.title}” to ${dayLabel(pendingMove.input.targetGroup, settings.language, board?.context.today)} lands after its deadline. The deadline and reminder keep their values.`
+              : `将「${pendingMove.title}」改期到 ${dayLabel(pendingMove.input.targetGroup, settings.language, board?.context.today)}，会晚于原截止时间。截止日期和提醒时间将保持原值。`}
+          </p>
           <button
             className="pill"
             onClick={() =>
               void run(async () => {
-                await client.moveTask(
+                const result = await client.moveTask(
                   pendingMove.id,
                   { ...pendingMove.input, allowPastDeadline: true },
                   { idempotencyKey: crypto.randomUUID() },
                 );
+                announceMove(pendingMove.input, result.undoToken);
                 setPendingMove(null);
               })
             }
@@ -665,6 +782,7 @@ export function Panel() {
               className="icon-button back-button"
               onClick={back}
               aria-label={t("cancel")}
+              title={`${t("cancel")} (${chord("[")})`}
             >
               <Icon name="back" />
             </button>
@@ -687,6 +805,7 @@ export function Panel() {
               aria-label={
                 settings.language === "en" ? "Open calendar" : "打开日历"
               }
+              title={`${settings.language === "en" ? "Open calendar" : "打开日历"} (${chord("⇧K")})`}
             >
               <Icon name="calendar" />
             </button>
@@ -695,6 +814,12 @@ export function Panel() {
             className={`icon-button ${panelPinned ? "is-pinned" : ""}`}
             onClick={() => setPanelPinned((value) => !value)}
             aria-label={settings.language === "en" ? "Pin panel" : "固定面板"}
+            aria-pressed={panelPinned}
+            title={
+              panelPinned
+                ? settings.language === "en" ? "Unpin (allow Esc to hide)" : "取消固定（允许 Esc 收起）"
+                : settings.language === "en" ? "Pin the panel so Esc doesn’t hide it" : "固定面板，防止 Esc 误收起"
+            }
           >
             <Icon name="pin" />
           </button>
@@ -705,6 +830,7 @@ export function Panel() {
             aria-label={
               settings.language === "en" ? "More actions" : "更多操作"
             }
+            title={settings.language === "en" ? "More actions" : "更多操作"}
           >
             <Icon name="more" />
           </button>
@@ -712,6 +838,7 @@ export function Panel() {
             className="icon-button"
             onClick={() => void hidePanel()}
             aria-label={t("hide")}
+            title={settings.language === "en" ? "Hide the panel; tasks and reminders keep running" : "收起面板，任务与提醒继续运行"}
           >
             <Icon name="close" />
           </button>
@@ -817,7 +944,15 @@ export function Panel() {
         )}
         </AnimatePresence>
         {!connection.online && (
-          <div className="offline-banner">{t("offline")}</div>
+          <OfflineBanner
+            language={settings.language}
+            message={connection.message}
+            retrying={retrying}
+            onRetry={() => {
+              setRetrying(true);
+              void refresh().finally(() => setRetrying(false));
+            }}
+          />
         )}
       </motion.header>
       {menuOpen && (
@@ -826,6 +961,7 @@ export function Panel() {
           onMouseLeave={() => setMenuOpen(false)}
         >
           <button
+            disabled={!connection.online}
             onClick={() => {
               edit();
               setMenuOpen(false);
@@ -835,6 +971,7 @@ export function Panel() {
             {t("newTask")}
           </button>
           <button
+            disabled={!connection.online}
             onClick={() => {
               editPeriodic();
               setMenuOpen(false);
@@ -923,6 +1060,7 @@ export function Panel() {
                       new Date().toISOString().slice(0, 10)
                     }
                     onQuickDate={setQuickDate}
+                    onNotify={notify}
                     onOpen={openTask}
                     onMenu={openTaskMenu}
                     onComplete={async (task) => {
@@ -932,7 +1070,12 @@ export function Panel() {
                   />
                 )}
                 {route === "list" && (
-                  <motion.div layoutScroll className="list-scroll">
+                  <motion.div layoutScroll className="list-scroll" ref={listScroll}>
+                    {moving && (
+                      <div className="list-hint" role="status">
+                        {settings.language === "en" ? "Saving the move…" : "正在保存移动…"}
+                      </div>
+                    )}
                     <AnimatePresence initial={false} mode="popLayout">
                     {view === "today" && next && (
                       <motion.section
@@ -1035,51 +1178,41 @@ export function Panel() {
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                           />
+                          {search && (
+                            <button
+                              type="button"
+                              className="search-clear"
+                              aria-label={settings.language === "en" ? "Clear search" : "清除搜索"}
+                              title={settings.language === "en" ? "Clear search" : "清除搜索"}
+                              onClick={() => setSearch("")}
+                            >
+                              <Icon name="close" size={10} />
+                            </button>
+                          )}
                         </div>
                       )}
                       <AnimatePresence initial={false} mode="popLayout">
                       <TabSwap key={view} direction={viewDirection} reduced={!!reduced}>
+                      {view === "all" && search.trim() && (
+                        <p className="search-hint">
+                          {settings.language === "en"
+                            ? "Clear the search to reorder by dragging"
+                            : "清除搜索后可拖动调整顺序"}
+                        </p>
+                      )}
                       {!board && connection.online ? (
                         <div className="skeleton" />
-                      ) : visibleCount === 0 ? (
-                        <motion.div
-                          className="empty-state"
-                          initial={{ opacity: 0, scale: reduced ? 1 : 0.94 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={reduced ? { duration: 0.12 } : motionTokens.list}
-                        >
-                          <div className="empty-ring">
-                            <span className="orange-disc">
-                              <Icon
-                                name={completed > 0 ? "check" : "plus"}
-                                size={22}
-                              />
-                            </span>
-                          </div>
-                          <h2>
-                            {settings.language === "en"
-                              ? completed > 0
-                                ? "Today is clear"
-                                : "Start with one small thing"
-                              : completed > 0
-                                ? "今天已清空"
-                                : "从一件小事开始"}
-                          </h2>
-                          <p>
-                            {settings.language === "en"
-                              ? "Write it down, and let it go."
-                              : "记下来，就不用一直惦记。"}
-                          </p>
-                          <button
-                            className="pill"
-                            onClick={() => quickInput.current?.focus()}
-                          >
-                            <span className="orange-disc">
-                              <Icon name="plus" />
-                            </span>
-                            {t("newTask")}
-                          </button>
-                        </motion.div>
+                      ) : visibleCount === 0 && !(view === "today" && next) ? (
+                        !board ? (
+                          <EmptyState
+                            icon="clock"
+                            title={settings.language === "en" ? "Tasks show up here once connected" : "连接后，任务会显示在这里"}
+                          />
+                        ) : (
+                          <EmptyState {...emptyCopy(view, !!search.trim(), completed, settings.language)}
+                            onAction={view !== "upcoming" && !search.trim() ? () => quickInput.current?.focus() : undefined}
+                          />
+                        )
                       ) : (
                         groups
                           .filter(
@@ -1116,7 +1249,10 @@ export function Panel() {
                                               expectedRevision:
                                                 board!.ordering.revision,
                                             });
-                                          setOrderUndo(result.undoToken);
+                                          notify({
+                                            message: settings.language === "en" ? "Order updated" : "已恢复自动排序",
+                                            undo: { kind: "order", token: result.undoToken },
+                                          });
                                         })
                                       }
                                       aria-label={
@@ -1124,6 +1260,7 @@ export function Panel() {
                                           ? `Restore automatic order in ${group.label}`
                                           : `${group.label}恢复自动排序`
                                       }
+                                      title={settings.language === "en" ? "Manual order · restore automatic" : "手动排序 · 恢复自动排序"}
                                     >
                                       <Icon name="repeat" size={10} />
                                     </button>
@@ -1235,7 +1372,10 @@ export function Panel() {
                     if (ownsFocus) quickInput.current?.focus();
                     void run(async () => {
                       try {
-                        await client.createTask(payload, { idempotencyKey: operation.key });
+                        const created = await client.createTask(payload, { idempotencyKey: operation.key });
+                        notify({
+                          message: settings.language === "en" ? `Added “${created.task.title}”` : `已添加「${created.task.title}」`,
+                        });
                         const restoreFocus = ownsFocus && activePage.current.route === route && quickFocusRevision.current === focusRevision && (
                           document.activeElement === quickInput.current || document.activeElement === submitter ||
                           document.activeElement === document.body
@@ -1356,6 +1496,8 @@ export function Panel() {
                 language={settings.language}
                 online={connection.online}
                 eventRevision={eventRevision}
+                today={board?.context.today}
+                timezone={board?.context.timezone}
                 query={completedQuery}
                 onQuery={setCompletedQuery}
                 onOpen={openTask}
@@ -1371,6 +1513,8 @@ export function Panel() {
                 language={settings.language}
                 online={connection.online}
                 rules={rules}
+                selectedId={periodicSelected?.id}
+                loadError={runtimeError}
                 onError={setError}
                 onChanged={refresh}
                 onEdit={editPeriodic}
@@ -1436,6 +1580,9 @@ export function Panel() {
                 }}
               />
             )}
+            {route === "detail" && !selected && (
+              <NotFoundPage language={settings.language} loading={!board} onBack={back} />
+            )}
             {route === "detail" && selected && (
               <Detail
                 key={selected.id}
@@ -1447,6 +1594,7 @@ export function Panel() {
                 eventRevision={eventRevision}
                 onEdit={edit}
                 onComplete={complete}
+                onNotify={notify}
                 onUpdated={(task) =>
                   setSelected((current) =>
                     current?.id === task.id ? task : current,
@@ -1476,6 +1624,13 @@ export function Panel() {
                     setDraft(value);
                 }}
                 onSaved={(task, submitted) => {
+                  notify({
+                    message: submitted.original
+                      ? settings.language === "en" ? "Saved" : "已保存"
+                      : submitted.repeat !== "none"
+                        ? settings.language === "en" ? "Repeating task created" : "已创建重复任务"
+                        : settings.language === "en" ? `Added “${task.title}”` : `已添加「${task.title}」`,
+                  });
                   const key = submitted.original?.id ?? "new";
                   const cached = drafts.current.get(key);
                   const ownDraft =
@@ -1525,215 +1680,58 @@ export function Panel() {
               />
             )}
             {route === "settings" && (
-              <section className="tile frost editor">
-                <label>
-                  {t("language")}
-                  <select
-                    value={settings.language}
-                    onChange={(event) => {
-                      const next = {
-                        ...settings,
-                        language: event.target
-                          .value as DesktopSettings["language"],
-                      };
-                      setSettings(next);
-                      void saveSettings(next).catch((error) =>
-                        setError(String(error)),
-                      );
-                    }}
-                  >
-                    <option value="zh-CN">简体中文</option>
-                    <option value="en">English</option>
-                  </select>
-                </label>
-                <label>
-                  {t("width")}
-                  <input
-                    type="range"
-                    min="300"
-                    max="600"
-                    value={settings.width}
-                    onChange={(event) => {
-                      const next = {
-                        ...settings,
-                        width: Number(event.target.value),
-                      };
-                      setSettings(next);
-                      void saveSettings(next).catch((error) =>
-                        setError(String(error)),
-                      );
-                    }}
-                  />
-                  <output>{settings.width}</output>
-                </label>
-                {(["notchEnabled", "quietFullscreen"] as const).map((key) => (
-                  <label key={key}>
-                    {t(key === "notchEnabled" ? "notch" : "quiet")}
-                    <input
-                      type="checkbox"
-                      checked={settings[key]}
-                      onChange={(event) => {
-                        const next = {
-                          ...settings,
-                          [key]: event.target.checked,
-                        };
-                        setSettings(next);
-                        void saveSettings(next).catch((error) =>
-                          setError(String(error)),
-                        );
-                      }}
-                    />
-                  </label>
-                ))}
-                <label>
-                  {settings.language === "en"
-                    ? "Global shortcut"
-                    : "全局快捷键"}
-                  <button
-                    className="shortcut-recorder pill secondary"
-                    onClick={(event) => {
-                      event.currentTarget.focus();
-                      void focusPanel().catch(error => setError(String(error)));
-                      setRecording((value) => !value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (!recording) return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (event.key === "Escape") {
-                        setRecording(false);
-                        return;
-                      }
-                      if (
-                        !["Meta", "Control", "Alt", "Shift"].includes(
-                          event.key,
-                        ) &&
-                        (event.metaKey || event.ctrlKey || event.altKey)
-                      ) {
-                        const shortcut = [
-                          event.metaKey ? "Super" : null,
-                          event.ctrlKey ? "Control" : null,
-                          event.altKey ? "Alt" : null,
-                          event.shiftKey ? "Shift" : null,
-                          event.code,
-                        ]
-                          .filter(Boolean)
-                          .join("+");
-                        const next = { ...settings, shortcut };
-                        setRecording(false);
-                        void saveSettings(next)
-                          .then(() => setSettings(next))
-                          .catch((error) => setError(String(error)));
-                      }
-                    }}
-                  >
-                    {recording
-                      ? settings.language === "en"
-                        ? "Press a shortcut…"
-                        : "按下快捷键…"
-                      : (settings.shortcut ??
-                        (settings.language === "en"
-                          ? "Record shortcut"
-                          : "录制快捷键"))}
-                  </button>
-                  {settings.shortcut && (
-                    <button
-                      className="text-button"
-                      onClick={() => {
-                        const next = { ...settings, shortcut: null };
-                        void saveSettings(next)
-                          .then(() => setSettings(next))
-                          .catch((error) => setError(String(error)));
-                      }}
-                    >
-                      {settings.language === "en" ? "Clear" : "清除"}
-                    </button>
-                  )}
-                </label>
-                <label>
-                  {settings.language === "en" ? "Open at login" : "登录时启动"}
-                  <input
-                    type="checkbox"
-                    checked={settings.autostart}
-                    disabled={!native}
-                    onChange={(event) => {
-                      const next = {
-                        ...settings,
-                        autostart: event.target.checked,
-                      };
-                      void saveSettings(next)
-                        .then(() => setSettings(next))
-                        .catch((error) => setError(String(error)));
-                    }}
-                  />
-                </label>
-                <button
-                  className="pill"
-                  disabled={!connection.online}
-                  onClick={() => void run(() => client.testNotification())}
-                >
-                  {t("notify")}
-                </button>
-                <button
-                  className="pill secondary"
-                  disabled={!connection.online}
-                  onClick={() =>
-                    void run(() => client.openNotificationSettings())
-                  }
-                >
-                  {t("notifySettings")}
-                </button>
-              </section>
+              <SettingsPage
+                settings={settings}
+                setSettings={setSettings}
+                online={connection.online}
+                onError={setError}
+                onReconnect={refresh}
+              />
             )}
           </RouteSurface>
         </AnimatePresence>
       </div>
-      {(!connection.online || error || runtimeError || undo || orderUndo) && (
-        <aside
-          className={`toast graphite ${route !== "list" && route !== "calendar" ? "toast-top" : ""}`}
-          role={error ? "alert" : "status"}
-        >
-          {error ??
-            runtimeError ??
-            (!connection.online
-              ? t("offline")
-              : orderUndo
-                ? settings.language === "en"
-                  ? "Order updated"
-                  : "排序已更新"
-                : t("completed"))}
-          {orderUndo && connection.online && (
+      <AnimatePresence>
+        {toast && (
+          <motion.aside
+            key={toast.id}
+            className={`toast graphite ${toast.kind === "error" ? "toast-error" : ""} ${route !== "list" && route !== "calendar" ? "toast-top" : ""}`}
+            role={toast.kind === "error" ? "alert" : "status"}
+            style={{ transformOrigin: route !== "list" && route !== "calendar" ? "top" : "bottom" }}
+            initial={
+              reduced
+                ? { opacity: 0 }
+                : { opacity: 0, y: route !== "list" && route !== "calendar" ? -16 : 16, scale: 0.96 }
+            }
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={
+              reduced
+                ? { opacity: 0, transition: { duration: 0.12 } }
+                : { opacity: 0, scale: 0.96, transition: { duration: 0.14, ease: "easeIn" } }
+            }
+            transition={reduced ? { duration: 0.12 } : motionTokens.settle}
+          >
+            <span className="toast-message">{toast.message}</span>
+            {toast.undo && (
+              <button
+                className="toast-undo"
+                disabled={!connection.online || saving || !!taskDrag.drag}
+                title={`${settings.language === "en" ? "Undo" : "撤销"} (${chord("Z")})`}
+                onClick={() => void undoAction(toast.undo!)}
+              >
+                {settings.language === "en" ? "Undo" : "撤销"}
+              </button>
+            )}
             <button
-              disabled={!!taskDrag.drag || saving}
-              onClick={() =>
-                void run(async () => {
-                  await client.undoOrder({
-                    token: orderUndo,
-                    expectedRevision: board!.ordering.revision,
-                  });
-                  setOrderUndo(null);
-                })
-              }
+              className="toast-close"
+              aria-label={settings.language === "en" ? "Dismiss" : "关闭提示"}
+              onClick={() => dismiss(toast.id)}
             >
-              {settings.language === "en" ? "Undo" : "撤销"}
+              <Icon name="close" size={10} />
             </button>
-          )}
-          {undo && connection.online && (
-            <button
-              onClick={() =>
-                void run(async () => {
-                  await client.reopenTask(undo.id, {
-                    expectedVersion: undo.version,
-                  });
-                  setUndo(null);
-                })
-              }
-            >
-              {settings.language === "en" ? "Undo" : "撤销"}
-            </button>
-          )}
-        </aside>
-      )}
+          </motion.aside>
+        )}
+      </AnimatePresence>
       {contextMenu.node}
     </main>
   );
