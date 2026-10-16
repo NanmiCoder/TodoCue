@@ -7,6 +7,7 @@ import {
   type TransportResponse,
 } from "@todocue/client";
 import { RuntimeEvent, type RuntimeEvent as Event } from "@todocue/shared";
+import { revealKind, type RevealMode } from "./model.js";
 
 export interface ConnectionState {
   online: boolean;
@@ -160,7 +161,11 @@ export async function presentNotch(state: {
         reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
       },
     });
-  document.getElementById("root")!.style.width = `${state.width}px`;
+  // The browser preview stands in for the native window: it takes the requested size too, so the
+  // shell fills it the way it fills the real window (a menu growing the window is visible here).
+  const root = document.getElementById("root")!;
+  root.style.width = `${state.width}px`;
+  root.style.height = `${state.height}px`;
   return true;
 }
 /**
@@ -169,13 +174,21 @@ export async function presentNotch(state: {
  */
 export async function onPanelRevealed(handler: () => void): Promise<() => void> {
   if (!native) return () => undefined;
-  return listen("panel:revealed", () => handler());
+  // `replay: false` means a fade-out was cancelled, not that the panel arrived.
+  return listen<{ replay?: boolean }>("panel:revealed", (event) => {
+    if (event.payload?.replay !== false) handler();
+  });
 }
-export async function revealTask(id: string) {
+/**
+ * Show a task in the panel. `mode` asks the panel to open its edit form, or to ask before
+ * deleting it (the notch's "Edit…" and "Delete…" menu items need the panel, as in the original).
+ */
+export async function revealTask(id: string, mode?: RevealMode) {
   if (native) {
-    await invoke("reveal_task", { id });
-  } else
-    window.dispatchEvent(new CustomEvent("todocue:reveal", { detail: id }));
+    await invoke("reveal_task", mode ? { id, mode } : { id });
+  } else if (mode)
+    window.dispatchEvent(new CustomEvent("todocue:route", { detail: { kind: revealKind(mode), id } }));
+  else window.dispatchEvent(new CustomEvent("todocue:reveal", { detail: id }));
 }
 
 export async function canShowNotch() {
@@ -200,7 +213,7 @@ export function resizePanelMac(input: {
 //
 // Both work through the runtime's HTTP API, which already speaks to the macOS notifier helper and
 // the Windows toast helper, so they need no host command. Opening the data folder does need one;
-// until the host provides `open_data_dir` the page shows the path and offers to copy it.
+// the host provides `open_data_dir`; a host without it (or a browser) falls back to showing the path.
 import {
   notificationStatus,
   requestResultLabel,
@@ -229,11 +242,15 @@ export async function sendTestNotification(language: string): Promise<string> {
 }
 
 const missingCommand = (error: unknown) => /not found|unknown command|not allowed/i.test(String(error));
-/** `opened: false` means this host cannot open folders yet — show the path instead. */
-export async function openDataFolder(path: string): Promise<{ opened: boolean }> {
+/**
+ * Open the data folder in the file manager. The host opens its own data directory; the renderer
+ * names no path (`_path` is only what the page shows). `opened: false` means this host cannot
+ * open folders (a browser, or a build without the command): show the path instead.
+ */
+export async function openDataFolder(_path?: string): Promise<{ opened: boolean }> {
   if (!native) return { opened: false };
   try {
-    await invoke("open_data_dir", { path });
+    await invoke("open_data_dir");
     return { opened: true };
   } catch (error) {
     if (missingCommand(error)) return { opened: false };
@@ -272,4 +289,33 @@ export async function exportJson(name: string, contents: string): Promise<string
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   return name;
+}
+
+/**
+ * Save an attachment where the person chooses. The host fetches it from the runtime itself and
+ * writes the file, so the bytes never cross the renderer. Resolves to the saved path, or null when
+ * the dialog was cancelled. The browser preview downloads the bytes it already has.
+ */
+export async function saveAttachment(
+  taskId: string | undefined,
+  file: { id?: string; name: string; mediaType: string },
+  browserData?: () => Promise<string>,
+): Promise<string | null> {
+  // A file that is not on the runtime yet (an unsaved draft's attachment) has no id to fetch by:
+  // its bytes are already here, so it takes the download path on every host.
+  const stored = taskId && file.id;
+  if (native && stored) return invoke<string | null>("save_file", { taskId, attachmentId: file.id });
+  const data = browserData
+    ? await browserData()
+    : stored
+      ? (await client.getAttachment(taskId, file.id!)).dataBase64
+      : "";
+  const bytes = Uint8Array.from(atob(data), (character) => character.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: file.mediaType }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = file.name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return file.name;
 }

@@ -94,6 +94,10 @@ enum Target {
     Task(String),
     Periodic(String),
     NewTask,
+    /// Open the task's edit form (the notch menu's "Edit…").
+    TaskEdit(String),
+    /// Ask to delete the task; the panel shows its confirmation first.
+    TaskDelete(String),
     NewPeriodic,
     PeriodicList,
     Settings,
@@ -150,7 +154,11 @@ fn parse_target(argument: &str) -> Option<Target> {
 fn route_target(app: &tauri::AppHandle, target: Target) {
     let focus_input = matches!(
         target,
-        Target::NewTask | Target::NewPeriodic | Target::Settings
+        Target::NewTask
+            | Target::NewPeriodic
+            | Target::Settings
+            | Target::TaskEdit(_)
+            | Target::TaskDelete(_)
     );
     let desktop = app.state::<Desktop>();
     let mut routing = desktop.routing.lock().unwrap();
@@ -580,22 +588,80 @@ fn panel_resize_macos(
     #[cfg(not(target_os = "macos"))]
     Err("macOS resize bridge unavailable on this platform".into())
 }
+/// What "reveal this task" asks the panel to do: show it, open its edit form, or ask to delete it.
+fn reveal_target(id: &str, mode: Option<&str>) -> Result<Option<Target>, String> {
+    if !export::valid_id(id) {
+        return Err("Invalid task id".into());
+    }
+    match mode {
+        None => Ok(None),
+        Some("edit") => Ok(Some(Target::TaskEdit(id.into()))),
+        Some("delete") => Ok(Some(Target::TaskDelete(id.into()))),
+        Some(_) => Err("Invalid reveal mode".into()),
+    }
+}
 #[tauri::command]
 fn reveal_task(
     app: tauri::AppHandle,
     desktop: State<'_, Desktop>,
     id: String,
+    mode: Option<String>,
 ) -> Result<(), String> {
-    if id.len() > 128
-        || !id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-    {
-        return Err("Invalid task id".into());
+    if let Some(target) = reveal_target(&id, mode.as_deref())? {
+        // Routed like a link: held until the panel is ready, then opened with the keyboard.
+        route_target(&app, target);
+        return Ok(());
     }
     panel_show(app.clone(), desktop)?;
     app.emit_to("panel", "task:reveal", id)
         .map_err(|e| e.to_string())
+}
+/// Open the data folder in the file manager. The folder is the one this app is running on; the
+/// renderer cannot name a path.
+#[tauri::command]
+fn open_data_dir(desktop: State<'_, Desktop>) -> Result<(), String> {
+    export::open_directory(&desktop.home)
+}
+/// Save an attachment where the person chooses. The host fetches it from the runtime itself, so
+/// the bytes never travel through the renderer, then shows the system save dialog, writes the file
+/// and reveals it. `None` means the dialog was cancelled.
+#[tauri::command]
+async fn save_file(
+    app: tauri::AppHandle,
+    runtime: State<'_, Arc<Runtime>>,
+    task_id: String,
+    attachment_id: String,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    if !export::valid_id(&task_id) || !export::valid_id(&attachment_id) {
+        return Err("Invalid attachment".into());
+    }
+    let response = runtime
+        .request(Request {
+            method: "GET".into(),
+            path: format!("/tasks/{task_id}/attachments/{attachment_id}"),
+            body: None,
+            idempotency_key: None,
+        })
+        .await?;
+    let (name, bytes) = export::decode_attachment(&response)?;
+    let dialog_app = app.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = dialog_app.dialog().file().set_file_name(name);
+        if let Some(window) = dialog_app.get_webview_window("panel") {
+            dialog = dialog.set_parent(&window);
+        }
+        dialog.blocking_save_file()
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let Some(chosen) = chosen else {
+        return Ok(None);
+    };
+    let path = chosen.into_path().map_err(|e| e.to_string())?;
+    tokio::fs::write(&path, bytes).await.map_err(|e| e.to_string())?;
+    export::reveal(&path);
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 #[tauri::command]
 fn notch_available(app: tauri::AppHandle, desktop: State<'_, Desktop>) -> bool {
@@ -1054,6 +1120,7 @@ pub fn run() {
                 .args(startup_args)
                 .build(),
         )
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -1089,7 +1156,9 @@ pub fn run() {
             panel_new_task,
             panel_visible,
             tray_update,
-            export_json
+            export_json,
+            open_data_dir,
+            save_file
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
@@ -1483,6 +1552,24 @@ mod tests {
         }
         assert_eq!(fade_alpha(true, 9.0), 1.0);
         assert_eq!(fade_alpha(false, -1.0), 1.0);
+    }
+    #[test]
+    fn reveal_modes_route_to_edit_and_delete_and_reject_everything_else() {
+        assert_eq!(reveal_target("t_1", None), Ok(None));
+        assert_eq!(reveal_target("t_1", Some("edit")), Ok(Some(Target::TaskEdit("t_1".into()))));
+        assert_eq!(reveal_target("t_1", Some("delete")), Ok(Some(Target::TaskDelete("t_1".into()))));
+        assert!(reveal_target("t_1", Some("remove")).is_err());
+        assert!(reveal_target("t_1", Some("")).is_err());
+        assert!(reveal_target("../t", Some("edit")).is_err());
+        assert!(reveal_target("", None).is_err());
+        assert_eq!(
+            serde_json::to_string(&Target::TaskEdit("t_1".into())).unwrap(),
+            r#"{"kind":"task_edit","id":"t_1"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&Target::TaskDelete("t_1".into())).unwrap(),
+            r#"{"kind":"task_delete","id":"t_1"}"#
+        );
     }
     #[test]
     fn tray_routes_serialize_for_the_panel() {

@@ -2,9 +2,9 @@ import { listen } from "@tauri-apps/api/event";
 import { native } from "./bridge.js";
 
 /**
- * The host tells the panel when it appears and when it starts to leave. A reveal slides the tiles in
- * from the right edge (DialRevealModifier); on Windows the page also fades, since a window-level
- * fade is only possible on macOS. The phase lives on `<body data-panel-phase>` and CSS does the rest.
+ * The host tells the panel when it appears and when it starts to leave. The tiles' own arrival is
+ * the Motion reveal in Panel; this only drives the page-level fade Windows needs, since a
+ * window-level fade is only possible on macOS. The phase lives on `<body data-panel-phase>`.
  */
 export function installPanelReveal() {
   if (!native) return;

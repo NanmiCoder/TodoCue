@@ -338,3 +338,44 @@ export function cueMeta(cue: Cue, now: number, language: string): string {
   }
   return kind;
 }
+
+/** Context menu inside the notch window. Sizes mirror `.context-menu` in style.css. */
+const MENU_ITEM_HEIGHT = 32;
+const MENU_SEPARATOR_HEIGHT = 11;
+const MENU_PADDING = 14;
+export const MENU_MARGIN = 8;
+
+/** Height a menu will need, from its items, before it has been laid out. */
+export function estimateMenuHeight(items: ReadonlyArray<{ kind: "item" | "separator" }>): number {
+  return (
+    MENU_PADDING +
+    items.reduce((sum, item) => sum + (item.kind === "item" ? MENU_ITEM_HEIGHT : MENU_SEPARATOR_HEIGHT), 0)
+  );
+}
+
+/**
+ * How tall the notch window must be while a context menu is open. The menu cannot leave its
+ * window, so the window grows to hold it (`anchorY` + the menu + a margin, or the bottom of the
+ * extent the menu reported once placed) and never beyond `cap`; with no menu it is just `content`.
+ */
+export function menuWindowHeight(input: {
+  content: number;
+  cap: number;
+  menu?: { anchorY: number; height: number } | null;
+  extentBottom?: number | null;
+}): number {
+  const need = input.menu ? input.menu.anchorY + input.menu.height + MENU_MARGIN : 0;
+  return Math.min(input.cap, Math.max(input.content, need, input.extentBottom ?? 0));
+}
+
+/** An open menu pins the quick look; closing it restores whatever it was before. */
+export function pinDuringMenu(before: boolean, menuOpen: boolean): boolean {
+  return menuOpen ? true : before;
+}
+
+/** The panel is asked to show a task, to edit it, or to ask before deleting it. */
+export type RevealMode = "edit" | "delete";
+export type RevealKind = "task" | "task_edit" | "task_delete";
+export function revealKind(mode?: RevealMode): RevealKind {
+  return mode === "edit" ? "task_edit" : mode === "delete" ? "task_delete" : "task";
+}

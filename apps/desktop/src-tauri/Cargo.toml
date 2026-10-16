@@ -23,6 +23,8 @@ tokio = { version = "1", features = ["sync", "time", "fs", "macros"] }
 url = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
+tauri-plugin-dialog = "2"
+base64 = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 windows-registry = "0.6"

@@ -49,6 +49,8 @@ macOS release 配置的 Preview 首次通过 `--home` 或 `TODOCUE_HOME` 选择�
 - 刘海展开后，只有点输入框或刘海带才向宿主请求键盘；点卡内按钮不再 `set_focus`（Windows 同时保持 `WS_EX_NOACTIVATE`）。
 - 面板从隐藏变可见才重新定位；已打开时只置前。显示/隐藏带 0.16s/0.18s 淡入淡出：macOS 淡化整个窗口，Windows 由页面 CSS 淡化（透明 WebView2 窗口不是分层窗口）。系统“减弱动态效果”时直接显示/隐藏。
 - macOS 主菜单只有“编辑”（剪切/拷贝/粘贴/全选）；托盘/菜单栏由刘海 WebView 通过 `tray_update` 推送状态后动态生成菜单；macOS 用模板图标和菜单栏数字，Windows 用橙色图标、悬停提示显示剩余数，左键切换面板，右键打开菜单。
+- 刘海内任务右键菜单与面板一致；菜单打开时窗口按菜单高度增高（上限 560）并把快览固定，关闭后恢复。“编辑…”“删除…”通过 `reveal_task` 的 `mode`（`edit` / `delete`）让面板打开编辑表单或先弹出删除确认。
+- 设置页“打开数据文件夹”调用 `open_data_dir`，宿主只打开自己运行所用的数据目录，不接受前端传入路径。附件“另存为”调用 `save_file`：宿主用 token 直接向运行时取附件并弹系统保存对话框（`tauri-plugin-dialog`），字节不经过 IPC；未保存草稿里的附件没有运行时 id，走浏览器下载。
 - 导出 JSON 由宿主写入系统下载目录并在 Finder / 资源管理器中定位，文件名固定为 `todocue-export-YYYY-MM-DD.json`。
 
 ## Windows 构建

@@ -813,7 +813,7 @@ export function Composer({
                 : label("添加任务", "Add task")}
         </button>
       </footer>
-      {viewing && <AttachmentPreview preview={viewing} language={language} onClose={() => setViewing(null)} />}
+      {viewing && <AttachmentPreview preview={viewing} language={language} onClose={() => setViewing(null)} onError={setError} />}
     </form>
   );
 }

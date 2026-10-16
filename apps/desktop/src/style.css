@@ -518,20 +518,12 @@ body[data-surface="notch"] {
 }
 .notch-count {
   font-family: Michroma, sans-serif;
-  font-size: 9px;
+  font-size: 12px;
 }
 .notch-content {
   padding: 14px 18px 18px;
   max-height: 536px;
   overflow: auto;
-}
-.notch-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: #9a9da3;
-  font-size: 11px;
-  margin-bottom: 12px;
 }
 .notch .task-row {
   color: #fff;
@@ -543,14 +535,6 @@ body[data-surface="notch"] {
 }
 .notch-next {
   padding: 12px 0;
-}
-.cue {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 0;
-  border-top: 1px solid #ffffff15;
 }
 .cue-title {
   font-size: 13px;
@@ -567,18 +551,6 @@ body[data-surface="notch"] {
 .cue-actions .pill {
   margin: 0;
   white-space: nowrap;
-}
-.cue-featured {
-  display: block;
-  padding-top: 18px;
-  padding-bottom: 18px;
-}
-.cue-featured .cue-title {
-  font-size: 19px;
-  font-weight: 600;
-}
-.cue-featured .cue-actions {
-  margin-top: 16px;
 }
 .notch .muted {
   color: #9a9da3;
@@ -2466,24 +2438,6 @@ body[data-dragging="true"] {
 .notch .task-meta {
   color: #ffffff8c;
 }
-.cue-featured .task-meta,
-.cue-featured .muted {
-  margin-top: 8px;
-}
-.cue.completing .cue-title {
-  text-decoration: line-through;
-  opacity: 0.55;
-}
-.notch .cue-featured {
-  border-radius: 22px;
-  background: #ffffff0a;
-  padding: 16px;
-  margin-bottom: 8px;
-}
-.notch .notch-heading .icon-button {
-  width: 24px;
-  height: 24px;
-}
 body[data-native="true"][data-surface="notch"] .notch {
   height: 100vh;
 }
@@ -2725,7 +2679,6 @@ body[data-native="true"][data-surface="notch"] .notch {
 }
 /* pages parity */
 .toast {
-  align-items: center;
   justify-content: flex-start;
 }
 .toast-message {
@@ -2789,7 +2742,6 @@ body[data-native="true"][data-surface="notch"] .notch {
   padding: 9px 12px;
   border-radius: 16px;
   background: #f26a2e29;
-  color: #f9c77b;
 }
 .offline-banner-text {
   display: flex;
@@ -2848,8 +2800,6 @@ body[data-native="true"][data-surface="notch"] .notch {
 }
 .completed-list h3 span {
   margin-left: 6px;
-  font-weight: 400;
-  color: var(--muted);
 }
 .field-error {
   font-size: 11px;
@@ -3026,7 +2976,6 @@ body[data-native="true"][data-surface="notch"] .notch {
   stroke-linejoin: round;
 }
 .notch-wing .notch-offline { color: inherit; }
-.notch-count { font-size: 12px; }
 
 .notch-stack-header {
   display: flex;
@@ -3171,20 +3120,19 @@ body[data-native="true"][data-surface="notch"] .notch {
 .cue-card-kicker { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--orange); }
 .cue-card-kicker em { font-style: normal; font-weight: 400; font-size: 11px; color: #ffffff80; }
 .cue-card .cue-title {
-  display: block;
   flex: none;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.3px;
   color: #fff;
   text-align: left;
+  padding: 0;
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.cue-card .cue-title { padding: 0; }
 .cue-card .cue-meta { color: #ffffff8c; }
 .cue-card .cue-fold { color: #ffffff80; align-self: flex-start; }
 .cue-card .cue-actions { margin-top: 0; display: flex; align-items: center; gap: 8px; }
@@ -3212,22 +3160,12 @@ body[data-native="true"][data-surface="notch"] .notch {
   .cue-row { transition: none; }
 }
 
-/* Panel reveal: tiles slide in from the right edge, one after another (DialRevealModifier). */
-@keyframes panel-tile-in {
-  from { opacity: 0; transform: translateX(18px); }
-  to { opacity: 1; transform: none; }
-}
+/* Windows cannot fade the window itself, so the page does it (macOS fades the whole window).
+   The tiles' own arrival is the Motion reveal (useReveal) on both platforms. */
 @keyframes panel-page-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-body[data-surface="panel"][data-panel-phase="reveal"] .panel-header {
-  animation: panel-tile-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both;
-}
-body[data-surface="panel"][data-panel-phase="reveal"] .page-stage {
-  animation: panel-tile-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) 45ms both;
-}
-/* Windows: the window cannot be faded, so the page does it. macOS fades the whole window. */
 body[data-surface="panel"][data-panel-phase="reveal"]:not([data-platform="macos"]) .panel-shell {
   animation: panel-page-in 0.16s ease-out both;
 }
@@ -3236,10 +3174,11 @@ body[data-surface="panel"][data-panel-phase="hiding"]:not([data-platform="macos"
   transition: opacity 0.18s ease-in;
 }
 @media (prefers-reduced-motion: reduce) {
-  body[data-surface="panel"] .panel-header,
-  body[data-surface="panel"] .page-stage,
   body[data-surface="panel"] .panel-shell {
     animation: none !important;
     transition: none !important;
   }
 }
+
+/* The browser preview's stand-in window is as tall as the notch asked for. */
+body[data-native="false"][data-surface="notch"] .notch { height: 100%; }

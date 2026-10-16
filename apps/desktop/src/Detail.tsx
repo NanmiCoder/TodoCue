@@ -417,7 +417,7 @@ export function Detail({
           </button>
         </div>
       )}
-      {viewing && <AttachmentPreview preview={viewing} language={language} onClose={() => setViewing(null)} />}
+      {viewing && <AttachmentPreview preview={viewing} language={language} onClose={() => setViewing(null)} onError={onError} />}
     </section>
   );
 }

@@ -25,7 +25,7 @@ import {
 } from "./bridge.js";
 import { translate } from "./i18n.js";
 import { describeError, isNotFound, isVersionConflict } from "./errors.js";
-import { isEditable, isPrimaryModifier, chord } from "./platform.js";
+import { isEditable, isPrimaryModifier, chord, platform } from "./platform.js";
 import { moveMessage, undoForShortcut, type NotifyInput, type UndoAction } from "./toast.js";
 import { useToasts } from "./useToasts.js";
 import { EmptyState, emptyCopy, NotFoundPage, OfflineBanner } from "./states.js";
@@ -60,6 +60,8 @@ import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
 /** Where the host or the tray asks the panel to go. */
 type TargetKind =
   | "task"
+  | "task_edit"
+  | "task_delete"
   | "periodic"
   | "open"
   | "new_task"
@@ -305,6 +307,14 @@ export function Panel() {
           setSelected(task);
           setRoute("detail");
         }
+      } else if (pendingTarget.kind === "task_edit" && pendingTarget.id) {
+        // The notch menu's "Edit…": the panel opens on the task's form.
+        const { task } = await client.getTask(pendingTarget.id);
+        if (!stopped) edit(task);
+      } else if (pendingTarget.kind === "task_delete" && pendingTarget.id) {
+        // "Delete…": the panel opens and asks first, as the original does.
+        const { task } = await client.getTask(pendingTarget.id);
+        if (!stopped) setPendingDelete(task);
       } else if (pendingTarget.kind === "periodic" && pendingTarget.id) {
         const { reminder } = await client.getPeriodicReminder(pendingTarget.id);
         if (!stopped) {
@@ -677,7 +687,7 @@ export function Panel() {
   return (
     <main className="panel-shell"
       onPointerDownCapture={(event) => {
-        if (native && navigator.userAgent.includes("Windows") &&
+        if (native && platform === "windows" &&
           (event.target as Element).closest("input, textarea, button, select, summary, [contenteditable=true]"))
           void focusPanel().catch(error => setError(String(error)));
         if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
@@ -1044,6 +1054,10 @@ export function Panel() {
                     JSON.stringify(bundle, null, 2),
                   ),
                 )
+                .then((path) => {
+                  const name = path.split(/[\\/]/).pop() ?? path;
+                  notify({ message: settings.language === "en" ? `Exported to ${name}` : `已导出到 ${name}` });
+                })
                 .catch((failure) => setError(String(failure)));
               setMenuOpen(false);
             }}

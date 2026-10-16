@@ -2,7 +2,7 @@ import { useReducedMotion } from "./useReducedMotion.js";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
-import type { PeriodicReminder, RuntimeEvent } from "@todocue/shared";
+import type { PeriodicReminder, RuntimeEvent, Task } from "@todocue/shared";
 import { listen } from "@tauri-apps/api/event";
 import {
   client,
@@ -11,6 +11,7 @@ import {
   loadNotchMetrics,
   type NotchMetrics,
   native,
+  platform,
   openPanel,
   openTaskComposer,
   canShowNotch,
@@ -38,13 +39,20 @@ import {
   QUICK_LOOK_MAX_HEIGHT,
   STACK_RETURN_DELAY,
   PULSE_INTERVAL,
+  estimateMenuHeight,
+  menuWindowHeight,
+  pinDuringMenu,
   type QuickLookClose,
   type Cue,
 } from "./model.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Icon } from "./icons.js";
 import { TaskMetadata } from "./metadata.js";
-import { rescheduleToTomorrow } from "./dates.js";
+import { rescheduleUndo } from "./dates.js";
+import { taskCommands } from "./taskCommands.js";
+import { taskMenuItems, type TaskMenuCommands } from "./taskMenu.js";
+import { useContextMenu, type MenuAnchor } from "./ContextMenu.js";
+import type { UndoAction } from "./toast.js";
 import { translate } from "./i18n.js";
 import { useRuntime } from "./useRuntime.js";
 import { dial, motionTokens } from "./tokens.js";
@@ -76,6 +84,18 @@ export function Notch() {
   const [cueHovered, setCueHovered] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<NotchToast | null>(null);
+  const contextMenu = useContextMenu();
+  /** The window must hold an open (or opening) menu; null when there is none. */
+  const menuFloor = useRef<{ anchorY: number; height: number } | null>(null);
+  /** Pin state before the menu opened, restored when it closes; null while no menu is active. */
+  const menuPin = useRef<{ before: boolean; opened: boolean } | null>(null);
+  /** Pin state at the moment of a secondary press, before focusing the row could pin the quick look. */
+  const pinBeforePress = useRef<boolean | null>(null);
+  /** Last pointer position seen by the page: `:hover` lags a frame behind a removed menu. */
+  const pointerPos = useRef<{ x: number; y: number } | null>(null);
+  const presentNow = useRef<() => Promise<unknown>>(async () => undefined);
+  const extentBottom = useRef<number | null>(null);
+  extentBottom.current = contextMenu.extent?.bottom ?? null;
   const [deferredCount, setDeferredCount] = useState(0);
   const [pulse, setPulse] = useState(0);
   const [announcement, setAnnouncement] = useState("");
@@ -146,7 +166,7 @@ export function Notch() {
     setToast({ ...next, id });
     toastTimer.current = setTimeout(
       () => setToast((current) => (current?.id === id ? null : current)),
-      next.undoTaskId ? 10000 : 4000,
+      next.undo ? 10000 : 4000,
     );
   }
   /**
@@ -228,9 +248,20 @@ export function Notch() {
   const pointer = useRef({ enter: pointerEnter, leave: pointerLeave });
   pointer.current = { enter: pointerEnter, leave: pointerLeave };
   useEffect(() => {
+    const track = (event: PointerEvent) => { pointerPos.current = { x: event.clientX, y: event.clientY }; };
+    window.addEventListener("pointermove", track, true);
+    window.addEventListener("pointerdown", track, true);
+    return () => {
+      window.removeEventListener("pointermove", track, true);
+      window.removeEventListener("pointerdown", track, true);
+    };
+  }, []);
+  useEffect(() => {
     if (native) return;
     const blur = () => outside.current();
     const click = (event: PointerEvent) => {
+      // The menu is portaled out of `.notch` but belongs to it: pressing it is not an outside click.
+      if (event.target instanceof Element && event.target.closest("[data-context-menu]")) return;
       if (event.target instanceof Node && !document.querySelector(".notch")?.contains(event.target)) outside.current();
     };
     window.addEventListener("blur", blur);
@@ -474,12 +505,18 @@ export function Notch() {
     if (expanded && pendingFocus.current) quickInput.current?.focus();
     const resize = () => {
       const width = expanded ? 560 : stackShown ? 460 : 273;
+      // An open context menu is part of the window: it grows to hold it, then shrinks back.
       const height = expanded
-        ? Math.min(node.scrollHeight, QUICK_LOOK_MAX_HEIGHT)
+        ? menuWindowHeight({
+            content: node.scrollHeight,
+            cap: QUICK_LOOK_MAX_HEIGHT,
+            menu: menuFloor.current,
+            extentBottom: extentBottom.current,
+          })
         : stackShown
           ? Math.min(node.scrollHeight, STACK_MAX_HEIGHT)
           : bandHeight;
-      void presentNotch({
+      return presentNotch({
         width,
         height,
         expanded,
@@ -493,13 +530,15 @@ export function Notch() {
           if (!document.hasFocus()) quickInput.current?.blur();
           if (document.activeElement !== quickInput.current || !document.hasFocus()) quickInput.current?.focus();
         }
+        return presented;
       }).catch((error) => { if (active) setError(String(error)); });
     };
+    presentNow.current = async () => resize();
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(node);
     return () => { active = false; observer.disconnect(); };
-  }, [expanded, pinned, stackShown, featured, cues, settings, bandHeight, focusTick, toast, deferredCount]);
+  }, [expanded, pinned, stackShown, featured, cues, settings, bandHeight, focusTick, toast, deferredCount, contextMenu.extent]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isCompositionKey(event)) {
@@ -589,16 +628,111 @@ export function Notch() {
     }).catch(() => {});
   }, [settings.language, remaining, online, nextTitle, nextId]);
   const tomorrow = () => runtime.board!.context.today;
-  async function completeWithFeedback(task: { id: string; title: string; version: number }) {
-    await new Promise((resolve) => setTimeout(resolve, reduced ? 120 : 420));
-    await client.completeTask(task.id, { expectedVersion: task.version });
-    showToast({ message: n(`已完成「${task.title}」`, `Completed “${task.title}”`), undoTaskId: task.id });
+  /** The freshest copy of a task: the board may have moved on since a menu or a row was built. */
+  const latest = (task: Task) => runtime.board?.all.find((item) => item.id === task.id) ?? task;
+  async function completeWithFeedback(task: Task, beat = true) {
+    if (beat) await new Promise((resolve) => setTimeout(resolve, reduced ? 120 : 420));
+    const { task: after } = await client.completeTask(task.id, { expectedVersion: task.version });
+    showToast({
+      message: n(`已完成「${task.title}」`, `Completed “${task.title}”`),
+      undo: { kind: "reopen", taskId: task.id, version: after.version },
+    });
   }
-  function undoCompletion(id: string) {
+  async function snoozeWithFeedback(task: Task) {
+    await taskCommands.snooze(latest(task));
+    showToast({ message: n("将在 10 分钟后提醒", "Reminder set for 10 minutes from now") });
+  }
+  /** The deadline may move with the plan, so the undo restores both. */
+  async function tomorrowWithFeedback(task: Task) {
+    const before = latest(task);
+    const { task: after } = await taskCommands.tomorrow(before, tomorrow());
+    showToast({ message: n("已改期到明天", "Rescheduled to tomorrow"), undo: rescheduleUndo(before, after) });
+  }
+  function undoToast(action: UndoAction) {
     clearTimeout(toastTimer.current);
     setToast(null);
-    void taskAction(async () => { await client.reopenTask(id, {}); });
+    void taskAction(async () => {
+      if (action.kind === "reopen") await client.reopenTask(action.taskId, { expectedVersion: action.version });
+      else if (action.kind === "reschedule")
+        await client.updateTask(action.taskId, {
+          expectedVersion: action.expectedVersion,
+          scheduledDate: action.scheduledDate,
+          scheduledAt: action.scheduledAt,
+          ...("dueDate" in action ? { dueDate: action.dueDate, dueAt: action.dueAt } : {}),
+          ...(action.scheduledAt || action.dueAt ? { timezone: action.timezone } : {}),
+        });
+    });
   }
+  // The row menu: the panel's items, run here. "Edit…" and "Delete…" need the panel, which opens
+  // on the form or on the confirmation (deleting is permanent, so it always asks first).
+  const menuCommands: TaskMenuCommands = {
+    complete: (task) => void taskAction(() => completeWithFeedback(latest(task), false)),
+    snooze: (task) => void taskAction(() => snoozeWithFeedback(task)),
+    tomorrow: (task) => void taskAction(() => tomorrowWithFeedback(task)),
+    edit: (task) => void revealTask(task.id, "edit").catch((error) => setError(String(error))),
+    cancel: (task) => void taskAction(() => taskCommands.cancel(latest(task))),
+    skip: (task) => void taskAction(() => taskCommands.skip(latest(task))),
+    reopen: (task) => void taskAction(() => taskCommands.reopen(latest(task))),
+    requestDelete: (task) => void revealTask(task.id, "delete").catch((error) => setError(String(error))),
+  };
+  /**
+   * Open the menu once the window can hold it: growing the window resizes the WebView, which
+   * would dismiss a menu that was already open, so the menu waits for the new size. The quick look
+   * is pinned for as long as the menu is up.
+   */
+  async function openTaskMenu(task: Task, anchor: MenuAnchor) {
+    const items = taskMenuItems(task, { language: settings.language, online, busy: saving, commands: menuCommands });
+    const floor = { anchorY: anchor.y, height: estimateMenuHeight(items) };
+    if (!menuPin.current) menuPin.current = { before: pinBeforePress.current ?? interaction.current.pinned, opened: false };
+    pinBeforePress.current = null;
+    clearTimeout(leaveTimer.current);
+    interaction.current.pinned = pinDuringMenu(menuPin.current.before, true);
+    setPinned(true);
+    menuFloor.current = floor;
+    await presentNow.current();
+    const wanted = menuWindowHeight({ content: 0, cap: QUICK_LOOK_MAX_HEIGHT, menu: floor });
+    // The native window has resized; wait until the page reports it before placing the menu.
+    for (let waited = 0; native && window.innerHeight < wanted - 1 && waited < 600; waited += 16)
+      await new Promise((resolve) => setTimeout(resolve, 16));
+    if (native) await new Promise((resolve) => setTimeout(resolve, 50));
+    if (!menuPin.current) return;
+    menuPin.current.opened = true;
+    contextMenu.open(anchor, items, task.title);
+  }
+  // Closing the menu gives the window back its height and the quick look its earlier pin state.
+  useEffect(() => {
+    const session = menuPin.current;
+    if (contextMenu.isOpen || !session?.opened) return;
+    menuPin.current = null;
+    menuFloor.current = null;
+    interaction.current.pinned = pinDuringMenu(session.before, false);
+    setPinned(session.before);
+    setFocusTick((value) => value + 1);
+    // The pointer may have left while the menu was up, and the page never saw it leave (it was on
+    // the menu, which is not inside `.notch`): ask the browser where it is now.
+    const box = document.querySelector(".notch")?.getBoundingClientRect();
+    const at = pointerPos.current;
+    const away = !!box && !!at && (at.x < box.left || at.x >= box.right || at.y < box.top || at.y >= box.bottom);
+    if (!session.before && away) {
+      if (hovering.current) {
+        lastDomPointer.current = Date.now();
+        pointer.current.leave();
+      } else {
+        // Already counted as gone while the menu held the pin; start the timer that pin cancelled.
+        clearTimeout(leaveTimer.current);
+        leaveTimer.current = setTimeout(() => {
+          if (shouldCollapseQuickLook("leave", { ...interaction.current, editing: document.activeElement === quickInput.current })) closeQuickLook("leave");
+        }, dial.leaveDelay);
+      }
+    }
+  }, [contextMenu.isOpen]);
+  // A menu belongs to the quick look and to one connection state.
+  useEffect(() => {
+    if (!expanded || !online) {
+      contextMenu.close();
+      if (menuPin.current && !menuPin.current.opened) { menuPin.current = null; menuFloor.current = null; }
+    }
+  }, [expanded, online]);
   const resting = stackCues.length;
   const folding = cues.length - resting;
   const countdown = next ? taskCountdown(next, now, settings.language) : null;
@@ -674,6 +808,7 @@ export function Notch() {
             <NotchSurface
               mode={expanded ? "quick" : "stack"}
               bandHeight={bandHeight}
+              onSecondaryPress={() => { pinBeforePress.current = interaction.current.pinned; }}
               reduced={!!reduced}
               onPin={(target) => {
                 if (target instanceof Element && !target.closest(".notch-quick-field")) {
@@ -709,8 +844,8 @@ export function Notch() {
                       >
                         <Icon name="check" size={14} />
                         <span>{toast.message}</span>
-                        {toast.undoTaskId && (
-                          <button onClick={() => undoCompletion(toast.undoTaskId!)} disabled={!online}>
+                        {toast.undo && (
+                          <button onClick={() => undoToast(toast.undo!)} disabled={!online}>
                             {n("撤销", "Undo")}
                           </button>
                         )}
@@ -834,7 +969,7 @@ export function Notch() {
                           className="pill"
                           disabled={!online || saving}
                           onClick={() =>
-                            void taskAction(() => completeWithFeedback(next))
+                            void taskAction(() => completeWithFeedback(latest(next)))
                           }
                         >
                           <span className="orange-disc">
@@ -846,13 +981,7 @@ export function Notch() {
                           className="pill secondary"
                           disabled={!online || saving}
                           onClick={() =>
-                            void taskAction(async () => {
-                              await client.snoozeTask(next.id, {
-                                expectedVersion: next.version,
-                                minutes: 10,
-                              });
-                              showToast({ message: n("将在 10 分钟后提醒", "Reminder set for 10 minutes from now") });
-                            })
+                            void taskAction(() => snoozeWithFeedback(next))
                           }
                         >
                           <span className="quiet-disc"><Icon name="snooze" size={10} /></span>
@@ -862,10 +991,7 @@ export function Notch() {
                           className="pill secondary"
                           disabled={!online || saving}
                           onClick={() =>
-                            void taskAction(async () => {
-                              await client.updateTask(next.id, rescheduleToTomorrow(next, tomorrow()));
-                              showToast({ message: n("已改期到明天", "Rescheduled to tomorrow") });
-                            })
+                            void taskAction(() => tomorrowWithFeedback(next))
                           }
                         >
                           <span className="quiet-disc"><Icon name="tomorrow" size={10} /></span>
@@ -899,12 +1025,10 @@ export function Notch() {
                                 task={task}
                                 today={runtime.board?.context.today}
                                 disabled={!online || saving}
+                                onMenu={(task, anchor) => void openTaskMenu(task, anchor)}
                                 onComplete={async (task) => {
                                   try {
-                                    await client.completeTask(task.id, {
-                                      expectedVersion: task.version,
-                                    });
-                                    showToast({ message: n(`已完成「${task.title}」`, `Completed “${task.title}”`), undoTaskId: task.id });
+                                    await completeWithFeedback(latest(task), false);
                                     await runtime.refresh();
                                   } catch (error) {
                                     setError(String(error));
@@ -915,18 +1039,12 @@ export function Notch() {
                                 trailingActions={<>
                                   <button className="icon-button" disabled={!online || saving}
                                     aria-label={`${t("snooze")} ${task.title}`}
-                                    onClick={() => void taskAction(async () => {
-                                      await client.snoozeTask(task.id, { expectedVersion: task.version, minutes: 10 });
-                                      showToast({ message: n("将在 10 分钟后提醒", "Reminder set for 10 minutes from now") });
-                                    })}>
+                                    onClick={() => void taskAction(() => snoozeWithFeedback(task))}>
                                     <Icon name="snooze" size={13} />
                                   </button>
                                   <button className="icon-button" disabled={!online || saving}
                                     aria-label={`${n("改期到明天", "Move to tomorrow")} ${task.title}`}
-                                    onClick={() => void taskAction(async () => {
-                                      await client.updateTask(task.id, rescheduleToTomorrow(task, tomorrow()));
-                                      showToast({ message: n("已改期到明天", "Rescheduled to tomorrow") });
-                                    })}>
+                                    onClick={() => void taskAction(() => tomorrowWithFeedback(task))}>
                                     <Icon name="tomorrow" size={13} />
                                   </button>
                                 </>}
@@ -1107,6 +1225,7 @@ export function Notch() {
           )}
         </AnimatePresence>
       </div>
+      {contextMenu.node}
     </motion.main>
   );
 }
@@ -1114,7 +1233,7 @@ export function Notch() {
 interface NotchToast {
   id: number;
   message: string;
-  undoTaskId?: string;
+  undo?: UndoAction;
 }
 
 /**
@@ -1122,12 +1241,14 @@ interface NotchToast {
  * drops in from the top edge; the quick look settles in just behind the growing shell and
  * pulls back (scale and offset) before it leaves.
  */
-function NotchSurface({ children, mode, bandHeight, reduced, onPin }: {
+function NotchSurface({ children, mode, bandHeight, reduced, onPin, onSecondaryPress }: {
   children: ReactNode;
   mode: "stack" | "quick";
   bandHeight: number;
   reduced: boolean;
   onPin: (target: EventTarget) => void;
+  /** A secondary press: the menu will pin, and remembers what the pin was before this press. */
+  onSecondaryPress: () => void;
 }) {
   const present = useIsPresent();
   const initial = reduced
@@ -1145,7 +1266,12 @@ function NotchSurface({ children, mode, bandHeight, reduced, onPin }: {
     inert={!present}
     aria-hidden={!present}
     style={{ maxHeight: (mode === "stack" ? STACK_MAX_HEIGHT : QUICK_LOOK_MAX_HEIGHT) - bandHeight, transformOrigin: "top center", pointerEvents: present ? "auto" : "none" }}
-    onPointerDownCapture={(event) => { if (present) onPin(event.target); }}
+    onPointerDownCapture={(event) => {
+      // A secondary press opens the context menu, which pins the quick look only while it is up.
+      const secondary = event.button === 2 || (platform === "macos" && event.ctrlKey);
+      if (present && secondary) onSecondaryPress();
+      else if (present) onPin(event.target);
+    }}
     onFocusCapture={(event) => { if (present) onPin(event.target); }}
     initial={initial}
     animate={{ opacity: 1, scale: 1, y: 0 }}

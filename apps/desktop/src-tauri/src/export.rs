@@ -1,4 +1,5 @@
-//! Saving the JSON export to the system Downloads folder and revealing it in the file manager.
+//! File helpers for the host commands: the JSON export, attachment save-as and opening the data
+//! folder. Everything that decides a path or a name lives here so it can be tested on any platform.
 
 use std::path::{Path, PathBuf};
 
@@ -73,21 +74,92 @@ pub fn reveal_command(os: Os, path: &Path) -> (&'static str, Vec<String>) {
     }
 }
 
-pub fn reveal(path: &Path) {
-    let (program, arguments) = reveal_command(current_os(), path);
+
+/// Ids the runtime hands out: letters, digits, `_` and `-`. Anything else never reaches a URL.
+pub fn valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// A file name that is safe to offer in a save dialog: no directory parts, no control characters
+/// or characters Windows rejects, no trailing dots or spaces, no reserved device names.
+pub fn safe_file_name(name: &str) -> String {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or("");
+    let cleaned: String = base
+        .chars()
+        .map(|c| if c.is_control() || "<>:\"|?*".contains(c) { '_' } else { c })
+        .collect();
+    let mut trimmed: String = cleaned.trim_matches(|c: char| c == ' ' || c == '.').chars().take(180).collect();
+    let stem = trimmed.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let reserved = ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str())
+        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.len() == 4
+            && stem.as_bytes()[3].is_ascii_digit());
+    if trimmed.is_empty() || reserved {
+        trimmed = format!("attachment{}", if reserved { format!("-{trimmed}") } else { String::new() });
+    }
+    trimmed
+}
+
+/// Pull the file name and bytes out of the runtime's attachment response
+/// (`{ status, body: { attachment: { name }, dataBase64 } }`).
+pub fn decode_attachment(response: &serde_json::Value) -> Result<(String, Vec<u8>), String> {
+    use base64::Engine;
+    if response["status"].as_u64() != Some(200) {
+        return Err(response["body"]["error"]["message"]
+            .as_str()
+            .unwrap_or("The attachment could not be read")
+            .to_string());
+    }
+    let body = &response["body"];
+    let encoded = body["dataBase64"].as_str().ok_or("The attachment has no content")?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|_| "The attachment content is damaged".to_string())?;
+    let name = safe_file_name(body["attachment"]["name"].as_str().unwrap_or(""));
+    Ok((name, bytes))
+}
+
+/// Program and arguments that open a directory in the platform's file manager.
+pub fn open_directory_command(os: Os, path: &Path) -> (&'static str, Vec<String>) {
+    let text = path.to_string_lossy().into_owned();
+    match os {
+        Os::Mac => ("open", vec![text]),
+        // One argument with the quotes inside it keeps paths with spaces intact.
+        Os::Windows => ("explorer", vec![format!("\"{text}\"")]),
+        Os::Other => ("xdg-open", vec![text]),
+    }
+}
+
+fn spawn(program: &str, arguments: &[String]) -> std::io::Result<std::process::Child> {
     let mut command = std::process::Command::new(program);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        for argument in &arguments {
+        for argument in arguments {
             command.raw_arg(argument);
         }
         command.creation_flags(0x08000000);
     }
     #[cfg(not(windows))]
-    command.args(&arguments);
+    command.args(arguments);
+    command.spawn()
+}
+
+/// Open `path` (the data directory itself) in the file manager.
+pub fn open_directory(path: &Path) -> Result<(), String> {
+    if !path.is_dir() {
+        return Err("The data folder does not exist yet".into());
+    }
+    let (program, arguments) = open_directory_command(current_os(), path);
+    spawn(program, &arguments).map(|_| ()).map_err(|e| e.to_string())
+}
+
+pub fn reveal(path: &Path) {
+    let (program, arguments) = reveal_command(current_os(), path);
     // Explorer reports failure for a successful reveal; the file is saved either way.
-    let _ = command.spawn();
+    let _ = spawn(program, &arguments);
 }
 
 #[cfg(test)]
@@ -140,5 +212,49 @@ mod tests {
         let (program, arguments) = reveal_command(Os::Other, path);
         assert_eq!(program, "xdg-open");
         assert_eq!(arguments, vec!["/Users/me/Downloads".to_string()]);
+    }
+
+    #[test]
+    fn ids_and_file_names_are_confined() {
+        assert!(valid_id("t_abc-123"));
+        for bad in ["", "a/b", "..", "a b", "t%2e", &"x".repeat(129)] {
+            assert!(!valid_id(bad), "{bad}");
+        }
+        assert_eq!(safe_file_name("报告 final.pdf"), "报告 final.pdf");
+        assert_eq!(safe_file_name("../../etc/passwd"), "passwd");
+        assert_eq!(safe_file_name("C:\\Windows\\system.ini"), "system.ini");
+        assert_eq!(safe_file_name("a<b>:c|d?.txt"), "a_b__c_d_.txt");
+        assert_eq!(safe_file_name("  ..  "), "attachment");
+        assert_eq!(safe_file_name("CON.txt"), "attachment-CON.txt");
+        assert_eq!(safe_file_name("lpt1"), "attachment-lpt1");
+        assert_eq!(safe_file_name(&"长".repeat(400)).chars().count(), 180);
+    }
+
+    #[test]
+    fn attachment_responses_decode_or_explain() {
+        let ok = serde_json::json!({ "status": 200, "body": {
+            "attachment": { "name": "../a.txt" }, "dataBase64": "aGVsbG8=" } });
+        assert_eq!(decode_attachment(&ok).unwrap(), ("a.txt".to_string(), b"hello".to_vec()));
+        let missing = serde_json::json!({ "status": 404, "body": { "error": { "message": "Attachment not found" } } });
+        assert_eq!(decode_attachment(&missing).unwrap_err(), "Attachment not found");
+        let empty = serde_json::json!({ "status": 200, "body": { "attachment": { "name": "a" } } });
+        assert!(decode_attachment(&empty).is_err());
+        let broken = serde_json::json!({ "status": 200, "body": { "dataBase64": "***" } });
+        assert!(decode_attachment(&broken).is_err());
+    }
+
+    #[test]
+    fn data_folder_open_commands_quote_paths_with_spaces() {
+        let mac = Path::new("/Users/me/My Data/.todocue");
+        assert_eq!(open_directory_command(Os::Mac, mac), ("open", vec!["/Users/me/My Data/.todocue".to_string()]));
+        let windows = Path::new("C:\\Users\\我 的\\.todocue");
+        assert_eq!(
+            open_directory_command(Os::Windows, windows),
+            ("explorer", vec!["\"C:\\Users\\我 的\\.todocue\"".to_string()])
+        );
+        assert_eq!(open_directory_command(Os::Other, mac).0, "xdg-open");
+        // A path that is not an existing directory is refused before anything is spawned.
+        assert!(open_directory(Path::new("/definitely/not/here")).is_err());
+        assert!(open_directory(&std::env::temp_dir().join("todocue-no-such-dir-xyz")).is_err());
     }
 }
