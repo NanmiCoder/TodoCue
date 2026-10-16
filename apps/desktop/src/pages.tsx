@@ -36,6 +36,7 @@ import {
   taskOverdue,
 } from "./dates.js";
 import { motionTokens, spring } from "./tokens.js";
+import { pageDirection } from "./motionKit.js";
 import { LatestRequest } from "./model.js";
 import { isCompositionKey } from "./quickAdd.js";
 import { useTextAreaSize } from "./useTextAreaSize.js";
@@ -76,8 +77,13 @@ export function CalendarPage({
   const { span, anchor, selected, collapsed } = state;
   const reduced = useReducedMotion();
   const previousAnchor = useRef(anchor);
-  const direction = anchor >= previousAnchor.current ? 1 : -1;
+  const direction = pageDirection(previousAnchor.current, anchor);
   useEffect(() => { previousAnchor.current = anchor; }, [anchor]);
+  // Month <-> week replaces content in place (fade), paging slides it (CalendarView.swap / pageTurn).
+  const previousSpan = useRef(span);
+  const spanChanged = previousSpan.current !== span;
+  useEffect(() => { previousSpan.current = span; }, [span]);
+  const swapKind = spanChanged;
   const pageElement = useRef<HTMLDivElement>(null);
   const navigator = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -222,6 +228,7 @@ export function CalendarPage({
               aria-pressed={span === "month"}
               onClick={() => setSpan("month")}
             >
+              {span === "month" && <SegmentThumb reduced={!!reduced} />}
               {zh ? "按月" : "Month"}
             </button>
             <button
@@ -229,6 +236,7 @@ export function CalendarPage({
               aria-pressed={span === "week"}
               onClick={() => setSpan("week")}
             >
+              {span === "week" && <SegmentThumb reduced={!!reduced} />}
               {zh ? "按周" : "Week"}
             </button>
           </div>
@@ -258,16 +266,17 @@ export function CalendarPage({
             <Icon name="chevron" size={12} />
           </button>
         </div>
+        <AnimatePresence initial={false} mode="popLayout" custom={{ direction, swap: swapKind }}>
         {span === "month" && (
-          <>
+          <CalendarSwap key="month" className="calendar-month-part" direction={direction} distance={0} swap={swapKind}>
             <div className="weekday-labels">
               {weekdayLabels(language, firstDay).map((day, i) => (
                 <span key={i}>{day}</span>
               ))}
             </div>
             <div className="calendar-month-stage">
-            <AnimatePresence initial={false} mode="popLayout" custom={direction}>
-            <CalendarSwap className="month-days" key={`${from}:${shownCollapsed}`} direction={direction}>
+            <AnimatePresence initial={false} mode="popLayout" custom={{ direction, swap: swapKind }}>
+            <CalendarSwap className="month-days" key={`${from}:${shownCollapsed}`} direction={direction} swap={swapKind}>
               {gridDays.map((day) => (
                 <button
                   style={{ height: cellHeight }}
@@ -314,12 +323,13 @@ export function CalendarPage({
             </CalendarSwap>
             </AnimatePresence>
             </div>
-          </>
+          </CalendarSwap>
         )}
+        </AnimatePresence>
       </motion.section>
       <section className="tile graphite calendar-agenda" aria-busy={loading}>
-        <AnimatePresence initial={false} mode="popLayout" custom={direction}>
-        <CalendarSwap className="calendar-agenda-days" key={span === "week" ? `week:${from}` : `day:${selected}`} direction={direction} distance={span === "week" ? 24 : 0}>
+        <AnimatePresence initial={false} mode="popLayout" custom={{ direction, swap: swapKind }}>
+        <CalendarSwap className="calendar-agenda-days" key={span === "week" ? `week:${from}` : `day:${selected}`} direction={direction} swap={swapKind} distance={span === "week" ? 24 : 0}>
         {(span === "week" ? days : [selected]).map((day) => (
           <section
             className={`day-agenda ${day === selected ? "selected" : ""}`}
@@ -442,16 +452,32 @@ export function CalendarPage({
   );
 }
 
-const CalendarSwap = forwardRef<HTMLDivElement, { children: ReactNode; className: string; direction: number; distance?: number }>(function CalendarSwap({ children, className, direction, distance = 24 }, ref) {
+interface SwapCustom { direction: number; swap: boolean }
+/**
+ * Calendar content that replaces itself in place. Paging slides: the new page springs in from the side
+ * you moved towards while the old one slides out the other way (ease-out 0.14s). Everything else swaps:
+ * the new content fades in (ease-out 0.16s) and the old waits 0.08s before leaving (ease-in 0.1s), so
+ * the two are never both half transparent.
+ */
+const CalendarSwap = forwardRef<HTMLDivElement, { children: ReactNode; className: string; direction: number; distance?: number; swap?: boolean }>(function CalendarSwap({ children, className, direction, distance = 24, swap = false }, ref) {
   const present = useIsPresent();
   const reduced = useReducedMotion();
-  return <motion.div ref={ref} className={className} inert={!present} aria-hidden={!present} custom={direction}
-    variants={{ enter: (direction: number) => ({ x: reduced ? 0 : direction * distance, opacity: 0 }) }}
-    initial="enter" animate={{ x: 0, opacity: 1 }}
-    exit={{ opacity: 0, transition: { duration: 0.1, ease: "easeIn" } }}
-    transition={reduced ? { duration: 0.12 } : { x: spring(0.34, 0.9), opacity: { duration: 0.14, ease: "easeOut" } }}
+  const turn = !swap && distance !== 0 && !reduced;
+  return <motion.div ref={ref} className={className} inert={!present} aria-hidden={!present} custom={{ direction, swap } satisfies SwapCustom}
+    variants={{
+      enter: (custom: SwapCustom) => ({ x: turn && !custom.swap ? custom.direction * distance : 0, opacity: 0 }),
+      exit: (custom: SwapCustom) => turn && !custom.swap
+        ? { x: -custom.direction * distance, opacity: 0, transition: { duration: 0.14, ease: "easeOut" } }
+        : { opacity: 0, transition: { duration: reduced ? 0.12 : 0.1, delay: reduced ? 0 : 0.08, ease: "easeIn" } },
+    }}
+    initial="enter" animate={{ x: 0, opacity: 1 }} exit="exit"
+    transition={reduced ? { duration: 0.12 } : turn && !swap ? spring(0.34, 0.9) : { duration: 0.16, ease: "easeOut" }}
   >{children}</motion.div>;
 });
+function SegmentThumb({ reduced }: { reduced: boolean }) {
+  return <motion.span className="segment-thumb" layoutId="calendar-span" aria-hidden="true"
+    transition={reduced ? { duration: 0.12 } : motionTokens.snap} />;
+}
 
 export function CompletedPage({
   language,

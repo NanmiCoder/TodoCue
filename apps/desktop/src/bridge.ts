@@ -158,6 +158,14 @@ export async function presentNotch(state: {
   document.getElementById("root")!.style.width = `${state.width}px`;
   return true;
 }
+/**
+ * The panel went from hidden to shown. The native host emits `panel:revealed`; callers keep a
+ * visibility fallback for hosts that do not (see watchReveal in motionKit).
+ */
+export async function onPanelRevealed(handler: () => void): Promise<() => void> {
+  if (!native) return () => undefined;
+  return listen("panel:revealed", () => handler());
+}
 export async function revealTask(id: string) {
   if (native) {
     await invoke("reveal_task", { id });

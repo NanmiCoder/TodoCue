@@ -4,6 +4,7 @@ import {
   AnimatePresence,
   motion,
   useIsPresent,
+  type MotionValue,
 } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -15,6 +16,7 @@ import {
   focusPanel,
   loadSettings,
   native,
+  onPanelRevealed,
   saveSettings,
   startDrag,
   type DesktopSettings,
@@ -40,6 +42,7 @@ import { projectGroups, useTaskDrag } from "./drag.js";
 import { dayLabel, planDate } from "./dates.js";
 import type { PeriodicReminder } from "@todocue/shared";
 import { motionTokens, spring } from "./tokens.js";
+import { HeaderSwap, TabSwap, VerticalSwap, tabDirection, useReveal, watchReveal } from "./motionKit.js";
 import { useRuntime } from "./useRuntime.js";
 import { ResizeEdge } from "./ResizeEdge.js";
 import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
@@ -120,6 +123,20 @@ export function Panel() {
   }, [route, quickFocusTick]);
   const t = translate(settings.language);
   const reduced = useReducedMotion();
+  const [revealTick, setRevealTick] = useState(0);
+  useEffect(() => watchReveal(() => setRevealTick((tick) => tick + 1), onPanelRevealed), []);
+  const headerReveal = useReveal(0, revealTick, !!reduced);
+  const nextReveal = useReveal(1, revealTick, !!reduced);
+  const listReveal = useReveal(2, revealTick, !!reduced);
+  const quickReveal = useReveal(3, revealTick, !!reduced);
+  const pageReveal = useReveal(1, revealTick, !!reduced);
+  // The lit dot's direction decides which side the new rows arrive from.
+  const previousView = useRef(view);
+  const viewDirection = tabDirection(previousView.current, view);
+  useEffect(() => {
+    previousView.current = view;
+    document.querySelector(".list-scroll")?.scrollTo({ top: 0 });
+  }, [view]);
   useEffect(() => {
     void loadSettings()
       .then(setSettings)
@@ -525,7 +542,7 @@ export function Panel() {
         <div
           aria-hidden="true"
           inert
-          className="drag-card graphite"
+          className={`drag-card graphite ${taskDrag.drag.landing ? "landing" : ""}`}
           style={{
             position: "fixed",
             left: taskDrag.drag.x,
@@ -533,6 +550,9 @@ export function Panel() {
             width: taskDrag.drag.width,
             pointerEvents: "none",
             zIndex: 40,
+            transform: taskDrag.drag.landing
+              ? `translate(${taskDrag.drag.landing.x - taskDrag.drag.x}px, ${taskDrag.drag.landing.y - taskDrag.drag.y}px)`
+              : undefined,
           }}
         >
           <TaskRow
@@ -572,7 +592,7 @@ export function Panel() {
           </button>
         </div>
       )}
-      <header className="tile graphite panel-header" data-route={route}>
+      <motion.header className="tile graphite panel-header" data-route={route} style={headerReveal}>
         <div className="brand">
           {route === "list" ? (
             <Mark />
@@ -632,8 +652,9 @@ export function Panel() {
             <Icon name="close" />
           </button>
         </div>
+        <AnimatePresence initial={false} mode="popLayout">
         {route === "list" ? (
-          <>
+          <HeaderSwap key="list" reduced={!!reduced}>
             <nav className="tabs" aria-label="任务视图切换">
               <div className="tab-dots">
                 {(["today", "upcoming", "all"] as const).map((tab) => (
@@ -696,9 +717,10 @@ export function Panel() {
                 </time>
               </div>
             </div>
-          </>
+          </HeaderSwap>
         ) : (
           route !== "detail" && (
+            <HeaderSwap key={route} reduced={!!reduced}>
             <h1 className="page-heading">
               {route === "settings"
                 ? settings.language === "en"
@@ -726,12 +748,14 @@ export function Panel() {
                             ? "A little thing to remember"
                             : "记下一件事"}
             </h1>
+            </HeaderSwap>
           )
         )}
+        </AnimatePresence>
         {!connection.online && (
           <div className="offline-banner">{t("offline")}</div>
         )}
-      </header>
+      </motion.header>
       {menuOpen && (
         <div
           className="header-menu graphite"
@@ -818,6 +842,7 @@ export function Panel() {
             key={route}
             reduced={!!reduced}
             depth={history.current.length}
+            reveal={route === "list" ? undefined : pageReveal}
           >
             {(route === "list" || route === "calendar") && (
               <>
@@ -842,9 +867,18 @@ export function Panel() {
                   />
                 )}
                 {route === "list" && (
-                  <div className="list-scroll">
+                  <motion.div layoutScroll className="list-scroll">
+                    <AnimatePresence initial={false} mode="popLayout">
                     {view === "today" && next && (
-                      <section className="tile frost next-card">
+                      <motion.section
+                        key="next-card"
+                        className="tile frost next-card"
+                        style={{ x: nextReveal.x, originY: 0 }}
+                        initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
+                        transition={reduced ? { duration: 0.12 } : motionTokens.list}
+                      >
                         <div className="next-heading">
                           <span className="eyebrow">NEXT</span>
                           <span>{t("next")}</span>
@@ -864,7 +898,9 @@ export function Panel() {
                           </span>
                         </div>
                         <div className="next-body">
-                          <div>
+                          <div className="next-swap">
+                          <AnimatePresence initial={false} mode="popLayout">
+                          <VerticalSwap key={next.id} reduced={!!reduced}>
                             <button
                               className={`next-title ${finishing.has(next.id) ? "finishing-title" : ""}`}
                               onClick={() => openTask(next)}
@@ -899,15 +935,21 @@ export function Panel() {
                                 <Icon name="open" />
                               </button>
                             </div>
+                          </VerticalSwap>
+                          </AnimatePresence>
                           </div>
                           <Gauge
                             completed={completed}
                             total={count + completed}
                           />
                         </div>
-                      </section>
+                      </motion.section>
                     )}
-                    <section
+                    </AnimatePresence>
+                    <motion.section
+                      layout="position"
+                      transition={reduced ? { duration: 0.12 } : motionTokens.list}
+                      style={listReveal}
                       className="tile graphite task-list"
                       aria-label={t(view)}
                     >
@@ -930,10 +972,17 @@ export function Panel() {
                           />
                         </div>
                       )}
+                      <AnimatePresence initial={false} mode="popLayout">
+                      <TabSwap key={view} direction={viewDirection} reduced={!!reduced}>
                       {!board && connection.online ? (
                         <div className="skeleton" />
                       ) : visibleCount === 0 ? (
-                        <div className="empty-state">
+                        <motion.div
+                          className="empty-state"
+                          initial={{ opacity: 0, scale: reduced ? 1 : 0.94 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={reduced ? { duration: 0.12 } : motionTokens.list}
+                        >
                           <div className="empty-ring">
                             <span className="orange-disc">
                               <Icon
@@ -965,7 +1014,7 @@ export function Panel() {
                             </span>
                             {t("newTask")}
                           </button>
-                        </div>
+                        </motion.div>
                       ) : (
                         groups
                           .filter(
@@ -1016,7 +1065,7 @@ export function Panel() {
                                   )}
                                 </h3>
                               )}
-                              <AnimatePresence initial={false}>
+                              <AnimatePresence initial={false} mode="popLayout">
                                 {group.tasks.map((task) => (
                                   <TaskRow
                                     group={group.key}
@@ -1081,6 +1130,7 @@ export function Panel() {
                                 : "查看全部"}
                             </button>
                           </div>
+                          <AnimatePresence initial={false} mode="popLayout">
                           {completedExpanded &&
                             board?.today.completed.map((task) => (
                               <TaskRow
@@ -1092,12 +1142,16 @@ export function Panel() {
                                 onComplete={(task) => complete(task, true)}
                               />
                             ))}
+                          </AnimatePresence>
                         </div>
                       )}
-                    </section>
-                  </div>
+                      </TabSwap>
+                      </AnimatePresence>
+                    </motion.section>
+                  </motion.div>
                 )}
-                <form
+                <motion.form
+                  style={route === "list" ? quickReveal : undefined}
                   className="tile frost quick-add"
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -1227,7 +1281,7 @@ export function Panel() {
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </form>
+                </motion.form>
               </>
             )}
             {route === "completed" && (
@@ -1619,10 +1673,12 @@ function RouteSurface({
   children,
   reduced,
   depth,
+  reveal,
 }: {
   children: import("react").ReactNode;
   reduced: boolean;
   depth: number;
+  reveal?: { x: MotionValue<number> };
 }) {
   const present = useIsPresent();
   return (
@@ -1630,7 +1686,7 @@ function RouteSurface({
       className="page-content"
       inert={!present}
       aria-hidden={!present}
-      style={{ zIndex: depth }}
+      style={{ zIndex: depth, x: reveal?.x }}
       initial={{ y: reduced ? 0 : 14, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{
