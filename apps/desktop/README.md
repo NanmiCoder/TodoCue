@@ -43,6 +43,14 @@ macOS release 配置的 Preview 首次通过 `--home` 或 `TODOCUE_HOME` 选择�
 
 桌面 CI 的 macOS matrix 在 Apple Silicon 与 Intel runner 分别构建 release 配置的共享 Preview App，验证 Mach-O 架构和 ad-hoc 签名，上传 `todocue-macos-arm64-desktop-preview` / `todocue-macos-x64-desktop-preview`。Artifact 含 App ZIP、SHA-256 和 `BUILD.json`，记录版本、架构与源码提交。两架构已在 CI 实测通过，下载后架构/整包签名/校验和亦通过；见[下载与构建记录](../../docs/qa/desktop-builds/README.md)。这些共享 App 尚需外部隔离运行时；现有 `Release macOS` 手动 Action 另行构建带运行时、Developer ID 签名及公证的 SwiftUI DMG，两类产物应分别使用。
 
+## 刘海与面板的宿主行为
+
+- 刘海悬停以 WebView 的 DOM 悬停为主；宿主每 100ms 读取指针位置并发出 `notch:pointer` 事件作兜底（应用未激活时 WebView 可能收不到鼠标事件）。DOM 事件最近 300ms 内有到达时以 DOM 为准。设置环境变量 `TODOCUE_NOTCH_POINTER=0` 可关闭宿主兜底。需真机验证。
+- 刘海展开后，只有点输入框或刘海带才向宿主请求键盘；点卡内按钮不再 `set_focus`（Windows 同时保持 `WS_EX_NOACTIVATE`）。
+- 面板从隐藏变可见才重新定位；已打开时只置前。显示/隐藏带 0.16s/0.18s 淡入淡出：macOS 淡化整个窗口，Windows 由页面 CSS 淡化（透明 WebView2 窗口不是分层窗口）。系统“减弱动态效果”时直接显示/隐藏。
+- macOS 主菜单只有“编辑”（剪切/拷贝/粘贴/全选）；托盘/菜单栏由刘海 WebView 通过 `tray_update` 推送状态后动态生成菜单；macOS 用模板图标和菜单栏数字，Windows 用橙色图标、悬停提示显示剩余数，左键切换面板，右键打开菜单。
+- 导出 JSON 由宿主写入系统下载目录并在 Finder / 资源管理器中定位，文件名固定为 `todocue-export-YYYY-MM-DD.json`。
+
 ## Windows 构建
 
 在对应架构的 Windows 主机上运行。安装 MSVC C++ 构建工具、Windows SDK 和 Rust；ARM64 需要对应的 C++ ARM64 工具链。

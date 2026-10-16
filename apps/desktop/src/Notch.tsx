@@ -1,5 +1,6 @@
 import { useReducedMotion } from "./useReducedMotion.js";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { AnimatePresence, motion, useIsPresent } from "motion/react";
 import type { PeriodicReminder, RuntimeEvent } from "@todocue/shared";
 import { listen } from "@tauri-apps/api/event";
@@ -15,6 +16,7 @@ import {
   canShowNotch,
   presentNotch,
   revealTask,
+  updateTray,
   type DesktopSettings,
 } from "./bridge.js";
 import {
@@ -24,16 +26,32 @@ import {
   canPresentPeriodic,
   periodicActive,
   shouldCollapseQuickLook,
+  shouldCollapseForPanel,
+  shouldDeferArrival,
+  freezeJoins,
+  foldsStack,
+  cueMeta,
+  cuePose,
+  rippleProgress,
+  taskCountdown,
+  STACK_MAX_HEIGHT,
+  QUICK_LOOK_MAX_HEIGHT,
+  STACK_RETURN_DELAY,
+  PULSE_INTERVAL,
+  type QuickLookClose,
   type Cue,
 } from "./model.js";
-import { Gauge, Mark, TaskRow } from "./components.js";
+import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Icon } from "./icons.js";
 import { TaskMetadata } from "./metadata.js";
-import { reschedule, shiftDate } from "./dates.js";
+import { rescheduleToTomorrow } from "./dates.js";
 import { translate } from "./i18n.js";
 import { useRuntime } from "./useRuntime.js";
 import { dial, motionTokens } from "./tokens.js";
 import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
+
+/** What the notch says about itself, with zh/en picked once. */
+const pick = (language: string) => (zh: string, en: string) => (language === "en" ? en : zh);
 
 export function Notch() {
   const stack = useRef(new CueStack());
@@ -41,12 +59,15 @@ export function Notch() {
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [folded, setFolded] = useState(false);
+  /** After the quick look closes the stack waits for the shell to shrink before it comes back. */
+  const [stackHold, setStackHold] = useState(false);
   const [featuredKey, setFeaturedKey] = useState<string | null>(null);
   const [quick, setQuick] = useState("");
   const [saving, setSaving] = useState(false);
   const quickInput = useRef<HTMLInputElement>(null);
   const quickRequest = useRef(new QuickAddRequest());
   const pendingFocus = useRef(false);
+  const [focusTick, setFocusTick] = useState(0);
   const quickFocusRevision = useRef(0);
   const actionBusy = useRef(false);
   const busyCues = useRef(new Set<string>());
@@ -54,17 +75,32 @@ export function Notch() {
   const [featured, setFeatured] = useState(false);
   const [cueHovered, setCueHovered] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<NotchToast | null>(null);
+  const [deferredCount, setDeferredCount] = useState(0);
+  const [pulse, setPulse] = useState(0);
+  const [announcement, setAnnouncement] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const [settings, setSettings] = useState<DesktopSettings>(defaults);
   const [bandHeight, setBandHeight] = useState(24);
   const inFlight = useRef(new Set<string>());
   const content = useRef<HTMLDivElement>(null);
   const hovering = useRef(false),
     deferred = useRef<Cue[]>([]);
+  const arrivals = useRef(new Map<string, number>());
+  const lastPulse = useRef(Date.now());
+  const panelVisible = useRef(false);
+  const lastDomPointer = useRef(0);
   const rearmAfterLeave = useRef(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   const reduced = useReducedMotion();
@@ -83,7 +119,41 @@ export function Notch() {
     foreground: document.visibilityState === "visible",
   };
   const t = translate(settings.language);
-  function closeQuickLook(fold = false) {
+  const n = pick(settings.language);
+  const stackShown = cues.length > 0 && !folded && !expanded && !stackHold;
+  const stackShownRef = useRef(stackShown);
+  stackShownRef.current = stackShown;
+  /** Rows may leave under the pointer but none may join it (a click aimed at one must not land on another). */
+  const joinsFrozen = () => stackShownRef.current && hovering.current;
+  function commitCues() {
+    const next = stack.current.shown().map((cue) => ({ ...cue }));
+    setCues((current) => {
+      const merged = joinsFrozen() ? freezeJoins(current, next) : next;
+      return JSON.stringify(current) === JSON.stringify(merged) ? current : merged;
+    });
+  }
+  function flushDeferred() {
+    if (!deferred.current.length) return;
+    setFeaturedKey(deferred.current.at(-1)!.key);
+    setFeatured(true);
+    deferred.current = [];
+    setDeferredCount(0);
+    commitCues();
+  }
+  function showToast(next: Omit<NotchToast, "id">) {
+    clearTimeout(toastTimer.current);
+    const id = Date.now();
+    setToast({ ...next, id });
+    toastTimer.current = setTimeout(
+      () => setToast((current) => (current?.id === id ? null : current)),
+      next.undoTaskId ? 10000 : 4000,
+    );
+  }
+  /**
+   * Closing the quick look hands the screen back to the reminder stack; only the fold button
+   * (`fold-button`) puts the stack into the wings.
+   */
+  function closeQuickLook(reason: QuickLookClose = "outside") {
     clearTimeout(hoverTimer.current);
     clearTimeout(leaveTimer.current);
     pendingFocus.current = false;
@@ -93,7 +163,14 @@ export function Notch() {
     quickInput.current?.blur();
     setExpanded(false);
     setPinned(false);
-    if (fold) setFolded(true);
+    if (foldsStack(reason)) {
+      lastPulse.current = Date.now();
+      setFolded(true);
+    } else {
+      setStackHold(true);
+      clearTimeout(holdTimer.current);
+      holdTimer.current = setTimeout(() => setStackHold(false), STACK_RETURN_DELAY);
+    }
   }
   function focusQuickAdd() {
     pendingFocus.current = true;
@@ -101,26 +178,55 @@ export function Notch() {
     clearTimeout(leaveTimer.current);
     setExpanded(true);
     setPinned(true);
-    // Already presented: no new resize effect is needed to return to the field.
+    // Already presented: ask the host for the keyboard, then return to the field.
     if (expanded && pinned) {
       quickInput.current?.focus();
-      pendingFocus.current = false;
+      setFocusTick((value) => value + 1);
     }
+  }
+  /** Opened on purpose from the stack: it stays until Esc or a click outside; the keyboard is left alone. */
+  function openQuickLookFromStack() {
+    if (!stackShownRef.current) return;
+    clearTimeout(hoverTimer.current);
+    clearTimeout(leaveTimer.current);
+    pendingFocus.current = false;
+    interaction.current = { expanded: true, pinned: true };
+    setExpanded(true);
+    setPinned(true);
   }
   function collapseOutside() {
     if (!shouldCollapseQuickLook("outside", { ...interaction.current, editing: false })) return;
-    closeQuickLook();
+    closeQuickLook("outside");
     hovering.current = false;
     setCueHovered(false);
-    if (deferred.current.length) {
-      setFeaturedKey(deferred.current.at(-1)!.key);
-      setFeatured(true);
-      deferred.current = [];
-      setCues(stack.current.shown().map(cue => ({ ...cue })));
-    }
+    flushDeferred();
   }
   const outside = useRef(collapseOutside);
   outside.current = collapseOutside;
+  function pointerEnter() {
+    if (hovering.current) return;
+    hovering.current = true;
+    setCueHovered(true);
+    clearTimeout(leaveTimer.current);
+    if (!expanded && !stackShown && !rearmAfterLeave.current)
+      hoverTimer.current = setTimeout(() => {
+        // The pointer may have left, or the panel opened, while the delay ran.
+        if (hovering.current && !panelVisible.current) setExpanded(true);
+      }, dial.hoverDelay);
+  }
+  function pointerLeave() {
+    if (!hovering.current) return;
+    hovering.current = false;
+    setCueHovered(false);
+    rearmAfterLeave.current = false;
+    clearTimeout(hoverTimer.current);
+    flushDeferred();
+    leaveTimer.current = setTimeout(() => {
+      if (shouldCollapseQuickLook("leave", { ...interaction.current, editing: document.activeElement === quickInput.current })) closeQuickLook("leave");
+    }, dial.leaveDelay);
+  }
+  const pointer = useRef({ enter: pointerEnter, leave: pointerLeave });
+  pointer.current = { enter: pointerEnter, leave: pointerLeave };
   useEffect(() => {
     if (native) return;
     const blur = () => outside.current();
@@ -151,21 +257,24 @@ export function Notch() {
     return () => { ended = true; stop?.(); };
   }, []);
   function arrival(cue: Omit<Cue, "repeats">) {
+    const listed = stack.current.entries.some((item) => item.key === cue.key);
     if (!stack.current.receive(cue)) return;
+    arrivals.current.set(cue.key, Date.now());
     setFolded(false);
-    if (hovering.current)
-      deferred.current.push(
-        stack.current.entries.find((item) => item.key === cue.key)!,
-      );
-    else {
+    setAnnouncement(n(`TodoCue 提醒：${cue.title}`, `TodoCue reminder: ${cue.title}`));
+    if (
+      shouldDeferArrival({
+        stackShown: stackShownRef.current,
+        pointerOnStack: hovering.current,
+        alreadyListed: listed,
+      })
+    ) {
+      deferred.current.push(stack.current.entries.find((item) => item.key === cue.key)!);
+      setDeferredCount(deferred.current.length);
+    } else {
       setFeaturedKey(cue.key);
       setFeatured(true);
-      setCues((current) => {
-        const next = stack.current.shown().map((cue) => ({ ...cue }));
-        return JSON.stringify(current) === JSON.stringify(next)
-          ? current
-          : next;
-      });
+      commitCues();
     }
   }
   const active = periodicActive;
@@ -245,7 +354,7 @@ export function Notch() {
         }) &&
         (await presentNotch({
           width: 460,
-          height: Math.min(content.current?.scrollHeight ?? 190, 560),
+          height: Math.min(content.current?.scrollHeight ?? 190, STACK_MAX_HEIGHT),
           expanded: false,
           pinned: false,
           stack: true,
@@ -255,12 +364,7 @@ export function Notch() {
         stack.current.entries = stack.current.entries.filter(
           (cue) => cue.id !== `${occurrence.id}:${occurrence.round}`,
         );
-        setCues((current) => {
-          const next = stack.current.shown().map((cue) => ({ ...cue }));
-          return JSON.stringify(current) === JSON.stringify(next)
-            ? current
-            : next;
-        });
+        commitCues();
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -278,13 +382,26 @@ export function Notch() {
         listen<DesktopSettings>("settings:changed", (event) =>
           setSettings(event.payload),
         ),
+        // The panel opened (or the space changed): only an open quick look closes, and the
+        // reminder stack stays where it is.
         listen("notch:collapse", () => {
-          closeQuickLook(true);
+          if (shouldCollapseForPanel(interaction.current)) closeQuickLook("panel-opened");
         }),
         listen("notch:outside", () => outside.current()),
         listen("notch:focus", () => {
           if (interaction.current.expanded && pendingFocus.current) quickInput.current?.focus();
         }),
+        // Host-side pointer position: a fallback for when the WebView gets no mouse events
+        // (the app is not active). DOM events win while they are arriving.
+        listen<{ inside: boolean }>("notch:pointer", (event) => {
+          if (Date.now() - lastDomPointer.current < 300) return;
+          if (event.payload.inside) pointer.current.enter();
+          else pointer.current.leave();
+        }),
+        listen<{ visible: boolean }>("panel:visibility", (event) => {
+          panelVisible.current = event.payload.visible;
+        }),
+        listen("tray:reconnect", () => void runtime.refresh()),
       ]).then((stops) => {
         const dispose = () => stops.forEach((stop) => stop());
         if (ended) dispose();
@@ -295,7 +412,12 @@ export function Notch() {
       stop?.();
       clearTimeout(hoverTimer.current);
       clearTimeout(leaveTimer.current);
+      clearTimeout(holdTimer.current);
+      clearTimeout(toastTimer.current);
     };
+  }, []);
+  useEffect(() => {
+    if (native) void invoke<boolean>("panel_visible").then((visible) => { panelVisible.current = visible; }).catch(() => {});
   }, []);
   useEffect(() => {
     if (!runtime.board) return;
@@ -318,24 +440,23 @@ export function Notch() {
         });
       }
     }
-    if (!hovering.current)
-      setCues((current) => {
-        const next = stack.current.shown().map((cue) => ({ ...cue }));
-        return JSON.stringify(current) === JSON.stringify(next)
-          ? current
-          : next;
-      });
+    commitCues();
   }, [runtime.board, runtime.rules]);
   useEffect(() => {
     const timer = setInterval(() => {
       stack.current.sync(runtime.board?.all ?? [], runtime.rules);
-      if (!hovering.current)
-        setCues((current) => {
-          const next = stack.current.shown().map((cue) => ({ ...cue }));
-          return JSON.stringify(current) === JSON.stringify(next)
-            ? current
-            : next;
-        });
+      commitCues();
+      setNow(Date.now());
+      // A folded stack breathes once in a while so it does not become wallpaper.
+      if (
+        !stackShownRef.current &&
+        !interaction.current.expanded &&
+        stack.current.shown().length > 0 &&
+        Date.now() - lastPulse.current >= PULSE_INTERVAL
+      ) {
+        lastPulse.current = Date.now();
+        setPulse((value) => value + 1);
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, [runtime.board, runtime.rules]);
@@ -344,7 +465,6 @@ export function Notch() {
     const timer = setTimeout(() => setFeatured(false), dial.featureDuration);
     return () => clearTimeout(timer);
   }, [featured, featuredKey, cueHovered, busyKeys.size, cues.find((cue) => cue.key === featuredKey)?.id]);
-  const stackShown = cues.length > 0 && !folded && !expanded;
   const stackCues = visibleCues(cues, featured ? featuredKey : null);
   useLayoutEffect(() => {
     const node = content.current;
@@ -354,14 +474,18 @@ export function Notch() {
     if (expanded && pendingFocus.current) quickInput.current?.focus();
     const resize = () => {
       const width = expanded ? 560 : stackShown ? 460 : 273;
-      const height =
-        expanded || stackShown ? Math.min(node.scrollHeight, 560) : bandHeight;
+      const height = expanded
+        ? Math.min(node.scrollHeight, QUICK_LOOK_MAX_HEIGHT)
+        : stackShown
+          ? Math.min(node.scrollHeight, STACK_MAX_HEIGHT)
+          : bandHeight;
       void presentNotch({
         width,
         height,
         expanded,
         pinned,
         stack: stackShown,
+        focus: expanded && pendingFocus.current,
       }).then((presented) => {
         // AX/DOM elements can exist before the native window has grown around them.
         if (active && presented && interaction.current.expanded && pendingFocus.current) {
@@ -375,13 +499,14 @@ export function Notch() {
     const observer = new ResizeObserver(resize);
     observer.observe(node);
     return () => { active = false; observer.disconnect(); };
-  }, [expanded, pinned, stackShown, featured, cues, settings, bandHeight]);
+  }, [expanded, pinned, stackShown, featured, cues, settings, bandHeight, focusTick, toast, deferredCount]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isCompositionKey(event)) {
         event.preventDefault();
         if (quick) { quickRequest.current.edited(); setQuick(""); }
-        else closeQuickLook(true);
+        // A draft goes first; then the quick look closes and the reminders stay.
+        else if (interaction.current.expanded) closeQuickLook("escape");
       }
     };
     window.addEventListener("keydown", key);
@@ -420,12 +545,7 @@ export function Notch() {
       stack.current.entries = stack.current.entries.filter(
         (item) => item.key !== cue.key,
       );
-      setCues((current) => {
-        const next = stack.current.shown().map((cue) => ({ ...cue }));
-        return JSON.stringify(current) === JSON.stringify(next)
-          ? current
-          : next;
-      });
+      commitCues();
       await runtime.refresh();
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -454,6 +574,38 @@ export function Notch() {
       setSaving(false);
     }
   }
+  const remaining = runtime.board?.today.remaining ?? 0;
+  const nextTitle = next?.title ?? null;
+  const nextId = next?.id ?? null;
+  const online = runtime.connection.online;
+  useEffect(() => {
+    if (!native) return;
+    void updateTray({
+      language: settings.language,
+      remaining,
+      online,
+      nextTitle,
+      nextId,
+    }).catch(() => {});
+  }, [settings.language, remaining, online, nextTitle, nextId]);
+  const tomorrow = () => runtime.board!.context.today;
+  async function completeWithFeedback(task: { id: string; title: string; version: number }) {
+    await new Promise((resolve) => setTimeout(resolve, reduced ? 120 : 420));
+    await client.completeTask(task.id, { expectedVersion: task.version });
+    showToast({ message: n(`已完成「${task.title}」`, `Completed “${task.title}”`), undoTaskId: task.id });
+  }
+  function undoCompletion(id: string) {
+    clearTimeout(toastTimer.current);
+    setToast(null);
+    void taskAction(async () => { await client.reopenTask(id, {}); });
+  }
+  const resting = stackCues.length;
+  const folding = cues.length - resting;
+  const countdown = next ? taskCountdown(next, now, settings.language) : null;
+  const nextReason = runtime.board?.next.next?.group === "overdue" ? t("overdue")
+    : runtime.board?.next.next?.group === "due_today" ? t("must")
+    : runtime.board?.next.next?.group === "scheduled_reached" ? n("已到计划时间", "Planned time reached")
+    : n("未安排", "Unscheduled");
   return (
     <motion.main
       className={`notch ${expanded || stackShown ? "notch-open" : ""}`}
@@ -463,34 +615,12 @@ export function Notch() {
       }}
       transition={reduced ? { duration: 0.12 } : motionTokens.expand}
       onMouseEnter={() => {
-        hovering.current = true;
-        setCueHovered(true);
-        clearTimeout(leaveTimer.current);
-        if (!expanded && !stackShown && !rearmAfterLeave.current)
-          hoverTimer.current = setTimeout(
-            () => setExpanded(true),
-            dial.hoverDelay,
-          );
+        lastDomPointer.current = Date.now();
+        pointer.current.enter();
       }}
       onMouseLeave={() => {
-        hovering.current = false;
-        setCueHovered(false);
-        rearmAfterLeave.current = false;
-        clearTimeout(hoverTimer.current);
-        if (deferred.current.length) {
-          setFeaturedKey(deferred.current.at(-1)!.key);
-          setFeatured(true);
-          deferred.current = [];
-          setCues((current) => {
-            const next = stack.current.shown().map((cue) => ({ ...cue }));
-            return JSON.stringify(current) === JSON.stringify(next)
-              ? current
-              : next;
-          });
-        }
-        leaveTimer.current = setTimeout(() => {
-          if (shouldCollapseQuickLook("leave", { ...interaction.current, editing: document.activeElement === quickInput.current })) closeQuickLook();
-        }, dial.leaveDelay);
+        lastDomPointer.current = Date.now();
+        pointer.current.leave();
       }}
     >
       <div
@@ -500,27 +630,60 @@ export function Notch() {
         <button
           className="notch-band"
           style={{ height: bandHeight }}
-          onClick={focusQuickAdd}
-          aria-label={t("showPanel")}
+          onClick={() => (stackShown ? openQuickLookFromStack() : focusQuickAdd())}
+          aria-label={
+            cues.length > 0
+              ? n(`${cues.length} 项提醒等你处理，今日剩余 ${remaining} 项，悬停或点击展开`, `${cues.length} reminders waiting, ${remaining} left today. Hover or click to open.`)
+              : t("showPanel")
+          }
         >
-          <span className="notch-wing">
-            <Mark />
-            {folded && cues.length > 0 && <span>{cues.length}</span>}
+          <span className="notch-wing notch-wing-left">
+            {cues.length > 0 ? (
+              <span className="notch-badge">
+                {pulse > 0 && !reduced && (
+                  <motion.span
+                    key={pulse}
+                    className="notch-pulse"
+                    initial={{ scale: 1, opacity: 0.8 }}
+                    animate={{ scale: 1.7, opacity: 0 }}
+                    transition={{ duration: 0.9, ease: "easeOut" }}
+                  />
+                )}
+                <Numeral value={cues.length} />
+              </span>
+            ) : (
+              <Mark />
+            )}
           </span>
           <span className="notch-housing" style={{ height: bandHeight }} />
           <span className="notch-wing notch-count">
-            {runtime.board?.today.remaining ?? "—"}
+            {!online ? (
+              <svg className="notch-offline" viewBox="0 0 24 24" aria-label={t("offline")}>
+                <path d="M3 9a14 14 0 0 1 18 0M6 13a9 9 0 0 1 12 0M9.500 17a4 4 0 0 1 5 0M4 4l16 16" />
+              </svg>
+            ) : runtime.board ? (
+              <Numeral value={remaining} />
+            ) : (
+              "—"
+            )}
           </span>
         </button>
+        <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
         <AnimatePresence initial={false}>
           {(expanded || stackShown) && (
             <NotchSurface
+              mode={expanded ? "quick" : "stack"}
               bandHeight={bandHeight}
               reduced={!!reduced}
               onPin={(target) => {
                 if (target instanceof Element && !target.closest(".notch-quick-field")) {
                   pendingFocus.current = false;
                   quickFocusRevision.current++;
+                }
+                // Typing needs the keyboard: ask the host for it only when the field is touched.
+                if (target instanceof Element && target.closest(".notch-quick-field")) {
+                  pendingFocus.current = true;
+                  setFocusTick((value) => value + 1);
                 }
                 if (expanded && !(target instanceof Element && target.closest("[data-pin-control]"))) {
                   clearTimeout(leaveTimer.current);
@@ -532,11 +695,37 @@ export function Notch() {
             >
               {expanded ? (
                 <>
-                  <div className="notch-quick-header">
+                  <div className="notch-toast-slot">
+                  <AnimatePresence initial={false}>
+                    {toast && (
+                      <motion.div
+                        key={toast.id}
+                        className="notch-toast"
+                        role="status"
+                        initial={reduced ? { opacity: 0 } : { opacity: 0, y: -14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                        transition={reduced ? { duration: 0.12 } : motionTokens.snap}
+                      >
+                        <Icon name="check" size={14} />
+                        <span>{toast.message}</span>
+                        {toast.undoTaskId && (
+                          <button onClick={() => undoCompletion(toast.undoTaskId!)} disabled={!online}>
+                            {n("撤销", "Undo")}
+                          </button>
+                        )}
+                        <button className="notch-toast-close" onClick={() => setToast(null)} aria-label={n("关闭提示", "Dismiss")}>
+                          <Icon name="close" size={10} />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  </div>
+                  <div className={`notch-quick-header ${toast ? "is-covered" : ""}`} aria-hidden={!!toast}>
                     <Mark />
                     <div>
                       <strong>
-                        {settings.language === "en" ? "Today" : "今天"}
+                        {n("今天", "Today")}
                       </strong>
                       <span>
                         {runtime.board &&
@@ -560,8 +749,8 @@ export function Notch() {
                       }
                     />
                     <span>{runtime.board?.today.remaining
-                      ? settings.language === "en" ? `${runtime.board.today.remaining} left` : `还剩 ${runtime.board.today.remaining} 件`
-                      : settings.language === "en" ? "All clear" : (runtime.board?.today.completed.length ? "已清空" : "暂无待办")}</span>
+                      ? n(`还剩 ${runtime.board.today.remaining} 件`, `${runtime.board.today.remaining} left`)
+                      : runtime.board?.today.completed.length ? n("已清空", "All clear") : n("暂无待办", "Nothing planned")}</span>
                     </div>
                     <button
                       className="icon-button"
@@ -580,49 +769,54 @@ export function Notch() {
                       }}
                       aria-pressed={pinned}
                       aria-label={
-                        settings.language === "en"
-                          ? "Pin quick look"
-                          : pinned ? "取消固定快览" : "固定快览"
+                        pinned ? n("取消固定快览", "Unpin quick look") : n("固定快览", "Pin quick look")
                       }
                     >
                       <Icon name="pin" />
                     </button>
                   </div>
-                  {!runtime.connection.online && (
+                  {!online && (
                     <p className="notch-notice">
                       {t("offline")}
                       <button onClick={() => void runtime.refresh()}>
-                        {settings.language === "en" ? "Reconnect" : "重连"}
+                        {n("重连", "Reconnect")}
                       </button>
                     </p>
                   )}
-                  {cues.map((cue) => (
-                    <CueCard
-                      key={cue.key}
-                      cue={cue}
-                      featured={false}
-                      language={settings.language}
-                      disabled={
-                        !runtime.connection.online || busyKeys.has(cue.key)
-                      }
-                      completing={busyKeys.has(cue.key)}
-                      onOpen={() =>
-                        cue.task
-                          ? void revealTask(cue.task.id)
-                          : void openPanel()
-                      }
-                      onAnswer={(action) => void answer(cue, action)}
-                    />
-                  ))}
+                  {cues.length > 0 && (
+                    <section className="notch-pending" aria-label={n("待你回应", "Waiting for you")}>
+                      <h3>
+                        {n("待你回应", "Waiting for you")} <span>{cues.length}</span>
+                      </h3>
+                      <AnimatePresence initial={false}>
+                        {cues.map((cue) => (
+                          <CueCard
+                            key={cue.key}
+                            cue={cue}
+                            featured={false}
+                            language={settings.language}
+                            now={now}
+                            arrivedAt={arrivals.current.get(cue.key) ?? cue.receivedAt}
+                            disabled={!online || busyKeys.has(cue.key)}
+                            completing={busyKeys.has(cue.key)}
+                            onOpen={() =>
+                              cue.task ? void revealTask(cue.task.id) : void openPanel()
+                            }
+                            onAnswer={(action) => void answer(cue, action)}
+                            onFold={() => {}}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </section>
+                  )}
                   {next && (
                     <section className="notch-next">
                       <div className="next-heading">
                         <span className="eyebrow">NEXT</span>
                         <span>{t("next")}</span>
-                        <span className="notch-next-reason">{runtime.board?.next.next?.group === "overdue" ? t("overdue")
-                          : runtime.board?.next.next?.group === "due_today" ? t("must")
-                          : runtime.board?.next.next?.group === "scheduled_reached" ? settings.language === "en" ? "Planned time reached" : "已到计划时间"
-                          : settings.language === "en" ? "Unscheduled" : "未安排"}</span>
+                        <span className={`notch-next-reason ${countdown?.late || runtime.board?.next.next?.group === "overdue" ? "is-late" : ""}`}>
+                          {countdown?.text ?? nextReason}
+                        </span>
                       </div>
                       <button
                         className="next-title"
@@ -638,16 +832,9 @@ export function Notch() {
                       <div className="notch-next-actions">
                         <button
                           className="pill"
-                          disabled={!runtime.connection.online || saving}
+                          disabled={!online || saving}
                           onClick={() =>
-                            void taskAction(async () => {
-                              await new Promise((resolve) =>
-                                setTimeout(resolve, reduced ? 120 : 420),
-                              );
-                              await client.completeTask(next.id, {
-                                expectedVersion: next.version,
-                              });
-                            })
+                            void taskAction(() => completeWithFeedback(next))
                           }
                         >
                           <span className="orange-disc">
@@ -657,36 +844,32 @@ export function Notch() {
                         </button>
                         <button
                           className="pill secondary"
-                          disabled={!runtime.connection.online || saving}
+                          disabled={!online || saving}
                           onClick={() =>
-                            void taskAction(() =>
-                              client.snoozeTask(next.id, {
+                            void taskAction(async () => {
+                              await client.snoozeTask(next.id, {
                                 expectedVersion: next.version,
                                 minutes: 10,
-                              }),
-                            )
+                              });
+                              showToast({ message: n("将在 10 分钟后提醒", "Reminder set for 10 minutes from now") });
+                            })
                           }
                         >
                           <span className="quiet-disc"><Icon name="snooze" size={10} /></span>
-                          {settings.language === "en" ? "Remind in 10 minutes" : "10 分钟后提醒"}
+                          {n("10 分钟后提醒", "Remind in 10 minutes")}
                         </button>
                         <button
                           className="pill secondary"
-                          disabled={!runtime.connection.online || saving}
+                          disabled={!online || saving}
                           onClick={() =>
-                            void taskAction(() =>
-                              client.updateTask(
-                                next.id,
-                                reschedule(
-                                  next,
-                                  shiftDate(runtime.board!.context.today, 1),
-                                ),
-                              ),
-                            )
+                            void taskAction(async () => {
+                              await client.updateTask(next.id, rescheduleToTomorrow(next, tomorrow()));
+                              showToast({ message: n("已改期到明天", "Rescheduled to tomorrow") });
+                            })
                           }
                         >
                           <span className="quiet-disc"><Icon name="tomorrow" size={10} /></span>
-                          {settings.language === "en" ? "Tomorrow" : "明天"}
+                          {n("明天", "Tomorrow")}
                         </button>
                         <button
                           className="icon-button"
@@ -715,12 +898,13 @@ export function Notch() {
                                 key={task.id}
                                 task={task}
                                 today={runtime.board?.context.today}
-                                disabled={!runtime.connection.online || saving}
+                                disabled={!online || saving}
                                 onComplete={async (task) => {
                                   try {
                                     await client.completeTask(task.id, {
                                       expectedVersion: task.version,
                                     });
+                                    showToast({ message: n(`已完成「${task.title}」`, `Completed “${task.title}”`), undoTaskId: task.id });
                                     await runtime.refresh();
                                   } catch (error) {
                                     setError(String(error));
@@ -729,14 +913,20 @@ export function Notch() {
                                 }}
                                 onOpen={(task) => void revealTask(task.id)}
                                 trailingActions={<>
-                                  <button className="icon-button" disabled={!runtime.connection.online || saving}
+                                  <button className="icon-button" disabled={!online || saving}
                                     aria-label={`${t("snooze")} ${task.title}`}
-                                    onClick={() => void taskAction(() => client.snoozeTask(task.id, { expectedVersion: task.version, minutes: 10 }))}>
+                                    onClick={() => void taskAction(async () => {
+                                      await client.snoozeTask(task.id, { expectedVersion: task.version, minutes: 10 });
+                                      showToast({ message: n("将在 10 分钟后提醒", "Reminder set for 10 minutes from now") });
+                                    })}>
                                     <Icon name="snooze" size={13} />
                                   </button>
-                                  <button className="icon-button" disabled={!runtime.connection.online || saving}
-                                    aria-label={`${settings.language === "en" ? "Move to tomorrow" : "改期到明天"} ${task.title}`}
-                                    onClick={() => void taskAction(() => client.updateTask(task.id, reschedule(task, shiftDate(runtime.board!.context.today, 1))))}>
+                                  <button className="icon-button" disabled={!online || saving}
+                                    aria-label={`${n("改期到明天", "Move to tomorrow")} ${task.title}`}
+                                    onClick={() => void taskAction(async () => {
+                                      await client.updateTask(task.id, rescheduleToTomorrow(task, tomorrow()));
+                                      showToast({ message: n("已改期到明天", "Rescheduled to tomorrow") });
+                                    })}>
                                     <Icon name="tomorrow" size={13} />
                                   </button>
                                 </>}
@@ -750,9 +940,8 @@ export function Notch() {
                   {!next && rows.length === 0 && (
                     <div className="notch-empty">
                       <span className="orange-disc"><Icon name={runtime.board?.today.completed.length ? "check" : "plus"} size={15} /></span>
-                      <div><strong>{settings.language === "en" ? (runtime.board?.today.completed.length ? "All clear today" : "Nothing planned today")
-                        : (runtime.board?.today.completed.length ? "今天已清空" : "今天还没有安排")}</strong>
-                        <p>{settings.language === "en" ? "Add a task below, then press Enter." : "在下方记一件事，回车就加到今天。"}</p></div>
+                      <div><strong>{runtime.board?.today.completed.length ? n("今天已清空", "All clear today") : n("今天还没有安排", "Nothing planned today")}</strong>
+                        <p>{n("在下方记一件事，回车就加到今天。", "Add a task below, then press Enter.")}</p></div>
                     </div>
                   )}
                   {(runtime.board?.today.items.length ?? 0) >
@@ -855,42 +1044,59 @@ export function Notch() {
                 </>
               ) : (
                 <>
-                  <div className="notch-heading">
-                    <span>{t("reminder")}</span>
+                  {cues.length > 1 && (
+                    <div className="notch-stack-header">
+                      <strong>{n(`${cues.length} 件在等你`, `${cues.length} waiting for you`)}</strong>
+                      {deferredCount > 0 && (
+                        <span className="notch-deferred">{n(`+${deferredCount} 条新提醒`, `+${deferredCount} new`)}</span>
+                      )}
+                      <span className="notch-stack-spacer" />
+                      <button
+                        className="notch-today-link"
+                        onClick={openQuickLookFromStack}
+                        aria-label={n("打开今天的快览", "Open today's quick look")}
+                      >
+                        {n("今天", "Today")} <Icon name="chevron" size={8} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        onClick={() => closeQuickLook("fold-button")}
+                        title={n("先收起，提醒仍留在刘海上", "Fold away; reminders stay on the notch")}
+                        aria-label={n("先收起提醒，仍留在刘海上", "Fold reminders away; they stay on the notch")}
+                      >
+                        <Icon name="close" size={10} />
+                      </button>
+                    </div>
+                  )}
+                  <AnimatePresence initial={false}>
+                    {stackCues.map((cue) => (
+                      <CueCard
+                        key={cue.key}
+                        cue={cue}
+                        featured={(featured && cue.key === featuredKey) || (cues.length === 1 && cueHovered)}
+                        language={settings.language}
+                        now={now}
+                        arrivedAt={arrivals.current.get(cue.key) ?? cue.receivedAt}
+                        disabled={!online || busyKeys.has(cue.key)}
+                        completing={busyKeys.has(cue.key)}
+                        onOpen={() =>
+                          cue.task ? void revealTask(cue.task.id) : void openPanel()
+                        }
+                        onAnswer={(action) => void answer(cue, action)}
+                        onFold={() => closeQuickLook("fold-button")}
+                      />
+                    ))}
+                  </AnimatePresence>
+                  {folding > 0 && (
                     <button
-                      className="icon-button"
-                      onClick={() => {
-                        setExpanded(false);
-                        setPinned(false);
-                        setFolded(true);
-                      }}
-                      aria-label={t("hide")}
+                      className="notch-fold-row"
+                      onClick={openQuickLookFromStack}
+                      aria-label={n(`还有 ${folding} 件提醒，在快览里查看`, `${folding} more reminders, see them in the quick look`)}
                     >
-                      <Icon name="close" />
+                      {n(`还有 ${folding} 件 · 在快览里查看`, `${folding} more · see in quick look`)} <Icon name="chevron" size={9} />
                     </button>
-                  </div>
-                  {stackCues.map((cue) => (
-                    <CueCard
-                      key={cue.key}
-                      cue={cue}
-                      featured={(featured && cue.key === featuredKey) || (cues.length === 1 && cueHovered)}
-                      language={settings.language}
-                      disabled={
-                        !runtime.connection.online || busyKeys.has(cue.key)
-                      }
-                      completing={busyKeys.has(cue.key)}
-                      onOpen={() =>
-                        cue.task
-                          ? void revealTask(cue.task.id)
-                          : void openPanel()
-                      }
-                      onAnswer={(action) => void answer(cue, action)}
-                    />
-                  ))}
+                  )}
                 </>
-              )}
-              {cues.length > stackCues.length && !expanded && (
-                <button className="muted" aria-label={settings.language === "en" ? "Show all reminders" : "查看全部提醒"} onClick={focusQuickAdd}>+{cues.length - stackCues.length}</button>
               )}
               {error && (
                 <p role="alert" className="error">
@@ -905,94 +1111,221 @@ export function Notch() {
   );
 }
 
-/** Exiting controls must leave the focus/AX tree before the native shell clips them. */
-function NotchSurface({ children, bandHeight, reduced, onPin }: {
+interface NotchToast {
+  id: number;
+  message: string;
+  undoTaskId?: string;
+}
+
+/**
+ * Exiting controls must leave the focus/AX tree before the native shell clips them. The stack
+ * drops in from the top edge; the quick look settles in just behind the growing shell and
+ * pulls back (scale and offset) before it leaves.
+ */
+function NotchSurface({ children, mode, bandHeight, reduced, onPin }: {
   children: ReactNode;
+  mode: "stack" | "quick";
   bandHeight: number;
   reduced: boolean;
   onPin: (target: EventTarget) => void;
 }) {
   const present = useIsPresent();
+  const initial = reduced
+    ? { opacity: 0 }
+    : mode === "stack"
+      ? { opacity: 0, y: -28, scale: 1 }
+      : { opacity: 0, scale: 0.97, y: -8 };
+  const exit = reduced
+    ? { opacity: 0, transition: { duration: 0.12 } }
+    : mode === "stack"
+      ? { opacity: 0, y: -14, scale: 0.98, transition: { duration: 0.14, ease: "easeIn" as const } }
+      : { opacity: 0, scale: 0.97, y: -8, transition: { duration: 0.12, delay: 0 } };
   return <motion.section
     className="notch-content"
     inert={!present}
     aria-hidden={!present}
-    style={{ maxHeight: dial.notchMaxHeight - bandHeight, pointerEvents: present ? "auto" : "none" }}
+    style={{ maxHeight: (mode === "stack" ? STACK_MAX_HEIGHT : QUICK_LOOK_MAX_HEIGHT) - bandHeight, transformOrigin: "top center", pointerEvents: present ? "auto" : "none" }}
     onPointerDownCapture={(event) => { if (present) onPin(event.target); }}
     onFocusCapture={(event) => { if (present) onPin(event.target); }}
-    initial={{ opacity: 0, scale: reduced ? 1 : 0.97, y: reduced ? 0 : -8 }}
+    initial={initial}
     animate={{ opacity: 1, scale: 1, y: 0 }}
-    exit={{ opacity: 0, transition: { duration: 0.12, delay: 0 } }}
+    exit={exit}
     transition={{ ...(reduced ? { duration: 0.12 } : motionTokens.settle), delay: reduced ? 0 : 0.06 }}
   >{children}</motion.section>;
+}
+
+/** The Cue disc: two rings leave it as the reminder lands, then the mark hops once and rests. */
+function CueDisc({ arrivedAt, size, reduced }: { arrivedAt: number; size: number; reduced: boolean }) {
+  const [elapsed, setElapsed] = useState(() => (Date.now() - arrivedAt) / 1000);
+  useEffect(() => {
+    if (reduced) { setElapsed(10); return; }
+    let frame = 0;
+    const tick = () => {
+      const seconds = (Date.now() - arrivedAt) / 1000;
+      setElapsed(seconds);
+      if (seconds < 1.6) frame = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(frame);
+  }, [arrivedAt, reduced]);
+  const pose = cuePose(elapsed, reduced);
+  const rings = [0, 1].map((ring) => rippleProgress(elapsed - ring * 0.32, reduced));
+  return (
+    <span className="cue-disc" style={{ width: size + 2, height: size + 2 }} aria-hidden="true">
+      {rings.map((p, index) => (
+        <span
+          key={index}
+          className="cue-ring"
+          style={{
+            width: size,
+            height: size,
+            transform: `scale(${1 + 0.55 * p})`,
+            opacity: p > 0 && p < 1 ? 0.55 * (1 - p) : 0,
+          }}
+        />
+      ))}
+      <span className="cue-disc-fill" style={{ width: size, height: size }}>
+        <span
+          className="cue-mark"
+          style={{
+            transform: `translateY(${pose.offsetY}px) rotate(${pose.rotation}deg) scale(${pose.scaleX * 1.1}, ${pose.scaleY * 1.1})`,
+          }}
+        >
+          <Mark />
+        </span>
+      </span>
+    </span>
+  );
 }
 
 function CueCard({
   cue,
   featured,
   language,
+  now,
+  arrivedAt,
   disabled,
   completing,
   onOpen,
   onAnswer,
+  onFold,
 }: {
   cue: Cue;
   featured: boolean;
   language: string;
+  now: number;
+  arrivedAt: number;
   disabled: boolean;
   completing: boolean;
   onOpen: () => void;
   onAnswer: (action: "complete" | "snooze" | "pause_today") => void;
+  onFold: () => void;
 }) {
-  const t = translate(language);
+  const n = pick(language);
   const reduced = useReducedMotion();
+  const meta = cueMeta(cue, now, language);
+  const periodic = !!cue.periodic;
+  const repeat = cue.repeats > 1 && (
+    <span className="cue-repeat" aria-label={n(`已累计 ${cue.repeats} 次未完成`, `${cue.repeats} unanswered`)}>×{cue.repeats}</span>
+  );
+  const more = periodic && (
+    <button
+      className="icon-button cue-more"
+      onClick={() => onAnswer("pause_today")}
+      disabled={disabled}
+      title={n("今天暂停", "Pause today")}
+      aria-label={n("今天暂停", "Pause today")}
+    >
+      <Icon name="more" size={14} />
+    </button>
+  );
   return (
     <motion.article
       layout={!reduced}
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: -16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, transition: { duration: 0.12 } }}
       transition={reduced ? { duration: 0.12 } : motionTokens.list}
-      className={`cue ${featured ? "cue-featured" : ""} ${completing ? "completing" : ""}`}
+      className={`cue-item ${featured ? "cue-card" : "cue-row"} ${completing ? "completing" : ""}`}
       data-cue-id={cue.id}
+      role="group"
+      aria-label={n(`TodoCue 提醒：${cue.title}`, `TodoCue reminder: ${cue.title}`)}
     >
-      <button className="cue-title" onClick={onOpen}>
-        {cue.title}
-        {cue.repeats > 1 && <span> ×{cue.repeats}</span>}
-      </button>
-      {featured && cue.task && (
-        <TaskMetadata task={cue.task} language={language} />
-      )}
-      {featured && cue.periodic && (
-        <p className="muted">
-          {language === "en"
-            ? `Every ${cue.periodic.intervalMinutes} minutes`
-            : cue.periodic.summary}
-        </p>
-      )}
-      <div className="cue-actions">
-        <button
-          className="orange-disc"
-          onClick={() => onAnswer("complete")}
-          aria-label={t("complete")}
-          disabled={disabled}
-        >
-          <Icon name="check" />
-        </button>
-        <button
-          className="pill secondary"
-          onClick={() => onAnswer("snooze")}
-          disabled={disabled}
-        >
-          {t("snooze")}
-        </button>
-        {cue.periodic && (
-          <button
-            className="text-button"
-            onClick={() => onAnswer("pause_today")}
-            disabled={disabled}
-          >
-            {t("pause")}
+      {featured ? (
+        <>
+          <div className="cue-card-head">
+            <CueDisc arrivedAt={arrivedAt} size={46} reduced={!!reduced} />
+            <div className="cue-card-text">
+              <div className="cue-card-kicker">
+                <span>{n("轻轻 Cue 你一下", "A little cue for you")}</span>
+                {cue.late && <em>{n("· 刚才错过了", "· A little late")}</em>}
+                {repeat}
+              </div>
+              <button className="cue-title" onClick={onOpen} aria-label={n(`打开提醒任务 ${cue.title}`, `Open ${cue.title}`)}>
+                {cue.title}
+              </button>
+              <p className="cue-meta">{meta}</p>
+            </div>
+            <button
+              className="icon-button cue-fold"
+              onClick={onFold}
+              title={n("先收起，提醒仍留在刘海上", "Fold away; reminders stay on the notch")}
+              aria-label={n("先收起提醒，仍留在刘海上", "Fold reminders away; they stay on the notch")}
+            >
+              <Icon name="close" size={11} />
+            </button>
+          </div>
+          <div className="cue-actions">
+            <button className="pill" onClick={() => onAnswer("complete")} disabled={disabled} aria-label={n("完成提醒任务", "Complete reminder")}>
+              <span className="orange-disc"><Icon name="check" /></span>
+              {periodic ? n("完成本次", "Done this time") : n("完成啦", "Done")}
+            </button>
+            <button className="pill secondary" onClick={() => onAnswer("snooze")} disabled={disabled} aria-label={n("Cue 提醒延后 10 分钟", "Snooze Cue for 10 minutes")}>
+              <span className="quiet-disc"><Icon name="snooze" size={10} /></span>
+              {n("10 分钟后", "In 10 minutes")}
+            </button>
+            {more}
+            <span className="cue-actions-end">
+              {completing ? <span className="quick-saving" role="status" /> : "TodoCue"}
+            </span>
+          </div>
+        </>
+      ) : (
+        <div className="cue-row-line">
+          <span className={`cue-glyph ${periodic ? "is-periodic" : ""}`} aria-hidden="true">
+            {periodic ? <Mark /> : <Icon name="clock" size={13} />}
+          </span>
+          <button className="cue-title" onClick={onOpen} aria-label={n(`打开提醒任务 ${cue.title}`, `Open ${cue.title}`)}>
+            <strong>{cue.title}</strong>
+            <span className="cue-meta">{meta}</span>
           </button>
-        )}
-      </div>
+          {repeat}
+          {more}
+          {completing ? (
+            <span className="quick-saving" role="status" />
+          ) : (
+            <>
+              <button
+                className="icon-button"
+                onClick={() => onAnswer("snooze")}
+                disabled={disabled}
+                title={n("10 分钟后", "In 10 minutes")}
+                aria-label={n("Cue 提醒延后 10 分钟", "Snooze Cue for 10 minutes")}
+              >
+                <Icon name="snooze" size={13} />
+              </button>
+              <button
+                className="orange-disc cue-complete"
+                onClick={() => onAnswer("complete")}
+                disabled={disabled}
+                aria-label={periodic ? n("完成本次", "Done this time") : n("完成提醒任务", "Complete reminder")}
+              >
+                <Icon name="check" size={12} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </motion.article>
   );
 }

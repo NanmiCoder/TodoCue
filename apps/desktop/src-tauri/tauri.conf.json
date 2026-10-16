@@ -25,7 +25,8 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {
