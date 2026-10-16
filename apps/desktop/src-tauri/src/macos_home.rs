@@ -39,6 +39,21 @@ pub fn resolve_home(
         .unwrap_or(preview_default)
 }
 
+/// Bare CI apps have no installed runtime and must retain development isolation.
+pub fn resolve_launch_home(
+    explicit: Option<PathBuf>,
+    profile: Option<&Path>,
+    production: PathBuf,
+    development: PathBuf,
+    bundled: bool,
+) -> PathBuf {
+    resolve_home(
+        explicit,
+        if bundled { profile } else { None },
+        if bundled { production } else { development },
+    )
+}
+
 /// Remember an explicit Preview selection so Finder and Dock launches use the same runtime.
 /// This stores only a directory; connection credentials remain in that directory.
 pub fn remember(profile: &Path, data_home: &Path) -> io::Result<()> {
@@ -125,6 +140,44 @@ mod tests {
         assert_eq!(
             resolve_home(None, Some(&fixture.profile()), fixture.fallback()),
             selected
+        );
+    }
+
+    #[test]
+    fn bare_ci_apps_ignore_production_selection_but_accept_an_explicit_home() {
+        let fixture = Fixture::new();
+        let production = fixture.0.join("production");
+        remember(&fixture.profile(), &production).unwrap();
+        assert_eq!(
+            resolve_launch_home(
+                None,
+                Some(&fixture.profile()),
+                production.clone(),
+                fixture.fallback(),
+                false
+            ),
+            fixture.fallback()
+        );
+        let isolated = fixture.0.join("isolated");
+        assert_eq!(
+            resolve_launch_home(
+                Some(isolated.clone()),
+                Some(&fixture.profile()),
+                production.clone(),
+                fixture.fallback(),
+                false
+            ),
+            isolated
+        );
+        assert_eq!(
+            resolve_launch_home(
+                None,
+                Some(&fixture.profile()),
+                production.clone(),
+                fixture.fallback(),
+                true
+            ),
+            production
         );
     }
 

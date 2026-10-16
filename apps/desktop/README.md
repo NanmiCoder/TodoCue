@@ -4,7 +4,7 @@ v0.6.0 起正式桌面客户端使用 React / TypeScript / Motion 与 Tauri 2，
 
 Mac 打包：`npm run desktop:macos`；正式签名/公证：`npm run desktop:macos -- --release`。产物为 `apps/desktop/build/TodoCue-<version>-macOS-<arm64|x64>.dmg`。Windows 对应架构打包：`npm run windows:build -- --release`，产物为 `TodoCue-<version>-Windows-<arm64|x64>-setup.exe`。`Release desktop (Mac and Windows)` 在 tag 上构建四种安装包，验证所有校验和后才发布；手动运行只构建验收，不公开 Release。Windows 暂无 Authenticode 证书，安装包未签名。
 
-正式版默认 `~/.todocue`，显式 `--home` / `TODOCUE_HOME` 优先；Mac 选择记在 `~/Library/Application Support/TodoCue/launch-home.json`，后续 Finder/Dock 打开复用。debug 和开发脚本默认仍用临时隔离目录。正式版不自动读取旧 Preview 的目录指针。Mac 包含签名通知辅助程序、runtime BUILD.json 和 Skill；与旧 SwiftUI 包使用兼容的 CLI bootstrap，保留数据格式和后台端口。检测到旧 SwiftUI App 正在运行会提示退出。
+正式版默认 `~/.todocue`，显式 `--home` / `TODOCUE_HOME` 优先；Mac 选择记在 `~/Library/Application Support/TodoCue/launch-home.json`，后续 Finder/Dock 打开复用。debug、开发脚本和没有内置运行时的 CI App 默认仍用临时隔离目录；裸 App 不读取或改写正式目录指针。正式版不自动读取旧 Preview 的目录指针。Mac 包含签名通知辅助程序、runtime BUILD.json 和 Skill；与旧 SwiftUI 包使用兼容的 CLI bootstrap，保留数据格式和后台端口。检测到旧 SwiftUI App 正在运行会提示退出。
 
 **当前边界：** 旧 SwiftUI 的 Apple 同步、硬件刘海和全部偏好导入尚未接入；保留旧源码和 v0.5.3 回退。Windows 硬件 GUI、原生鼠标/IME 与逐帧动效仍待验收，见[发布说明](../../release-notes/v0.6.0.md)。以下是迁移期间的开发说明与历史验证记录；其中 Preview 下载和外部后台条件仅适用于旧预览产物。
 

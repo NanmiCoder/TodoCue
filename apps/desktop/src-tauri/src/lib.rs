@@ -646,20 +646,18 @@ fn explicit_home() -> Option<PathBuf> {
 fn home() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
-        let profile = (!cfg!(debug_assertions))
+        let profile = bundled_macos_runtime()
             .then(macos_home::profile_path)
             .flatten();
-        macos_home::resolve_home(
+        macos_home::resolve_launch_home(
             explicit_home(),
             profile.as_deref(),
-            if cfg!(debug_assertions) {
-                std::env::temp_dir().join("todocue-desktop-development")
-            } else {
-                std::env::var_os("HOME")
-                    .map(PathBuf::from)
-                    .expect("User home directory")
-                    .join(".todocue")
-            },
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .expect("User home directory")
+                .join(".todocue"),
+            std::env::temp_dir().join("todocue-desktop-development"),
+            bundled_macos_runtime(),
         )
     }
     #[cfg(not(target_os = "macos"))]
@@ -676,6 +674,19 @@ fn home() -> PathBuf {
         // Preview builds never attach to or create the user's production task database.
         std::env::temp_dir().join("todocue-desktop-development")
     }
+}
+
+#[cfg(target_os = "macos")]
+fn bundled_macos_runtime() -> bool {
+    !cfg!(debug_assertions)
+        && std::env::current_exe()
+            .ok()
+            .and_then(|exe| {
+                exe.parent()?
+                    .parent()
+                    .map(|contents| contents.join("Resources/runtime/bin/node"))
+            })
+            .is_some_and(|node| node.is_file())
 }
 
 pub fn run() {
@@ -776,7 +787,7 @@ pub fn run() {
             platform::check_legacy_client().map_err(std::io::Error::other)?;
             let home = launch_home.clone();
             #[cfg(target_os = "macos")]
-            if !cfg!(debug_assertions) && explicit_home().is_some() {
+            if bundled_macos_runtime() && explicit_home().is_some() {
                 if let Some(profile) = macos_home::profile_path() {
                     if let Err(error) = macos_home::remember(&profile, &home) {
                         eprintln!("Unable to remember Preview data directory: {error}");
