@@ -75,6 +75,7 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      className="icon"
       style={style}
     >
       <path d={paths[name]} />
