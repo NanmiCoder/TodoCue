@@ -9,7 +9,7 @@
 <p align="center">
   <strong>和 Agent 聊到的事，一句话变成待办。</strong><br>
   通过 Skills，让 Agent 用自然语言创建、管理任务与提醒。<br>
-  TodoCue 把它们放在 Mac 手边，随时可见，到时提醒。
+  TodoCue 把它们放在桌面手边，随时可见，到时提醒。
 </p>
 
 <p align="center">
@@ -19,11 +19,11 @@
   <a href="LICENSE">MIT</a>
 </p>
 
-## 在对话里安排，在 Mac 上看见
+## 在对话里安排，在桌面上看见
 
 和 Agent 写代码、讨论方案、推进不同项目时，总会聊到一些「待会儿做」「明天跟进」的事。直接让 Agent 记进 TodoCue，继续手头的对话。任务创建后，就能在原生 macOS 面板里看到；设置了提醒，到时间也会通知你。
 
-**Agent 是 TodoCue 的主要交互入口。** 通过同一份 Skill，在 Claude Code、Codex、Cursor、WorkBuddy 等支持 Skills 且能执行本机命令的 Agent 中，用自然语言完成任务的创建、查询、修改与完成。不同项目、不同 Agent，管理的是这台 Mac 上同一份待办。
+**Agent 是 TodoCue 的主要交互入口。** 通过同一份 Skill，在 Claude Code、Codex、Cursor、WorkBuddy 等支持 Skills 且能执行本机命令的 Agent 中，用自然语言完成任务的创建、查询、修改与完成。不同项目、不同 Agent，管理的是这台电脑上同一份待办。
 
 | 你可以这样说 | TodoCue 帮你记好 |
 | --- | --- |
@@ -55,10 +55,10 @@ Agent 创建的任务会同步出现在面板中。打开后，先看下一步�
 
 - **看得见做过什么。** 完成的事不会消失：从面板菜单或当天的已完成区打开「已完成」，按天回看，也能搜。点一下就能重新打开。
 - **看得更远。** 从面板头部（⌘⇧K）打开日历，做过的、在做的和排到几个月后的任务在同一个平面上。可以在月视图和周视图之间切换，点某一天就展开这天的完整安排。改期直接把任务拖到另一天，时刻保留、截止与提醒不动；也可以直接往正在看的那天添加。超出 30 天预生成范围的重复任务会显示为「待生成」占位，而不是让远期月份看起来空空如也。
-- **带到 iPhone 上。** 在设置里打开「同步到日历」或「同步到提醒事项」，有日期的待办会出现在「TodoCue」日历或提醒事项列表里，经 iCloud 同步到 iPhone。双向同步：在那边改期、改标题或勾选完成，TodoCue 跟着变；删除即删除对应任务。推荐只开提醒事项：iOS 18 / macOS 15 起，带日期的提醒也会显示在日历里。仅在 App 运行时同步，不额外设闹钟。[详细说明](docs/apple-sync.md)
+- **旧 v0.5.3：带到 iPhone 上。** 在设置里打开「同步到日历」或「同步到提醒事项」，有日期的待办会出现在「TodoCue」日历或提醒事项列表里，经 iCloud 同步到 iPhone。双向同步：在那边改期、改标题或勾选完成，TodoCue 跟着变；删除即删除对应任务。推荐只开提醒事项：iOS 18 / macOS 15 起，带日期的提醒也会显示在日历里。仅在 App 运行时同步，不额外设闹钟。[详细说明](docs/apple-sync.md)
 - **中英切换。** 在设置中选择简体中文或 English，立即生效并记住选择；首次启动跟随系统语言，任务内容保持原文。
-- **待在手边。** 原生 SwiftUI + AppKit 浮动面板，支持浅色与深色外观。石墨色块始终保持深色；雾面块跟随系统外观，并模糊背后的桌面。
-- **刘海就是入口。** 在有刘海的 MacBook 上，刘海两侧常显今日剩余数；鼠标停上去就展开今日任务：下一步、逾期与已安排各项，可直接完成、稍后提醒、改期到明天，或回车添加新任务。点一下刘海可固定并直接输入，Esc 收起。合上笔记本或使用外接显示器时，TodoCue 会在菜单栏中间画一个刘海，跟着鼠标出现在你正在用的屏幕上；不需要可以在设置里关掉。
+- **待在手边。** 共享 React/Tauri 浮动面板与原生系统效果，支持浅色与深色外观。石墨色块始终保持深色；雾面块跟随系统外观，并模糊背后的桌面。
+- **刘海就是入口。** 屏幕顶部的虚拟刘海显示今日剩余数；鼠标停上去就展开今日任务：下一步、逾期与已安排各项，可直接完成、稍后提醒、改期到明天，或回车添加新任务。点一下刘海可固定并直接输入，Esc 收起。合上笔记本或使用外接显示器时，TodoCue 会在菜单栏中间画一个刘海，跟着鼠标出现在你正在用的屏幕上；不需要可以在设置里关掉。
 - **顺序随手调。** 拖动任务时，上下条目平滑让位。「全部」可跨项目移动，「即将到来」可跨日期改期；「今日」在同组内调整顺序，支持撤销和恢复自动排序。
 - **安排有后续。** 支持重复任务、提醒、稍后提醒，以及完成后的撤销。关闭面板后，后台服务继续负责提醒。
 - **数据属于你。** 任务保存在 `~/.todocue/todocue.sqlite`。覆盖、删除或重新安装 App 后，这个目录仍然保留。
@@ -90,6 +90,8 @@ App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无�
 
 [校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.5.1/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
+Windows：选择 `Windows-x64-setup.exe` 或 `Windows-arm64-setup.exe`。当前用户安装包包含离线 WebView2 与运行时。Windows 包未签名，请核对 Release 的 `SHA256SUMS`。使用过 Preview 时先退出并卸载 Preview，再安装正式版；任务数据保留。
+
 ## 安装 Skills
 
 先安装并打开一次 TodoCue，再用 [Vercel Skills CLI](https://github.com/vercel-labs/skills) 安装到本机 Agent（需 Node.js / npx），按提示选择 Claude Code、Codex、Cursor 等客户端：
@@ -102,7 +104,7 @@ WorkBuddy 或其他未列出的客户端，可按其自定义 Skills 安装方�
 
 安装后，在 Agent 对话中说：「用 TodoCue 把整理本周进展放到今天，归到工作项目，预计 25 分钟。」之后的查询、改期、提醒和完成，也都可以继续用自然语言操作。
 
-Agent 需要能访问安装 TodoCue 的同一台 Mac，并有执行本机命令的权限。仅在远程或云端加载 Skill，无法直接操作这台 Mac 的任务。App 的快速输入框保存任务标题，日期与提醒可在表单中填写。
+Agent 需要能访问安装 TodoCue 的同一台电脑，并有执行本机命令的权限。仅在远程或云端加载 Skill，无法直接操作这台电脑的任务。App 的快速输入框保存任务标题，日期与提醒可在表单中填写。
 
 MCP 为可选入口，可通过 `todocue mcp` 接入；自建集成见 [Local API 文档](docs/api.md)。
 
@@ -116,35 +118,27 @@ npm ci
 npm run build
 npm test
 swift test --package-path apps/macos
-npm run macos:dmg
+npm run desktop:macos
 ```
 
-DMG 位于 `apps/macos/build/`。本地打包会下载并校验固定版本的官方 Node，安装锁定的生产依赖，并检查内置 Node、SQLite 和 MCP 能否运行。
+共享 DMG 位于 `apps/desktop/build/`；Windows 在对应架构主机运行 `npm run windows:build`。本地打包会下载并校验固定版本的官方 Node，安装锁定的生产依赖，并检查内置 Node、SQLite 和 MCP 能否运行。
 
 | 路径 | 职责 |
 | --- | --- |
-| `apps/macos` | SwiftUI / AppKit 客户端与通知辅助程序 |
-| `apps/desktop`、`packages/client` | Tauri 2 共享前端与便携客户端（迁移预览） |
+| `apps/macos` | 旧 SwiftUI / AppKit 客户端与现用 Mac 通知辅助程序 |
+| `apps/desktop`、`packages/client` | Tauri 2 正式共享前端与便携客户端 |
 | `packages/engine` | 任务规则、重复实例、提醒与 SQLite |
 | `packages/server` | Local API、认证与 SSE 实时同步 |
 | `packages/cli`、`packages/shared` | CLI / MCP 接口与共享契约 |
 | `skills/todocue` | 可分发的 Agent skill |
 
-开发时运行 `npm run dev:serve`；使用 `TODOCUE_HOME` 可隔离开发数据。GitHub Actions 在推送 `vX.Y.Z` 标签后构建双架构安装包，完成签名、公证后发布 Release。
+开发时运行 `npm run dev:serve`；使用 `TODOCUE_HOME` 可隔离开发数据。GitHub Actions 在推送 `vX.Y.Z` 标签后构建 Mac / Windows 四种架构安装包，Mac 完成签名、公证，所有安装检查通过后发布 Release。
 
 [发布指南](docs/github-release.md) · [实现与验收](docs/implementation-plan.md) · [提交 Issue](https://github.com/NanmiCoder/TodoCue/issues)
 
 </details>
 
-跨平台迁移预览已加入源码：`npm run desktop:dev` 可在隔离数据上对照共享界面；preview workflow 构建 Windows x64/ARM64 当前用户安装包与 macOS Apple Silicon/Intel 共享 App ZIP。Windows 实机与完整视觉验收仍待完成，正式 macOS 版继续使用现有原生客户端。见 [预览运行与构建](apps/desktop/README.md)、[实施/验收状态](docs/desktop-migration.md)及 [继续开发交接](docs/desktop-handoff.md)。
-
-此前 UI 对照阶段已回归 macOS 刘海/面板输入、粘贴、回车与保存中继续输入，按原版校准表单、附件、详情和日历；当时 Windows x64/ARM64 构建与七组真实安装包冒烟通过。[实测记录、对照截图与预览下载](docs/qa/desktop-p1-ui/README.md)明确区分这些结果与真实鼠标、候选窗口、Windows GUI 和逐帧等未验证项。
-
-[独立审查修复](docs/qa/desktop-review-fixes/README.md)补齐CLI目录/端口恢复、日历选择、普通回车、提醒和原生焦点。Windows两架构十组安装包回归均通过；实机验收与正式macOS切换仍待完成。
-
-[合并后构建与下载](docs/qa/desktop-builds/README.md)提供四种共享 Preview 和两种 Developer ID 签名、公证的 SwiftUI DMG，相关 CI 全通过。共享 Mac 预览为 ad-hoc 签名并需要外部隔离运行时；这些 CI 产物与正式 Release 分开。
-
-共享 Mac release 预览现在记住显式选定的隔离运行时目录，从 Finder/Dock 重开仍能连接。[修复与原生实测](docs/qa/desktop-macos-runtime/README.md)覆盖直接启动后一直离线的回归；外部运行时正式打包仍待完成。
+共享桌面现为正式构建。开发时使用隔离 `TODOCUE_HOME` 和 `npm run desktop:dev`；正式流水线 `Release desktop (Mac and Windows)` 检查四个安装包后才公开发布。[运行与构建](apps/desktop/README.md)、[实施/验收状态](docs/desktop-migration.md)和[交接](docs/desktop-handoff.md)区分实测与硬件待验收项。历史证据见 [UI 对照](docs/qa/desktop-p1-ui/README.md)、[独立审查修复](docs/qa/desktop-review-fixes/README.md)及[直接启动离线修复](docs/qa/desktop-macos-runtime/README.md)。
 
 ## 许可证
 

@@ -49,8 +49,10 @@ const config = {
     windows: { webviewInstallMode: { type: "offlineInstaller" }, nsis: { installMode: "currentUser", installerHooks: "windows-hooks.nsh", languages: ["English", "SimpChinese"] } } },
 };
 fs.writeFileSync(path.join(native, "target/windows-config.json"), JSON.stringify(config, null, 2));
-await runWindowsBundler(process.execPath, [npm, "run", "tauri", "--workspace", "@todocue/desktop", "--", "build", "--target", target, "--config", "src-tauri/target/windows-config.json"], { cwd: root });
+// Rust caches may contain installers from an older version/product name.
 const output = path.join(native, "target", target, "release", "bundle/nsis");
+fs.rmSync(output, { recursive: true, force: true });
+await runWindowsBundler(process.execPath, [npm, "run", "tauri", "--workspace", "@todocue/desktop", "--", "build", "--target", target, "--config", "src-tauri/target/windows-config.json"], { cwd: root });
 for (const file of fs.readdirSync(output).filter(file => file.endsWith(".exe"))) {
   fs.writeFileSync(path.join(output, `${file}.sha256`), `${createHash("sha256").update(fs.readFileSync(path.join(output, file))).digest("hex")}  ${file}\n`);
 }

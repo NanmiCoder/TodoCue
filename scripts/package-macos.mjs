@@ -50,6 +50,8 @@ if (desktop) {
   });
   fs.rmSync(path.join(out, 'TodoCue.app'), { recursive: true, force: true });
   copy(path.join(root, 'apps/desktop/src-tauri/target/release/bundle/macos/TodoCue.app'), path.join(out, 'TodoCue.app'));
+  // Keep the existing Dial app icon at its original macOS resolutions.
+  copy(path.join(root, 'apps/macos/build/AppIcon.icns'), path.join(out, 'TodoCue.app/Contents/Resources/TodoCue.icns'));
 }
 const app = path.join(out, 'TodoCue.app');
 const resources = path.join(app, 'Contents/Resources');
