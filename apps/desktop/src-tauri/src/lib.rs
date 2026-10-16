@@ -984,14 +984,22 @@ fn bundled_macos_runtime() -> bool {
             .is_some_and(|node| node.is_file())
 }
 
-/// The original app's only main menu: Edit, so ⌘X ⌘C ⌘V ⌘A reach text fields. Undo is left out on
-/// purpose: ⌘Z belongs to the undo toast.
+/// The main menu: an app menu whose Quit carries ⌘Q (the accessory app has no Dock icon to quit
+/// from), and Edit so ⌘X ⌘C ⌘V ⌘A reach text fields. Undo is left out on purpose: ⌘Z belongs to
+/// the undo toast.
 #[cfg(target_os = "macos")]
 fn install_edit_menu(app: &tauri::App, language: &str) -> tauri::Result<()> {
     use tauri::menu::{Menu, PredefinedMenuItem, Submenu};
+    let en = language == "en";
+    let application = Submenu::with_items(
+        app,
+        "TodoCue",
+        true,
+        &[&PredefinedMenuItem::quit(app, Some(if en { "Quit TodoCue" } else { "退出 TodoCue" }))?],
+    )?;
     let edit = Submenu::with_items(
         app,
-        if language == "en" { "Edit" } else { "编辑" },
+        if en { "Edit" } else { "编辑" },
         true,
         &[
             &PredefinedMenuItem::cut(app, None)?,
@@ -1001,8 +1009,14 @@ fn install_edit_menu(app: &tauri::App, language: &str) -> tauri::Result<()> {
             &PredefinedMenuItem::select_all(app, None)?,
         ],
     )?;
-    app.set_menu(Menu::with_items(app, &[&edit])?)?;
+    app.set_menu(Menu::with_items(app, &[&application, &edit])?)?;
     Ok(())
+}
+
+/// The panel's own "Quit TodoCue" entry. The background runtime keeps delivering reminders.
+#[tauri::command]
+fn app_quit(app: tauri::AppHandle) {
+    app.exit(0);
 }
 
 const TRAY_ID: &str = "main";
@@ -1254,6 +1268,7 @@ pub fn run() {
             panel_new_task,
             panel_visible,
             tray_update,
+            app_quit,
             export_json,
             open_data_dir,
             save_file

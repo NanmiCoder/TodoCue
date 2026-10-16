@@ -36,7 +36,8 @@ export type ShortcutIntent =
   | { kind: "newTask" }
   | { kind: "focusSearch" }
   | { kind: "refresh" }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "quit" };
 
 export interface ShortcutResult {
   intent: ShortcutIntent;
@@ -78,6 +79,7 @@ export function shortcutFor(
   if (key === "n") return { intent: { kind: "newTask" }, preventDefault: true };
   if (key === "f") return { intent: { kind: "focusSearch" }, preventDefault: true };
   if (key === "r") return { intent: { kind: "refresh" }, preventDefault: true };
+  if (key === "q" && !event.shiftKey) return { intent: { kind: "quit" }, preventDefault: true };
   if (event.key === ",") return { intent: { kind: "settings" }, preventDefault: true };
   if (event.key === "[") return { intent: { kind: "back" }, preventDefault: true };
   return null;

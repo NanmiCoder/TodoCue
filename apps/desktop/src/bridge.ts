@@ -272,6 +272,10 @@ export interface TrayState {
   nextTitle: string | null;
   nextId: string | null;
 }
+/** Quit the desktop app. The background runtime keeps running, so reminders are still delivered. */
+export async function quitApp() {
+  if (native) await invoke("app_quit");
+}
 /** Push what the menu-bar / tray entry shows; the host rebuilds its menu from this. */
 export async function updateTray(state: TrayState) {
   if (native) await invoke("tray_update", { state });
