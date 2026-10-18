@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use crate::notch_geometry::{covers_screen, fullscreen_top_inset, Frame};
+use crate::notch_geometry::{covers_screen, fullscreen_top_inset, is_fullscreen_window, Frame};
 use tauri::WebviewWindow;
 
 #[cfg(target_os = "macos")]
@@ -330,7 +330,9 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
 /// (NotchController.shouldAutoExpand). Window bounds from CGWindowList and the monitor frame are
 /// both top-left-origin points. The monitor frame is the whole screen, menu bar and camera area
 /// included; a fullscreen window may start below the camera's safe area, whose height (not the work
-/// area's gap, which is 0 once the menu bar hides) is the room allowed at the top.
+/// area's gap, which is the menu bar's with or without fullscreen) is the room allowed at the top.
+/// A window that starts there is only fullscreen if the active Space is one (`mac_spaces`): a zoomed
+/// window has the same bounds.
 #[cfg(target_os = "macos")]
 pub fn fullscreen(window: &WebviewWindow) -> bool {
     let Ok(Some(monitor)) = window.current_monitor() else {
@@ -348,11 +350,83 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
         return false;
     }
     let inset = fullscreen_top_inset(safe_area_top(window));
-    windows.into_iter().any(|frame| covers_screen(frame, screen, inset))
+    // A zoomed window under the menu bar has the same bounds as a native fullscreen one on a camera
+    // screen; only the Space the person is in tells them apart.
+    let fullscreen_space = mac_spaces::active_space_is_fullscreen();
+    windows
+        .into_iter()
+        .any(|frame| is_fullscreen_window(frame, screen, inset, fullscreen_space))
 }
 #[cfg(not(any(windows, target_os = "macos")))]
 pub fn fullscreen(_window: &WebviewWindow) -> bool {
     false
+}
+
+/// Whether the Space the person is looking at is a native fullscreen one. WindowServer has no public
+/// call for this (`NSApplication.currentSystemPresentationOptions` only reflects this process), so
+/// the long-standing CGS functions are looked up at run time: if a future macOS drops one, the
+/// answer is `None` and the app still starts.
+#[cfg(target_os = "macos")]
+mod mac_spaces {
+    use std::ffi::{c_char, c_void};
+    use std::sync::OnceLock;
+
+    extern "C" {
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+    const RTLD_DEFAULT: *mut c_void = -2_isize as *mut c_void;
+    /// `kCGSSpaceFullscreen`; a regular desktop Space is 0.
+    const FULLSCREEN_SPACE: i32 = 4;
+
+    type MainConnection = unsafe extern "C" fn() -> u32;
+    type ActiveSpace = unsafe extern "C" fn(u32) -> u64;
+    type SpaceType = unsafe extern "C" fn(u32, u64) -> i32;
+
+    struct Api {
+        connection: MainConnection,
+        active_space: ActiveSpace,
+        space_type: SpaceType,
+    }
+
+    fn api() -> Option<&'static Api> {
+        static API: OnceLock<Option<Api>> = OnceLock::new();
+        API.get_or_init(|| unsafe {
+            let find = |name: &'static std::ffi::CStr| {
+                let symbol = dlsym(RTLD_DEFAULT, name.as_ptr());
+                (!symbol.is_null()).then_some(symbol)
+            };
+            Some(Api {
+                connection: std::mem::transmute::<*mut c_void, MainConnection>(find(
+                    c"CGSMainConnectionID",
+                )?),
+                active_space: std::mem::transmute::<*mut c_void, ActiveSpace>(find(
+                    c"CGSGetActiveSpace",
+                )?),
+                space_type: std::mem::transmute::<*mut c_void, SpaceType>(find(
+                    c"CGSSpaceGetType",
+                )?),
+            })
+        })
+        .as_ref()
+    }
+
+    pub fn active_space_is_fullscreen() -> Option<bool> {
+        let api = api()?;
+        unsafe {
+            let connection = (api.connection)();
+            let space = (api.active_space)(connection);
+            Some((api.space_type)(connection, space) == FULLSCREEN_SPACE)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn the_space_type_can_be_read_on_this_macos() {
+            // The value depends on where the person is looking; resolving the symbols must not.
+            assert!(super::active_space_is_fullscreen().is_some());
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]

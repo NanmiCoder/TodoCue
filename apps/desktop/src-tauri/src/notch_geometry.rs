@@ -32,23 +32,47 @@ pub struct Frame {
     pub height: f64,
 }
 
+/// How far a window edge may be from the screen edge and still count as touching it.
+const EDGE_TOLERANCE: f64 = 2.0;
+
 /// Whether `window` is a fullscreen window of `screen` (NotchLayout.coversScreen). It must span the
 /// screen's width and reach its bottom edge; its top may sit up to `top_inset` below the screen top,
 /// because fullscreen windows can start below the camera or menu-bar safe area. Tolerance is 2.
 pub fn covers_screen(window: Frame, screen: Frame, top_inset: f64) -> bool {
-    let tolerance = 2.0;
     let top_gap = window.y - screen.y;
-    (window.x - screen.x).abs() <= tolerance
-        && (window.width - screen.width).abs() <= tolerance
-        && (window.y + window.height - (screen.y + screen.height)).abs() <= tolerance
-        && top_gap >= -tolerance
-        && top_gap <= top_inset.max(0.0) + tolerance
+    (window.x - screen.x).abs() <= EDGE_TOLERANCE
+        && (window.width - screen.width).abs() <= EDGE_TOLERANCE
+        && (window.y + window.height - (screen.y + screen.height)).abs() <= EDGE_TOLERANCE
+        && top_gap >= -EDGE_TOLERANCE
+        && top_gap <= top_inset.max(0.0) + EDGE_TOLERANCE
+}
+
+/// Whether a front-application `window` puts the notch's `screen` into fullscreen, which silences
+/// the notch. Geometry alone cannot tell a native fullscreen window from a zoomed one on a screen
+/// with a camera housing: both span the screen and start at the menu bar's bottom edge (measured on
+/// a 1728 x 1117 screen with a 32-point safe area: both are X 0, Y 33, 1728 x 1084). So a window
+/// that starts below the top edge only counts when the system says the active Space is a fullscreen
+/// one (`fullscreen_space`, `None` when it cannot be read: keep treating the window as fullscreen).
+/// A window flush with the top edge leaves no room for a menu bar, so it is fullscreen regardless.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn is_fullscreen_window(
+    window: Frame,
+    screen: Frame,
+    top_inset: f64,
+    fullscreen_space: Option<bool>,
+) -> bool {
+    if !covers_screen(window, screen, top_inset) {
+        return false;
+    }
+    let flush_with_top = window.y - screen.y <= EDGE_TOLERANCE;
+    flush_with_top || fullscreen_space != Some(false)
 }
 
 /// How far below the top of its screen a fullscreen window may start: the camera housing's safe
-/// area (0 on a screen without one). It must not come from the work area: with the menu bar hidden
-/// in fullscreen the work area reaches the top of the screen while the window still starts below
-/// the camera, and a zoomed (not fullscreen) window starts below the menu bar.
+/// area (0 on a screen without one). It must not come from the work area: `NSScreen.visibleFrame`
+/// keeps leaving out the menu bar both in native fullscreen and for a merely zoomed window
+/// (measured: 33 points either way), so it cannot tell them apart. Neither can this inset: see
+/// `is_fullscreen_window`.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn fullscreen_top_inset(safe_area_top: f64) -> f64 {
     if safe_area_top.is_finite() && safe_area_top > 0.0 {
@@ -129,19 +153,49 @@ mod tests {
         assert!(!covers_screen(frame(0.0, 0.0, 1920.0, 1080.0), screen, 0.0));
     }
     #[test]
-    fn a_camera_screen_in_fullscreen_is_covered_although_the_work_area_gap_is_zero() {
+    fn a_camera_screen_window_below_the_camera_area_needs_the_safe_area_as_inset() {
         let screen = frame(0.0, 0.0, 1728.0, 1117.0);
-        // Fullscreen on a notched screen: the menu bar is hidden, so the work area starts at the
-        // very top (gap 0), while the window starts under the 32-point camera area.
+        // A fullscreen window on a notched screen starts under the 32-point camera area, so the
+        // zero inset of a screen without a camera would reject it.
         let window = frame(0.0, 32.0, 1728.0, 1085.0);
-        let work_area_gap = 0.0;
-        assert!(!covers_screen(window, screen, work_area_gap), "the work area cannot decide this");
+        let no_camera_inset = 0.0;
+        assert!(!covers_screen(window, screen, no_camera_inset), "the camera area must be allowed for");
         assert!(covers_screen(window, screen, fullscreen_top_inset(32.0)));
         // A zoomed window under a visible menu bar is not fullscreen on a screen without a camera.
         let zoomed = frame(0.0, 24.0, 1728.0, 1093.0);
         assert!(!covers_screen(zoomed, screen, fullscreen_top_inset(0.0)));
         assert_eq!(fullscreen_top_inset(f64::NAN), 0.0);
         assert_eq!(fullscreen_top_inset(-4.0), 0.0);
+    }
+    #[test]
+    fn a_zoomed_window_under_the_menu_bar_does_not_silence_the_notch_on_a_camera_screen() {
+        // Measured on the built-in screen: a zoomed window (double-click on the title bar) and a
+        // native fullscreen window have the same bounds, only the active Space's type differs.
+        let screen = frame(0.0, 0.0, 1728.0, 1117.0);
+        let below_menu_bar = frame(0.0, 33.0, 1728.0, 1084.0);
+        let inset = fullscreen_top_inset(32.0);
+        assert!(covers_screen(below_menu_bar, screen, inset), "geometry alone cannot tell them apart");
+        assert!(!is_fullscreen_window(below_menu_bar, screen, inset, Some(false)));
+        assert!(is_fullscreen_window(below_menu_bar, screen, inset, Some(true)));
+        // The Space cannot be read: keep the earlier behaviour (quiet) rather than guess.
+        assert!(is_fullscreen_window(below_menu_bar, screen, inset, None));
+    }
+    #[test]
+    fn a_window_flush_with_the_top_is_fullscreen_whatever_the_space_says() {
+        let screen = frame(0.0, 0.0, 1920.0, 1080.0);
+        let flush = frame(0.0, 0.0, 1920.0, 1080.0);
+        assert!(is_fullscreen_window(flush, screen, 0.0, Some(false)));
+        assert!(is_fullscreen_window(flush, screen, 0.0, Some(true)));
+        assert!(is_fullscreen_window(flush, screen, 0.0, None));
+    }
+    #[test]
+    fn a_window_that_does_not_cover_the_screen_is_never_fullscreen() {
+        let screen = frame(0.0, 0.0, 1728.0, 1117.0);
+        let moved_down = frame(0.0, 60.0, 1728.0, 1057.0);
+        let inset = fullscreen_top_inset(32.0);
+        for space in [Some(true), Some(false), None] {
+            assert!(!is_fullscreen_window(moved_down, screen, inset, space));
+        }
     }
 
     // Main screen: 1512 x 982 points at 2x. An external 1920 x 1080 screen at 1x to its right.
