@@ -1,6 +1,6 @@
 {
   "name": "@todocue/desktop",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
-    "@todocue/client": "0.6.1",
-    "@todocue/shared": "0.6.1",
+    "@todocue/client": "0.6.2",
+    "@todocue/shared": "0.6.2",
     "luxon": "^3.7.2",
     "motion": "^12.34.0",
     "react": "^19.2.0",
