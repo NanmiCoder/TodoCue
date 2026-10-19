@@ -1,5 +1,6 @@
 import { keepsNativeMenu } from "./menuModel.js";
 
+const SELECTABLE = "[data-selectable]";
 const EDITABLE = "input, textarea, [contenteditable=''], [contenteditable='true']";
 
 /**
@@ -13,7 +14,11 @@ export function installContextMenuGuard(development = import.meta.env.DEV) {
     const target = event.target instanceof Element ? event.target : null;
     if (keepsNativeMenu({
       editable: !!target?.closest(EDITABLE),
-      hasSelection: !!window.getSelection()?.toString(),
+      // WebKit selects the word under the pointer on a right-click, so a bare selection says
+      // nothing; only text inside a region marked `data-selectable` (details) is worth Copy.
+      // (Computed `user-select` can't tell: WKWebView has no unprefixed property and reports
+      // plain text as "text" too.)
+      hasSelection: !!window.getSelection()?.toString() && !!target?.closest(SELECTABLE),
       development,
     })) return;
     event.preventDefault();

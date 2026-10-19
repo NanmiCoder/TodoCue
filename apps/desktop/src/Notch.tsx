@@ -63,7 +63,7 @@ import { TaskMetadata } from "./metadata.js";
 import { rescheduleUndo } from "./dates.js";
 import { taskCommands } from "./taskCommands.js";
 import { taskMenuItems, type TaskMenuCommands } from "./taskMenu.js";
-import { useContextMenu, type MenuAnchor } from "./ContextMenu.js";
+import { menuTriggers, useContextMenu, type MenuAnchor } from "./ContextMenu.js";
 import type { UndoAction } from "./toast.js";
 import { translate } from "./i18n.js";
 import { useRuntime } from "./useRuntime.js";
@@ -1045,7 +1045,7 @@ export function Notch() {
                     </section>
                   )}
                   {next && (
-                    <section className="notch-next">
+                    <section className="notch-next" {...menuTriggers((anchor) => void openTaskMenu(next, anchor))}>
                       <div className="next-heading">
                         <span className="eyebrow">NEXT</span>
                         <span>{t("next")}</span>

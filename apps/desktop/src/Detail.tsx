@@ -138,7 +138,7 @@ export function Detail({
   return (
     <section className="tile frost detail-page">
       <div className="detail-scroll">
-        <div className="detail-title">
+        <div className="detail-title" data-selectable>
           <span
             className={`detail-status ${overdue ? "overdue" : task.status === "done" ? "accent" : "muted"}`}
           >
@@ -200,7 +200,7 @@ export function Detail({
           {fields
             .filter((field) => field.value)
             .map((field) => (
-              <div className="detail-field" key={field.label}>
+              <div className="detail-field" data-selectable key={field.label}>
                 <Icon name={field.icon} size={14} />
                 <span>{field.label}</span>
                 <span>{field.value}</span>

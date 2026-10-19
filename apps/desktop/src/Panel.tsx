@@ -37,7 +37,7 @@ import { EmptyState, emptyCopy, NotFoundPage, OfflineBanner } from "./states.js"
 import { SettingsPage } from "./SettingsPage.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
-import { useContextMenu, type MenuAnchor } from "./ContextMenu.js";
+import { menuTriggers, useContextMenu, type MenuAnchor } from "./ContextMenu.js";
 import { deleteConfirmText, delegateCommands, taskMenuItems, type TaskMenuCommands } from "./taskMenu.js";
 import { taskCommands } from "./taskCommands.js";
 import { Detail } from "./Detail.js";
@@ -1149,6 +1149,7 @@ export function Panel() {
                       <motion.section
                         key="next-card"
                         className="tile frost next-card"
+                        {...menuTriggers((anchor) => openTaskMenu(next, anchor))}
                         style={{ x: nextReveal.x, originY: 0 }}
                         initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
                         animate={{ opacity: 1, scale: 1 }}
