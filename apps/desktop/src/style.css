@@ -505,6 +505,11 @@ body[data-surface="notch"] {
 }
 .notch-wing {
   width: 44px;
+  height: 100%;
+  max-width: 44px;
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2852,98 +2857,6 @@ body[data-native="true"][data-surface="notch"] .notch {
   font-size: 10px;
   color: var(--muted);
 }
-.settings-page {
-  gap: 12px;
-}
-.settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 0 0;
-  border-top: 1px solid #80808026;
-}
-.settings-group h3 {
-  font-size: 12px;
-  font-weight: 600;
-}
-.settings-hint {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-.settings-state {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
-}
-.settings-state span {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-.settings-state.state-granted strong {
-  color: var(--orange);
-}
-.settings-state.state-denied strong {
-  color: #ff938e;
-}
-.settings-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.settings-actions .pill {
-  margin-top: 0;
-}
-.settings-message {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-.settings-path {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-  padding: 7px 8px;
-  border-radius: 8px;
-  background: #80808017;
-  user-select: text;
-}
-.settings-diagnostics summary {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-}
-.settings-diagnostics dl {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 10px;
-  font-size: 11px;
-  margin: 8px 0;
-}
-.settings-diagnostics dt {
-  color: var(--muted);
-}
-.settings-diagnostics dd {
-  overflow-wrap: anywhere;
-  user-select: text;
-}
-.settings-check {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-.settings-check.warn {
-  color: #f9c77b;
-}
-.settings-version {
-  text-align: center;
-  font-size: 11px;
-  color: var(--muted);
-  padding: 4px 0;
-}
 /* notch parity */
 .notch-content { position: relative; }
 .notch-wing { position: relative; }
@@ -3188,3 +3101,16 @@ body[data-surface="panel"][data-panel-phase="hiding"]:not([data-platform="macos"
 
 /* The browser preview's stand-in window is as tall as the notch asked for. */
 body[data-native="false"][data-surface="notch"] .notch { height: 100%; }
+
+.notch-left .notch-housing, .notch-right .notch-housing { width: 0; }
+
+/* The compact top band only needs 22 points on each side of the camera. */
+.notch-top .notch-wing { max-width: 22px; }
+.notch-top .notch-wing-left { justify-content: flex-end; padding-right: 2px; }
+.notch-top .notch-count { justify-content: flex-start; padding-left: 2px; }
+.notch-top .notch-wing svg { width: 14px; height: 14px; flex-shrink: 0; }
+.notch-top .notch-wing .numeral,
+.notch-overflow-count { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.notch-overflow-count { font-size: 10px; }
+.notch-top .notch-badge { width: 18px; height: 18px; }
+.notch-top .notch-badge .numeral { font-size: 10px; }

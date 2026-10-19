@@ -1,26 +1,55 @@
-#[derive(Clone, Copy)]
-pub struct Rect {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
+/// Reserve the visible menu bar or the native menu/camera safe inset even when the menu auto-hides.
+pub fn safe_work_area(screen_y: f64, work: Frame, safe_top: f64, scale: f64) -> Frame {
+    let y = work.y.max(screen_y + safe_top * scale);
+    Frame { y, height: (work.y + work.height - y).max(0.0), ..work }
 }
-pub struct Layout {
-    pub x: i32,
-    pub y: i32,
-    pub band_height: f64,
+
+/// On a camera screen the band wraps the housing at the screen's top edge. Its center is an
+/// empty spacer; only the two wings contain controls. Never offset the whole band below it.
+pub fn camera_work_area(screen: Frame, work: Frame, camera_height: f64) -> Frame {
+    if !camera_height.is_finite() || camera_height <= 0.0 { return work; }
+    // A left/right Dock changes visibleFrame, but never moves the camera's screen center.
+    Frame { x: screen.x, y: screen.y, width: screen.width, height: (work.y + work.height - screen.y).max(0.0) }
 }
-pub fn layout(screen: Rect, work: Rect, width: u32, scale: f64, macos: bool) -> Layout {
-    let area = if macos { screen } else { work };
-    let inset = (work.y - screen.y).max(0) as f64 / scale;
-    Layout {
-        x: area.x + (area.width as i64 - width as i64) as i32 / 2,
-        y: area.y,
-        band_height: if macos && inset.is_finite() && inset >= 18.0 {
-            inset
-        } else {
-            24.0
-        },
+
+pub const DEFAULT_NOTCH_WIDTH: f64 = 273.0;
+
+pub fn compact_width(camera_width: f64, placement: &crate::notch_display::Placement) -> f64 {
+    use crate::notch_display::Placement;
+    match placement {
+        Placement::Top => (housing_width(camera_width, placement) + 44.0).min(DEFAULT_NOTCH_WIDTH),
+        _ => 88.0,
     }
+}
+
+/// Cap the total width at the original default even on scaled displays. A spacer may
+/// consume the entire collapsed band; controls must never spill into the physical housing.
+pub fn housing_width(camera_width: f64, placement: &crate::notch_display::Placement) -> f64 {
+    if *placement != crate::notch_display::Placement::Top { return 0.0; }
+    if camera_width.is_finite() && camera_width > 0.0 { camera_width.min(DEFAULT_NOTCH_WIDTH) }
+    else { 185.0 }
+}
+
+pub fn band_height(camera_height: f64, placement: &crate::notch_display::Placement) -> f64 {
+    if *placement == crate::notch_display::Placement::Top && camera_height.is_finite() && camera_height > 0.0 {
+        camera_height
+    } else { 32.0 }
+}
+
+/// All inputs are physical pixels on the target display. Keep the entire expanded shell in the
+/// usable area. Side tabs keep their top anchored while growing, unless the bottom would escape.
+pub fn dock_layout(work: Frame, width: f64, height: f64, placement: &crate::notch_display::Placement) -> (i32, i32) {
+    use crate::notch_display::Placement;
+    let x = match placement {
+        Placement::Top => work.x + (work.width - width) / 2.0,
+        Placement::Left => work.x,
+        Placement::Right => work.x + work.width - width,
+    };
+    let y = match placement {
+        Placement::Top => work.y,
+        _ => (work.y + work.height * 0.35).min(work.y + work.height - height),
+    };
+    (x.max(work.x).round() as i32, y.max(work.y).round() as i32)
 }
 
 /// An axis-aligned rectangle with a top-left origin and a size, in one consistent unit.
@@ -47,7 +76,7 @@ pub fn covers_screen(window: Frame, screen: Frame, top_inset: f64) -> bool {
         && top_gap <= top_inset.max(0.0) + EDGE_TOLERANCE
 }
 
-/// Whether a front-application `window` puts the notch's `screen` into fullscreen, which silences
+/// Whether a visible application `window` puts the notch's `screen` into fullscreen, which silences
 /// the notch. Geometry alone cannot tell a native fullscreen window from a zoomed one on a screen
 /// with a camera housing: both span the screen and start at the menu bar's bottom edge (measured on
 /// a 1728 x 1117 screen with a 32-point safe area: both are X 0, Y 33, 1728 x 1084). So a window
@@ -251,73 +280,73 @@ mod tests {
         assert!(!contains(area, 9.9, 30.0));
     }
     #[test]
-    fn mac_virtual_notch_occupies_the_menu_bar_at_the_screen_top() {
-        let result = layout(
-            Rect {
-                x: 0,
-                y: 0,
-                width: 3024,
-            },
-            Rect {
-                x: 0,
-                y: 60,
-                width: 3024,
-            },
-            546,
-            2.0,
-            true,
-        );
-        assert_eq!((result.x, result.y, result.band_height), (1239, 0, 30.0));
-        let hidden = layout(
-            Rect {
-                x: -1920,
-                y: -1080,
-                width: 1920,
-            },
-            Rect {
-                x: -1920,
-                y: -1080,
-                width: 1920,
-            },
-            273,
-            1.0,
-            true,
-        );
-        assert_eq!((hidden.y, hidden.band_height), (-1080, 24.0));
+    fn menu_and_camera_are_reserved_even_with_an_auto_hidden_menu() {
+        let screen = frame(0.0, 0.0, 3456.0, 2234.0);
+        assert_eq!(safe_work_area(0.0, screen, 32.0, 2.0).y, 64.0);
+        let work = frame(0.0, 66.0, 3456.0, 2168.0);
+        assert_eq!(safe_work_area(0.0, work, 32.0, 2.0), work);
+        assert_eq!(safe_work_area(-1080.0, frame(-1920.0, -1080.0, 1920.0, 1080.0), 24.0, 1.0).y, -1056.0);
+        // A Windows taskbar stays reserved without inventing a macOS menu inset.
+        let work = frame(60.0, 0.0, 1860.0, 1040.0);
+        assert_eq!(safe_work_area(0.0, work, 0.0, 1.0), work);
     }
     #[test]
-    fn windows_uses_the_work_area_with_top_and_side_taskbars() {
-        let top = layout(
-            Rect {
-                x: -1920,
-                y: 0,
-                width: 1920,
-            },
-            Rect {
-                x: -1920,
-                y: 48,
-                width: 1920,
-            },
-            273,
-            1.0,
-            false,
-        );
-        assert_eq!((top.x, top.y, top.band_height), (-1097, 48, 24.0));
-        let side = layout(
-            Rect {
-                x: 0,
-                y: 0,
-                width: 1920,
-            },
-            Rect {
-                x: 60,
-                y: 0,
-                width: 1860,
-            },
-            546,
-            2.0,
-            false,
-        );
-        assert_eq!((side.x, side.y, side.band_height), (717, 0, 24.0));
+    fn the_compact_camera_band_stays_at_the_screen_top() {
+        use crate::notch_display::Placement::Top;
+        let work = frame(0.0, 66.0, 3456.0, 2168.0);
+        let screen = frame(0.0, 0.0, 3456.0, 2234.0);
+        let area = camera_work_area(screen, work, 32.0);
+        assert_eq!(area.y, 0.0);
+        assert_eq!(area.y + area.height, work.y + work.height);
+        assert_eq!(dock_layout(area, compact_width(185.0, &Top) * 2.0, 64.0, &Top), (1499, 0));
+        // Global coordinates above the main display, even with an auto-hidden menu bar.
+        let above = frame(-1920.0, -1080.0, 1920.0, 1080.0);
+        assert_eq!(camera_work_area(above, above, 32.0).y, -1080.0);
+        // Side Dock must not move the band away from the camera's center.
+        let side_dock = frame(160.0, 66.0, 3296.0, 2168.0);
+        assert_eq!(camera_work_area(screen, side_dock, 32.0), area);
+        // Screens with no physical housing continue to reserve the menu/taskbar.
+        assert_eq!(camera_work_area(screen, work, 0.0), work);
+        assert_eq!(camera_work_area(screen, work, f64::NAN), work);
+    }
+    #[test]
+    fn compact_wings_use_half_the_space_and_never_exceed_the_original_width() {
+        use crate::notch_display::Placement::*;
+        assert_eq!(compact_width(185.0, &Top), 229.0);
+        assert_eq!(compact_width(210.0, &Top), 254.0);
+        assert_eq!(compact_width(250.0, &Top), 273.0);
+        assert_eq!(compact_width(300.0, &Top), 273.0);
+        assert_eq!(housing_width(185.0, &Top), 185.0);
+        assert_eq!((compact_width(185.0, &Top) - housing_width(185.0, &Top)) / 2.0, 22.0);
+        assert_eq!(housing_width(210.0, &Top), 210.0);
+        assert_eq!(housing_width(300.0, &Top), 273.0);
+        assert_eq!(housing_width(0.0, &Top), 185.0);
+        assert_eq!(housing_width(f64::NAN, &Top), 185.0);
+        for side in [Left, Right] {
+            assert_eq!(compact_width(185.0, &side), 88.0);
+            assert_eq!(housing_width(185.0, &side), 0.0);
+        }
+    }
+    #[test]
+    fn the_band_matches_camera_height_without_dropping_below_it() {
+        use crate::notch_display::Placement::*;
+        assert_eq!(band_height(32.0, &Top), 32.0);
+        assert_eq!(band_height(28.0, &Top), 28.0);
+        assert_eq!(band_height(40.0, &Top), 40.0);
+        assert_eq!(band_height(0.0, &Top), 32.0);
+        assert_eq!(band_height(f64::NAN, &Top), 32.0);
+        assert_eq!(band_height(40.0, &Left), 32.0);
+    }
+    #[test]
+    fn placement_keeps_the_menu_bar_and_taskbar_free() {
+        use crate::notch_display::Placement::*;
+        let work = frame(-1920.0, 28.0, 1920.0, 1012.0);
+        assert_eq!(dock_layout(work, 128.0, 32.0, &Top), (-1024, 28));
+        assert_eq!(dock_layout(work, 88.0, 32.0, &Left), (-1920, 382));
+        assert_eq!(dock_layout(work, 560.0, 560.0, &Right), (-560, 382));
+        let small = frame(60.0, -1000.0, 900.0, 600.0);
+        assert_eq!(dock_layout(small, 560.0, 560.0, &Right), (400, -960));
+        // 2x Retina coordinates, including negative origins.
+        assert_eq!(dock_layout(frame(-3840.0, 64.0, 3840.0, 2000.0), 256.0, 64.0, &Top), (-2048, 64));
     }
 }

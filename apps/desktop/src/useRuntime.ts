@@ -14,7 +14,7 @@ export function useRuntime(onEvent?: (event: RuntimeEvent) => void) {
   const [revision, setRevision] = useState(0);
   const callback = useRef(onEvent);
   callback.current = onEvent;
-  const refresh = useRef<() => Promise<void>>(async () => {});
+  const refresh = useRef<() => Promise<string | null>>(async () => "Runtime is not ready");
   useEffect(() => {
     let stopped = false,
       online = false,
@@ -22,7 +22,7 @@ export function useRuntime(onEvent?: (event: RuntimeEvent) => void) {
       generation: string | undefined;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let dispose: (() => void) | undefined;
-    let pending: Promise<void> | undefined,
+    let pending: Promise<string | null> | undefined,
       dirty = false;
     refresh.current = () => {
       dirty = true;
@@ -43,11 +43,13 @@ export function useRuntime(onEvent?: (event: RuntimeEvent) => void) {
             }
           } while (dirty && !stopped);
         } catch (error) {
-          if (!stopped)
-            setError(error instanceof Error ? error.message : String(error));
+          const message = error instanceof Error ? error.message : String(error);
+          if (!stopped) setError(message);
+          return message;
         } finally {
           pending = undefined;
         }
+        return null;
       })();
       return pending;
     };
@@ -102,6 +104,11 @@ export function useRuntime(onEvent?: (event: RuntimeEvent) => void) {
     connection,
     revision,
     error,
-    refresh: () => refresh.current(),
+    // Automatic refreshes report errors through state; explicit reconnection must also reject.
+    refresh: async () => { await refresh.current(); },
+    reconnect: async () => {
+      const error = await refresh.current();
+      if (error !== null) throw new Error(error);
+    },
   };
 }

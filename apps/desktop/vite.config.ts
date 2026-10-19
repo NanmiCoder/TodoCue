@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -98,7 +99,7 @@ export function runtimeProxy(): Plugin {
   };
 }
 export default defineConfig({
-  plugins: [react(), runtimeProxy()],
+  plugins: [react(), tailwindcss(), runtimeProxy()],
   clearScreen: false,
   server: { port: 5173, strictPort: true, host: "127.0.0.1" },
   build: {
