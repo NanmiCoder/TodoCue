@@ -93,6 +93,7 @@ export function Panel() {
     error: runtimeError,
     revision: eventRevision,
     refresh,
+    reconnect,
   } = useRuntime();
   const [settings, setSettings] = useState<DesktopSettings>(defaults);
   const [view, setView] = useState<"today" | "upcoming" | "all">("today");
@@ -715,7 +716,7 @@ export function Panel() {
     <main className="panel-shell"
       onPointerDownCapture={(event) => {
         if (native && platform === "windows" &&
-          (event.target as Element).closest("input, textarea, button, select, summary, [contenteditable=true]"))
+          (event.target as Element).closest("input, textarea, button, select, summary, [role=slider], [contenteditable=true]"))
           void focusPanel().catch(error => setError(String(error)));
         if (event.target instanceof Element && !event.target.closest(".quick-row")) quickFocusRevision.current++;
       }}
@@ -828,7 +829,7 @@ export function Panel() {
           </button>
         </div>
       )}
-      <motion.header className="tile graphite panel-header" data-route={route} style={headerReveal}>
+      <motion.header className={`tile ${route === "settings" ? "" : "graphite"} panel-header`} data-route={route} style={headerReveal}>
         <div className="brand">
           {route === "list" ? (
             <Mark />
@@ -842,7 +843,7 @@ export function Panel() {
               <Icon name="back" />
             </button>
           )}
-          <span>TodoCue</span>
+          <span>{route === "settings" ? t("settings") : "TodoCue"}</span>
           <div
             className="drag-zone"
             onPointerDown={(event) => {
@@ -1755,7 +1756,7 @@ export function Panel() {
                 setSettings={setSettings}
                 online={connection.online}
                 onError={setError}
-                onReconnect={refresh}
+                onReconnect={reconnect}
               />
             )}
           </RouteSurface>

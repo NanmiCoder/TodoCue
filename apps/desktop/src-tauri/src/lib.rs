@@ -3,6 +3,7 @@ mod macos_home;
 mod export;
 mod host_tray;
 mod notch_geometry;
+mod notch_display;
 #[cfg(any(target_os = "macos", test))]
 mod panel_geometry;
 mod panel_fade;
@@ -35,6 +36,8 @@ struct Settings {
     width: f64,
     height: f64,
     notch_enabled: bool,
+    notch_display: Option<notch_display::Selection>,
+    notch_placement: notch_display::Placement,
     quiet_fullscreen: bool,
     shortcut: Option<String>,
     autostart: bool,
@@ -46,6 +49,8 @@ impl Default for Settings {
             width: 340.0,
             height: 680.0,
             notch_enabled: true,
+            notch_display: None,
+            notch_placement: notch_display::Placement::Top,
             quiet_fullscreen: true,
             shortcut: None,
             autostart: false,
@@ -103,10 +108,12 @@ fn release_turn(shared: &Mutex<NotchState>) {
     stored.keyboard = false;
     stored.expanded = false;
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct NotchMetrics {
     band_height: f64,
+    compact_width: f64,
+    housing_width: f64,
 }
 #[derive(Clone, Serialize, PartialEq, Debug)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
@@ -316,7 +323,8 @@ fn settings_save(
         fit_panel(&panel, &settings, false)?;
     }
     if let Some(notch) = app.get_webview_window("notch") {
-        if settings.notch_enabled {
+        let _ = position_notch(&notch);
+        if settings.notch_enabled && !(settings.quiet_fullscreen && platform::fullscreen(&notch)) {
             notch.show().map_err(|e| e.to_string())?;
         } else {
             notch.hide().map_err(|e| e.to_string())?;
@@ -765,7 +773,7 @@ async fn notch_present(
     if !state.width.is_finite() || !state.height.is_finite() {
         return Err("Invalid notch size".into());
     }
-    state.width = state.width.clamp(185.0, 560.0);
+    state.width = state.width.clamp(88.0, 560.0);
     state.height = state.height.clamp(
         if cfg!(target_os = "macos") {
             18.0
@@ -888,43 +896,65 @@ fn shell_progress(seconds: f64) -> f64 {
         * ((frequency * residual * seconds).cos()
             + damping / residual * (frequency * residual * seconds).sin())
 }
+fn target_display(window: &WebviewWindow) -> Result<Option<notch_display::Display>, String> {
+    let displays = notch_display::list(window)?;
+    let settings = window.state::<Desktop>().settings.lock().unwrap().clone();
+    let current = window.current_monitor().map_err(|e| e.to_string())?;
+    let current_index = displays.iter().position(|d| current.as_ref().is_some_and(|m| m.position() == d.monitor.position()));
+    let ids = displays.iter().map(|d| d.id.as_str()).collect::<Vec<_>>();
+    let index = notch_display::selected_index(&ids, settings.notch_display.as_ref().map(|d| d.id.as_str()),
+        current_index, displays.iter().position(|d| d.primary));
+    Ok(index.map(|i| displays[i].clone()))
+}
+
+fn position_notch_on(window: &WebviewWindow, display: &notch_display::Display) -> Result<(), String> {
+    let monitor = &display.monitor;
+    let scale = monitor.scale_factor();
+    let settings = window.state::<Desktop>().settings.lock().unwrap().clone();
+    // Read logical size on the source screen, then convert using the destination scale.
+    let size = window.outer_size().map_err(|e| e.to_string())?
+        .to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
+    let work = monitor.work_area();
+    let area = notch_geometry::safe_work_area(monitor.position().y as f64, notch_geometry::Frame {
+        x: work.position.x as f64, y: work.position.y as f64,
+        width: work.size.width as f64, height: work.size.height as f64,
+    }, display.safe_top, scale);
+    let area = if settings.notch_placement == notch_display::Placement::Top {
+        notch_geometry::camera_work_area(notch_geometry::Frame {
+            x: monitor.position().x as f64, y: monitor.position().y as f64,
+            width: monitor.size().width as f64, height: monitor.size().height as f64,
+        }, area, display.camera_height)
+    } else { area };
+    let (x, y) = notch_geometry::dock_layout(area, size.width * scale, size.height * scale, &settings.notch_placement);
+    // Tao converts physical positions with the *source* window scale on macOS. Use global
+    // points explicitly when crossing displays, or a 1x/2x pair lands on the wrong screen.
+    #[cfg(target_os = "macos")]
+    let position = tauri::Position::Logical(tauri::LogicalPosition::new(x as f64 / scale, y as f64 / scale));
+    #[cfg(not(target_os = "macos"))]
+    let position = tauri::Position::Physical(tauri::PhysicalPosition::new(x, y));
+    window.set_position(position).map_err(|e| e.to_string())
+}
+
 fn position_notch(window: &WebviewWindow) -> Result<(), String> {
-    if let Some(monitor) = window.current_monitor().map_err(|e| e.to_string())? {
-        let size = window.outer_size().map_err(|e| e.to_string())?;
-        let layout = notch_layout(&monitor, size.width);
-        window
-            .set_position(tauri::PhysicalPosition::new(layout.x, layout.y))
-            .map_err(|e| e.to_string())?;
+    if let Some(display) = target_display(window)? {
+        position_notch_on(window, &display)?;
     }
     Ok(())
 }
-fn notch_layout(monitor: &tauri::Monitor, width: u32) -> notch_geometry::Layout {
-    let position = monitor.position();
-    let work = monitor.work_area();
-    notch_geometry::layout(
-        notch_geometry::Rect {
-            x: position.x,
-            y: position.y,
-            width: monitor.size().width,
-        },
-        notch_geometry::Rect {
-            x: work.position.x,
-            y: work.position.y,
-            width: work.size.width,
-        },
-        width,
-        monitor.scale_factor(),
-        cfg!(target_os = "macos"),
-    )
+
+#[tauri::command]
+fn notch_displays(window: WebviewWindow) -> Result<Vec<notch_display::Display>, String> {
+    notch_display::list(&window)
 }
+
 #[tauri::command]
 fn notch_metrics(window: WebviewWindow) -> Result<NotchMetrics, String> {
-    let monitor = window
-        .current_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or("Notch monitor unavailable")?;
+    let (camera_width, camera_height) = target_display(&window)?.map_or((0.0, 0.0), |display| (display.camera_width, display.camera_height));
+    let placement = window.state::<Desktop>().settings.lock().unwrap().notch_placement.clone();
     Ok(NotchMetrics {
-        band_height: notch_layout(&monitor, 0).band_height,
+        band_height: notch_geometry::band_height(camera_height, &placement),
+        compact_width: notch_geometry::compact_width(camera_width, &placement),
+        housing_width: notch_geometry::housing_width(camera_width, &placement),
     })
 }
 fn explicit_home() -> Option<PathBuf> {
@@ -1264,6 +1294,7 @@ pub fn run() {
             notch_present,
             notch_available,
             notch_metrics,
+            notch_displays,
             route_ready,
             panel_new_task,
             panel_visible,
@@ -1375,7 +1406,7 @@ pub fn run() {
                 WebviewUrl::App("index.html?surface=notch".into()),
             )
             .title("TodoCue Notch")
-            .inner_size(273.0, 24.0)
+            .inner_size(notch_geometry::DEFAULT_NOTCH_WIDTH, 32.0)
             .decorations(false)
             .transparent(true)
             .always_on_top(true)
@@ -1387,12 +1418,10 @@ pub fn run() {
             .visible(false)
             .build()?;
             platform::notch_level(&notch).map_err(std::io::Error::other)?;
-            let band_height = notch_metrics(notch.clone())
-                .map_err(std::io::Error::other)?
-                .band_height;
-            notch.set_size(tauri::LogicalSize::new(273.0, band_height))?;
+            let metrics = notch_metrics(notch.clone()).map_err(std::io::Error::other)?;
+            notch.set_size(tauri::LogicalSize::new(metrics.compact_width, metrics.band_height))?;
             position_notch(&notch).map_err(std::io::Error::other)?;
-            platform::configure(&notch, false, 273.0, band_height)
+            platform::configure(&notch, false, metrics.compact_width, metrics.band_height)
                 .map_err(std::io::Error::other)?;
             if settings.notch_enabled {
                 notch.show()?;
@@ -1405,6 +1434,7 @@ pub fn run() {
                 let mut other_since: Option<Instant> = None;
                 let mut layout = String::new();
                 let mut band_height = 0.0;
+                let mut last_metrics = None;
                 // The host reports whether the pointer is on the notch, as a fallback for a
                 // WebView that gets no mouse events while the app is inactive. Switch it off with
                 // TODOCUE_NOTCH_POINTER=0; the renderer then relies on DOM hover alone.
@@ -1422,30 +1452,20 @@ pub fn run() {
                     let state = desktop.notch.lock().unwrap().clone();
                     let settings = desktop.settings.lock().unwrap().clone();
                     if let Ok(metrics) = notch_metrics(window.clone()) {
-                        if band_height != metrics.band_height {
+                        if last_metrics.as_ref() != Some(&metrics) {
                             band_height = metrics.band_height;
+                            last_metrics = Some(metrics.clone());
                             let _ = handle.emit_to("notch", "notch:metrics", metrics);
-                        }
-                    }
-                    // Fullscreen detection reads the window list: twice a second is plenty.
-                    if tick % 5 == 1 {
-                        fullscreen_now = settings.quiet_fullscreen && platform::fullscreen(&window);
-                    }
-                    let should_show = settings.notch_enabled && !fullscreen_now;
-                    if window.is_visible().ok() != Some(should_show) {
-                        if should_show {
-                            let _ = window.show();
-                        } else {
-                            let _ = window.hide();
                         }
                     }
                     let Ok(monitors) = window.available_monitors() else {
                         continue;
                     };
-                    let current_layout = format!("{:?}", monitors);
-                    if current_layout != layout {
-                        layout = current_layout;
-                        let width = state.width.max(273.0);
+                    let current_layout = format!("{:?}:{:?}:{:?}", monitors, settings.notch_display, settings.notch_placement);
+                    let layout_changed = current_layout != layout;
+                    if layout_changed {
+                        let width = if state.expanded || state.stack { state.width.max(128.0) }
+                            else { last_metrics.as_ref().map_or(notch_geometry::DEFAULT_NOTCH_WIDTH, |metrics| metrics.compact_width) };
                         let height = if state.expanded || state.stack {
                             state.height.max(band_height)
                         } else {
@@ -1453,23 +1473,35 @@ pub fn run() {
                         };
                         let _ = window.set_size(tauri::LogicalSize::new(width, height));
                         let _ = platform::configure(&window, state.keyboard, width, height);
-                        let _ = position_notch(&window);
+                        if position_notch(&window).is_ok() { layout = current_layout; }
                         if let Some(panel) = handle.get_webview_window("panel") {
                             if panel.is_visible().unwrap_or(false) {
                                 let _ = fit_panel(&panel, &settings, false);
                             }
                         }
                     }
-                    // Panel layout must recover even when the optional notch is hidden.
-                    if !should_show {
-                        pointer_inside = None;
-                        continue;
+                    // Fullscreen detection reads the window list: twice a second is plenty.
+                    if tick % 5 == 1 || layout_changed {
+                        fullscreen_now = settings.quiet_fullscreen && platform::fullscreen(&window);
                     }
+                    let should_show = settings.notch_enabled && !fullscreen_now;
+                    if window.is_visible().ok() != Some(should_show) {
+                        if should_show {
+                            let _ = window.show();
+                        } else {
+                            release_turn(&desktop.notch);
+                            let _ = window.set_focusable(false);
+                            let _ = window.hide();
+                        }
+                    }
+                    // Panel layout must recover even when the optional notch is hidden.
+                    if !should_show { pointer_inside = None; }
+                    if !settings.notch_enabled { continue; }
                     if tick % 5 == 3 {
                         platform::follow_virtual_desktop(&window);
                     }
                     let cursor_scale = pointer_scale(&window);
-                    if report_pointer {
+                    if report_pointer && should_show {
                         if let (Ok(cursor), Ok(origin), Ok(size), Ok(window_scale)) = (
                             window.cursor_position(),
                             window.outer_position(),
@@ -1490,7 +1522,7 @@ pub fn run() {
                             }
                         }
                     }
-                    if state.expanded {
+                    if (state.expanded && should_show) || settings.notch_display.is_some() {
                         other_since = None;
                         continue;
                     }
@@ -1517,11 +1549,14 @@ pub fn run() {
                             continue;
                         }
                         other_since = None;
-                        let width =
-                            (state.width.max(273.0) * monitor.scale_factor()).round() as i32;
-                        let layout = notch_layout(monitor, width as u32);
-                        let _ =
-                            window.set_position(tauri::PhysicalPosition::new(layout.x, layout.y));
+                        if let Ok(displays) = notch_display::list(&window) {
+                            if let Some(display) = displays.iter().find(|d| d.monitor.position() == monitor.position()) {
+                                let _ = position_notch_on(&window, display);
+                                // The new display may be in fullscreen; do not reuse the previous screen's result.
+                                fullscreen_now = settings.quiet_fullscreen && platform::fullscreen(&window);
+                                if fullscreen_now { let _ = window.hide(); }
+                            }
+                        }
                     }
                 }
             });
@@ -1754,6 +1789,22 @@ mod tests {
         ] {
             assert_eq!(serde_json::to_string(&target).unwrap(), expected);
         }
+    }
+    #[test]
+    fn old_settings_migrate_to_a_safe_top_notch_and_follow_mode() {
+        let settings: Settings = serde_json::from_str(r#"{"notchEnabled":true,"language":"en"}"#).unwrap();
+        assert_eq!(settings.notch_placement, notch_display::Placement::Top);
+        assert!(settings.notch_display.is_none());
+        assert!(serde_json::from_str::<Settings>(r#"{"notchPlacement":"invalid"}"#).is_err());
+    }
+    #[test]
+    fn pinned_display_and_side_placement_round_trip() {
+        let mut settings = Settings::default();
+        settings.notch_placement = notch_display::Placement::Right;
+        settings.notch_display = Some(notch_display::Selection { id: "mac:stable-uuid".into(), name: "Studio Display".into() });
+        let restored: Settings = serde_json::from_slice(&serde_json::to_vec(&settings).unwrap()).unwrap();
+        assert_eq!(restored.notch_display, settings.notch_display);
+        assert_eq!(restored.notch_placement, settings.notch_placement);
     }
     #[test]
     fn settings_reject_nan_and_clamp_sizes() {

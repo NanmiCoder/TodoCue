@@ -19,6 +19,8 @@ export interface DesktopSettings {
   width: number;
   height: number;
   notchEnabled: boolean;
+  notchDisplay: { id: string; name: string } | null;
+  notchPlacement: "top" | "left" | "right";
   quietFullscreen: boolean;
   shortcut: string | null;
   autostart: boolean;
@@ -27,9 +29,20 @@ export const native = isTauri();
 import { platform, type Platform } from "./platform.js";
 /** The one place the host OS is read from the WebView lives in platform.ts. */
 export { platform, type Platform };
-export interface NotchMetrics { bandHeight: number }
+export interface NotchMetrics { bandHeight: number; compactWidth: number; housingWidth: number }
 export async function loadNotchMetrics(): Promise<NotchMetrics> {
-  return native ? invoke<NotchMetrics>("notch_metrics") : { bandHeight: 24 };
+  return native ? invoke<NotchMetrics>("notch_metrics") : { bandHeight: 32, compactWidth: 229, housingWidth: 185 };
+}
+export interface NotchDisplay {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  primary: boolean;
+  hasNotch: boolean;
+}
+export async function loadNotchDisplays(): Promise<NotchDisplay[]> {
+  return native ? invoke<NotchDisplay[]>("notch_displays") : [];
 }
 const initialLanguage = navigator.language.startsWith("zh") ? "zh-CN" : "en";
 export const defaults: DesktopSettings = {
@@ -37,6 +50,8 @@ export const defaults: DesktopSettings = {
   width: 340,
   height: 680,
   notchEnabled: true,
+  notchDisplay: null,
+  notchPlacement: "top",
   quietFullscreen: true,
   shortcut: null,
   autostart: false,

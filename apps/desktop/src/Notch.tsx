@@ -73,6 +73,12 @@ import { isCompositionKey, QuickAddRequest } from "./quickAdd.js";
 /** What the notch says about itself, with zh/en picked once. */
 const pick = (language: string) => (zh: string, en: string) => (language === "en" ? en : zh);
 
+function NotchCount({ value }: { value: number }) {
+  return value > 99
+    ? <span className="notch-overflow-count"><span aria-hidden="true">99+</span><span className="sr-only">{value}</span></span>
+    : <Numeral value={value} />;
+}
+
 export function Notch() {
   const stack = useRef(new CueStack());
   const [cues, setCues] = useState<Cue[]>([]);
@@ -117,7 +123,9 @@ export function Notch() {
   const [announcement, setAnnouncement] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [settings, setSettings] = useState<DesktopSettings>(defaults);
-  const [bandHeight, setBandHeight] = useState(24);
+  const [bandHeight, setBandHeight] = useState(32);
+  const [compactWidth, setCompactWidth] = useState(229);
+  const [housingWidth, setHousingWidth] = useState(185);
   const inFlight = useRef(new Set<string>());
   const content = useRef<HTMLDivElement>(null);
   const hovering = useRef(false),
@@ -306,6 +314,8 @@ export function Notch() {
     let stop: (() => void) | undefined;
     const update = (metrics: NotchMetrics) => {
       if (!ended && Number.isFinite(metrics.bandHeight)) setBandHeight(metrics.bandHeight);
+      if (!ended && Number.isFinite(metrics.compactWidth)) setCompactWidth(metrics.compactWidth);
+      if (!ended && Number.isFinite(metrics.housingWidth)) setHousingWidth(metrics.housingWidth);
     };
     void (async () => {
       if (native) {
@@ -561,7 +571,7 @@ export function Notch() {
     // Keyboard input must work while the shell is growing, before it reaches full size.
     if (expanded && pendingFocus.current) quickInput.current?.focus();
     const resize = () => {
-      const width = expanded ? 560 : stackShown ? 460 : 273;
+      const width = expanded ? 560 : stackShown ? 460 : settings.notchPlacement === "top" ? compactWidth : 88;
       // An open context menu is part of the window: it grows to hold it, then shrinks back.
       const height = expanded
         ? menuWindowHeight({
@@ -595,7 +605,7 @@ export function Notch() {
     const observer = new ResizeObserver(resize);
     observer.observe(node);
     return () => { active = false; observer.disconnect(); };
-  }, [expanded, pinned, stackShown, featured, cues, settings, bandHeight, focusTick, toast, deferredCount, contextMenu.extent]);
+  }, [expanded, pinned, stackShown, featured, cues, settings, bandHeight, compactWidth, focusTick, toast, deferredCount, contextMenu.extent]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !isCompositionKey(event)) {
@@ -829,10 +839,12 @@ export function Notch() {
     : n("未安排", "Unscheduled");
   return (
     <motion.main
-      className={`notch ${expanded || stackShown ? "notch-open" : ""}`}
+      className={`notch notch-${settings.notchPlacement} ${expanded || stackShown ? "notch-open" : ""}`}
       animate={{
-        borderBottomLeftRadius: expanded || stackShown ? 24 : 10,
-        borderBottomRightRadius: expanded || stackShown ? 24 : 10,
+        borderTopLeftRadius: settings.notchPlacement === "right" ? (expanded || stackShown ? 24 : 12) : 0,
+        borderTopRightRadius: settings.notchPlacement === "left" ? (expanded || stackShown ? 24 : 12) : 0,
+        borderBottomLeftRadius: settings.notchPlacement === "left" ? 0 : expanded || stackShown ? 24 : 12,
+        borderBottomRightRadius: settings.notchPlacement === "right" ? 0 : expanded || stackShown ? 24 : 12,
       }}
       transition={reduced ? { duration: 0.12 } : motionTokens.expand}
       onMouseEnter={() => {
@@ -846,7 +858,7 @@ export function Notch() {
     >
       <div
         ref={content}
-        style={{ width: expanded ? 560 : stackShown ? 460 : 273 }}
+        style={{ width: expanded ? 560 : stackShown ? 460 : settings.notchPlacement === "top" ? compactWidth : 88 }}
       >
         <button
           className="notch-band"
@@ -870,20 +882,20 @@ export function Notch() {
                     transition={{ duration: 0.9, ease: "easeOut" }}
                   />
                 )}
-                <Numeral value={cues.length} />
+                <NotchCount value={cues.length} />
               </span>
             ) : (
               <Mark />
             )}
           </span>
-          <span className="notch-housing" style={{ height: bandHeight }} />
+          <span className="notch-housing" aria-hidden="true" style={{ height: bandHeight, width: settings.notchPlacement === "top" ? housingWidth : 0 }} />
           <span className="notch-wing notch-count">
             {!online ? (
               <svg className="notch-offline" viewBox="0 0 24 24" aria-label={t("offline")}>
                 <path d="M3 9a14 14 0 0 1 18 0M6 13a9 9 0 0 1 12 0M9.500 17a4 4 0 0 1 5 0M4 4l16 16" />
               </svg>
             ) : runtime.board ? (
-              <Numeral value={remaining} />
+              <NotchCount value={remaining} />
             ) : (
               "—"
             )}

@@ -213,23 +213,26 @@ pub fn configure(
         }
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style as isize);
         let radius = if window.label() == "notch" {
-            if height <= 24.0 {
-                10.0
+            if height <= 32.0 {
+                12.0
             } else {
                 24.0
             }
         } else {
             42.0
         };
-        let top = if window.label() == "notch" {
+        use tauri::Manager;
+        let placement = window.state::<crate::Desktop>().settings.lock().unwrap().notch_placement.clone();
+        let notch = window.label() == "notch";
+        let top = if notch && placement == crate::notch_display::Placement::Top {
             -(radius * scale).round() as i32
-        } else {
-            0
-        };
+        } else { 0 };
+        let left = if notch && placement == crate::notch_display::Placement::Left { -(radius * scale).round() as i32 } else { 0 };
+        let right = if notch && placement == crate::notch_display::Placement::Right { (radius * scale).round() as i32 } else { 0 };
         let region = CreateRoundRectRgn(
-            0,
+            left,
             top,
-            (width * scale).ceil() as i32 + 1,
+            (width * scale).ceil() as i32 + 1 + right,
             (height * scale).ceil() as i32 + 1,
             (radius * 2.0 * scale) as i32,
             (radius * 2.0 * scale) as i32,
@@ -262,29 +265,35 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
         UI::WindowsAndMessaging::*,
     };
     unsafe {
-        let foreground = GetForegroundWindow();
-        if foreground.0.is_null() {
-            return false;
+        use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
+        let Ok(own) = window.hwnd() else { return false; };
+        let target = MonitorFromWindow(windows::Win32::Foundation::HWND(own.0), MONITOR_DEFAULTTONEAREST);
+        let mut target_info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        if !GetMonitorInfoW(target, &mut target_info).as_bool() { return false; }
+        let center_x = (target_info.rcMonitor.left + target_info.rcMonitor.right) / 2;
+        let center_y = (target_info.rcMonitor.top + target_info.rcMonitor.bottom) / 2;
+        let mut cursor = GetTopWindow(None).ok();
+        let mut candidate = None;
+        for _ in 0..512 {
+            let Some(hwnd) = cursor else { break; };
+            cursor = GetWindow(hwnd, GW_HWNDNEXT).ok();
+            let mut pid = 0;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pid == std::process::id() || !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() { continue; }
+            let mut cloaked: u32 = 0;
+            let _ = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &mut cloaked as *mut _ as *mut _, std::mem::size_of::<u32>() as u32);
+            if cloaked != 0 || MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) != target { continue; }
+            let mut class = [0_u16; 128];
+            let count = GetClassNameW(hwnd, &mut class);
+            let class = String::from_utf16_lossy(&class[..count.max(0) as usize]);
+            if ["Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"].contains(&class.as_str()) { continue; }
+            let mut rect = RECT::default();
+            if GetWindowRect(hwnd, &mut rect).is_ok() && center_x >= rect.left && center_x < rect.right && center_y >= rect.top && center_y < rect.bottom {
+                candidate = Some(hwnd);
+                break;
+            }
         }
-        if window
-            .hwnd()
-            .map(|hwnd| hwnd.0 == foreground.0)
-            .unwrap_or(false)
-        {
-            return false;
-        }
-        if window
-            .hwnd()
-            .map(|hwnd| {
-                MonitorFromWindow(
-                    windows::Win32::Foundation::HWND(hwnd.0),
-                    MONITOR_DEFAULTTONEAREST,
-                ) != MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST)
-            })
-            .unwrap_or(true)
-        {
-            return false;
-        }
+        let Some(foreground) = candidate else { return false; };
         // A maximized decorated window and the desktop are not immersive fullscreen.
         if GetWindowLongPtrW(foreground, GWL_STYLE) as u32 & WS_CAPTION.0 != 0 {
             return false;
@@ -326,7 +335,7 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
     }
 }
 
-/// macOS: the frontmost application owns an on-screen window covering the notch's screen
+/// macOS: inspect the notch screen even when the foreground application is on another display.
 /// (NotchController.shouldAutoExpand). Window bounds from CGWindowList and the monitor frame are
 /// both top-left-origin points. The monitor frame is the whole screen, menu bar and camera area
 /// included; a fullscreen window may start below the camera's safe area, whose height (not the work
@@ -345,17 +354,16 @@ pub fn fullscreen(window: &WebviewWindow) -> bool {
         width: monitor.size().width as f64 / scale,
         height: monitor.size().height as f64 / scale,
     };
-    let windows = mac_windows::front_application_windows();
-    if windows.is_empty() {
-        return false;
-    }
+    let details = display_details(window).unwrap_or_default();
+    let display = details.iter().find(|d| (d.x - screen.x).abs() < 1.0 && (d.y - screen.y).abs() < 1.0);
+    let fullscreen_space = display.and_then(|d| mac_spaces::display_space_is_fullscreen(&d.id));
+    if fullscreen_space == Some(true) { return true; }
     let inset = fullscreen_top_inset(safe_area_top(window));
-    // A zoomed window under the menu bar has the same bounds as a native fullscreen one on a camera
-    // screen; only the Space the person is in tells them apart.
-    let fullscreen_space = mac_spaces::active_space_is_fullscreen();
-    windows
-        .into_iter()
-        .any(|frame| is_fullscreen_window(frame, screen, inset, fullscreen_space))
+    // CGWindowList is front-to-back. Do not mistake a covered fullscreen-size background window
+    // for the content the user sees. Native fullscreen remains quiet even with a dialog above it.
+    mac_windows::visible_application_windows().into_iter()
+        .find(|frame| crate::notch_geometry::contains(*frame, screen.x + screen.width / 2.0, screen.y + screen.height / 2.0))
+        .is_some_and(|frame| is_fullscreen_window(frame, screen, inset, fullscreen_space))
 }
 #[cfg(not(any(windows, target_os = "macos")))]
 pub fn fullscreen(_window: &WebviewWindow) -> bool {
@@ -380,11 +388,14 @@ mod mac_spaces {
 
     type MainConnection = unsafe extern "C" fn() -> u32;
     type ActiveSpace = unsafe extern "C" fn(u32) -> u64;
+    type DisplaySpace = unsafe extern "C" fn(u32, *const objc2_foundation::NSString) -> u64;
     type SpaceType = unsafe extern "C" fn(u32, u64) -> i32;
 
     struct Api {
         connection: MainConnection,
+        #[allow(dead_code)]
         active_space: ActiveSpace,
+        display_space: Option<DisplaySpace>,
         space_type: SpaceType,
     }
 
@@ -402,6 +413,7 @@ mod mac_spaces {
                 active_space: std::mem::transmute::<*mut c_void, ActiveSpace>(find(
                     c"CGSGetActiveSpace",
                 )?),
+                display_space: find(c"CGSManagedDisplayGetCurrentSpace").map(|symbol| std::mem::transmute::<*mut c_void, DisplaySpace>(symbol)),
                 space_type: std::mem::transmute::<*mut c_void, SpaceType>(find(
                     c"CGSSpaceGetType",
                 )?),
@@ -410,12 +422,27 @@ mod mac_spaces {
         .as_ref()
     }
 
+    #[cfg(test)]
     pub fn active_space_is_fullscreen() -> Option<bool> {
         let api = api()?;
         unsafe {
             let connection = (api.connection)();
             let space = (api.active_space)(connection);
             Some((api.space_type)(connection, space) == FULLSCREEN_SPACE)
+        }
+    }
+
+    pub fn display_space_is_fullscreen(id: &str) -> Option<bool> {
+        let raw = id.strip_prefix("mac:")?;
+        if raw.len() != 32 || !raw.bytes().all(|b| b.is_ascii_hexdigit()) { return None; }
+        let uuid = format!("{}-{}-{}-{}-{}", &raw[..8], &raw[8..12], &raw[12..16], &raw[16..20], &raw[20..]).to_uppercase();
+        let api = api()?;
+        let display_space = api.display_space?;
+        let name = objc2_foundation::NSString::from_str(&uuid);
+        unsafe {
+            let connection = (api.connection)();
+            let space = display_space(connection, &*name);
+            (space != 0).then(|| (api.space_type)(connection, space) == FULLSCREEN_SPACE)
         }
     }
 
@@ -435,7 +462,7 @@ mod mac_windows {
     use objc2::{
         msg_send,
         rc::autoreleasepool,
-        runtime::{AnyClass, AnyObject},
+        runtime::AnyObject,
     };
     use objc2_foundation::NSString;
     use std::ffi::c_void;
@@ -461,24 +488,9 @@ mod mac_windows {
         }
     }
 
-    /// Frames of every on-screen window owned by the frontmost application, unless that is us.
-    pub fn front_application_windows() -> Vec<Frame> {
+    /// Visible normal application windows, front-to-back, excluding TodoCue and desktop elements.
+    pub fn visible_application_windows() -> Vec<Frame> {
         autoreleasepool(|_| unsafe {
-            let Some(class) = AnyClass::get(c"NSWorkspace") else {
-                return Vec::new();
-            };
-            let workspace: *mut AnyObject = msg_send![class, sharedWorkspace];
-            if workspace.is_null() {
-                return Vec::new();
-            }
-            let application: *mut AnyObject = msg_send![workspace, frontmostApplication];
-            if application.is_null() {
-                return Vec::new();
-            }
-            let pid: i32 = msg_send![application, processIdentifier];
-            if pid == std::process::id() as i32 {
-                return Vec::new();
-            }
             let list = CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | EXCLUDE_DESKTOP_ELEMENTS, 0);
             if list.is_null() {
                 return Vec::new();
@@ -488,7 +500,10 @@ mod mac_windows {
             let mut frames = Vec::new();
             for index in 0..count {
                 let entry: *mut AnyObject = msg_send![array, objectAtIndex: index];
-                if entry.is_null() || number(entry, "kCGWindowOwnerPID") != Some(pid as f64) {
+                if entry.is_null()
+                    || number(entry, "kCGWindowOwnerPID") == Some(std::process::id() as f64)
+                    || number(entry, "kCGWindowLayer") != Some(0.0)
+                    || number(entry, "kCGWindowAlpha") == Some(0.0) {
                     continue;
                 }
                 let key = NSString::from_str("kCGWindowBounds");
@@ -529,6 +544,9 @@ fn on_main_thread<T: Send + 'static>(
     window: &WebviewWindow,
     read: impl FnOnce(&WebviewWindow) -> T + Send + 'static,
 ) -> Option<T> {
+    if objc2::MainThreadMarker::new().is_some() {
+        return Some(read(window));
+    }
     let (sender, receiver) = std::sync::mpsc::channel();
     let target = window.clone();
     window
@@ -733,4 +751,62 @@ pub fn glass(window: &WebviewWindow) -> Result<(), String> {
 #[cfg(not(any(target_os = "macos", windows)))]
 pub fn glass(_window: &WebviewWindow) -> Result<(), String> {
     Ok(())
+}
+
+/// Native identity is independent of resolution, scale, arrangement and localized display name.
+#[cfg(target_os = "macos")]
+pub struct DisplayDetails {
+    pub id: String,
+    pub name: String,
+    pub x: f64,
+    pub y: f64,
+    pub safe_top: f64,
+    pub has_notch: bool,
+    pub camera_height: f64,
+    pub camera_width: f64,
+}
+
+#[cfg(target_os = "macos")]
+pub fn display_details(window: &WebviewWindow) -> Result<Vec<DisplayDetails>, String> {
+    on_main_thread(window, |_| {
+        use objc2::{msg_send, MainThreadMarker};
+        use objc2_app_kit::{NSScreen, NSStatusBar};
+        use objc2_foundation::{NSRect, NSString};
+        use std::ffi::c_void;
+        #[repr(C)]
+        struct UuidBytes { bytes: [u8; 16] }
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGDisplayBounds(display: u32) -> NSRect;
+            fn CGDisplayCreateUUIDFromDisplayID(display: u32) -> *const c_void;
+        }
+        #[link(name = "CoreFoundation", kind = "framework")]
+        extern "C" {
+            fn CFUUIDGetUUIDBytes(uuid: *const c_void) -> UuidBytes;
+            fn CFRelease(value: *const c_void);
+        }
+        let marker = MainThreadMarker::new().expect("Display enumeration on main thread");
+        let menu_height = NSStatusBar::systemStatusBar().thickness();
+        NSScreen::screens(marker).iter().filter_map(|screen| unsafe {
+            let number = screen.deviceDescription().objectForKey(&NSString::from_str("NSScreenNumber"))?;
+            let display_id: u32 = msg_send![&*number, unsignedIntValue];
+            let uuid = CGDisplayCreateUUIDFromDisplayID(display_id);
+            if uuid.is_null() { return None; }
+            let id = CFUUIDGetUUIDBytes(uuid).bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+            CFRelease(uuid);
+            let bounds = CGDisplayBounds(display_id);
+            let safe = screen.safeAreaInsets().top;
+            let left = screen.auxiliaryTopLeftArea();
+            let right = screen.auxiliaryTopRightArea();
+            let camera_width = if safe > 0.0 && left.size.width > 0.0 && right.size.width > 0.0 {
+                (right.origin.x - left.origin.x - left.size.width).max(0.0)
+            } else { 0.0 };
+            Some(DisplayDetails {
+                id: format!("mac:{id}"), name: screen.localizedName().to_string(),
+                x: bounds.origin.x, y: bounds.origin.y,
+                safe_top: safe.max(menu_height), has_notch: safe > 0.0,
+                camera_height: safe, camera_width,
+            })
+        }).collect()
+    }).ok_or_else(|| "Could not read connected displays".into())
 }

@@ -53,6 +53,14 @@ macOS release 配置的 Preview 首次通过 `--home` 或 `TODOCUE_HOME` 选择�
 - 设置页“打开数据文件夹”调用 `open_data_dir`，宿主只打开自己运行所用的数据目录，不接受前端传入路径。附件“另存为”调用 `save_file`：宿主用 token 直接向运行时取附件并弹系统保存对话框（`tauri-plugin-dialog`），字节不经过 IPC；未保存草稿里的附件没有运行时 id，走浏览器下载。
 - 导出 JSON 由宿主写入系统下载目录并在 Finder / 资源管理器中定位，文件名固定为 `todocue-export-YYYY-MM-DD.json`。
 
+### 刘海位置与显示器（issue #26）
+
+设置 → 刘海提供可交互的屏幕预览和顶部 / 左侧 / 右侧分段选择，以及“跟随鼠标所在屏幕”或指定显示器。顶部收起宽度为摄像头留白加两侧各 22 点，上限为原默认 273 点（本机 185 + 44 = 229 点），侧边为 88 × 32 点；快览和提醒保留现有展开尺寸。带刘海的 Mac 直接贴住屏幕顶边，高度跟随摄像头区域，中间按实际摄像头宽度留空，图标与任务数分列两侧；侧边 Dock 不改变摄像头的水平中心。其他屏幕以工作区和菜单栏高度定位，即使菜单栏自动隐藏也保留菜单空间。侧边在工作区内向内展开，避开 Dock / 任务栏。
+
+宿主 `notch_displays` 返回 `{ id, name, width, height, primary, hasNotch }[]`（宽高为逻辑点）。设置新增 `notchDisplay: { id, name } | null`（null 跟随鼠标）、`notchPlacement: "top" | "left" | "right"`。旧设置自动补默认值，设置页每两秒重读连接列表。固定屏断开后临时回退主屏，保存的目标不清空；重连后恢复。macOS ID 使用 CGDisplay UUID，不依赖名称、分辨率和排列；Windows 使用系统显示设备名称，换接口后可能需重选。
+
+macOS 跨屏定位显式使用全局逻辑坐标，避免源屏 / 目标屏缩放比例不同导致偏移。全屏静默按刘海所在屏判断；macOS 查询该屏当前 Space，非原生全屏和 Windows 检查该屏最前方可见应用窗口。旧 SwiftUI 客户端未修改。实测及待验收项见 [issue #26 验证记录](../../docs/qa/notch-display/README.md)。
+
 ## Windows 构建
 
 在对应架构的 Windows 主机上运行。安装 MSVC C++ 构建工具、Windows SDK 和 Rust；ARM64 需要对应的 C++ ARM64 工具链。
@@ -98,3 +106,11 @@ swift test --package-path apps/macos
 真实鼠标外部点击、候选窗口、透明命中、Windows GUI/通知点击/多屏/DPI/休眠、全原生视觉/逐帧验收，以及 EventKit、全部偏好迁移仍待完成。共享 Mac 正式运行时、签名/公证和客户端分发切换的最新结果见正式分发记录。Mac Intel Tauri release 预览包的构建与归档验证已通过。
 
 2026-10-15的[独立审查修复](../../docs/qa/desktop-review-fixes/README.md)补齐CLI所属目录、bootstrap端口、普通Return、日历选择、Pin、图片、逾期、提醒与被动窗口焦点；本地208项Vitest/34项脚本测试及desktop检查通过。最新50762d4两架构十组安装及恢复失败/不健康测试均通过，正式分发和完整SwiftUI复刻仍未验收。
+
+### 设置界面
+
+设置拆为通用、刘海、通知、数据四个页签，使用 Radix Tabs / Select / Switch / Slider / RadioGroup 处理键盘和焦点。`SettingsControls.tsx` 统一控件，`settings.css` 使用 `tw:` 前缀的 Tailwind 4 utilities，不加载全局 preflight，避免改动任务和刘海窗口样式。Geist 拉丁字形随包分发，中文使用系统字体，不依赖外部字体请求。
+
+语言与设置保存成功后才更新界面；其他偏好控件在保存期间禁用，失败保留原值并就地提示。宽度滑杆在保存期间保留焦点，连续输入串行保存并合并中间值；拖动时预览数值，松手或按方向键时提交；页签切换回到顶部。下拉菜单使用窗口内 portal，自动避让边界，Esc 关闭下拉并归还焦点。动画遵循系统减少动态效果偏好。通知状态、数据路径和诊断保留真实运行时来源。
+
+截图和交互验收见 [设置重构验证记录](../../docs/qa/settings-redesign/README.md)。
