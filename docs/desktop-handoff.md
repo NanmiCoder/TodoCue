@@ -36,7 +36,7 @@
 
 | 位置 | 内容 |
 | --- | --- |
-| `apps/desktop/src` | 今日/即将到来/全部、详情、表单、日历、历史、周期提醒、附件、设置、刘海，以及共享 token、图标、日期、草稿和拖动逻辑 |
+| `apps/desktop/src` | 今日/即将到来/全部、详情、表单、日历、历史、周期提醒、附件、设置（含 macOS「同步」）、刘海，以及共享 token、图标、日期、草稿和拖动逻辑 |
 | `apps/desktop/src-tauri/src/lib.rs`、`platform.rs` | Tauri 窗口、托盘、快捷键、尺寸记忆、玻璃、显示器定位、原生鼠标/焦点接入 |
 | `apps/desktop/src-tauri/src/runtime.rs`、`packages/client` | 宿主代理 REST/SSE，token 保持在宿主；便携类型化客户端；原 server 客户端保留 `fromHome()` 兼容入口 |
 | `packages/cli/src/windows-service.ts`、`windows-integration.ts` | 当前用户后台计划任务、自定义目录登记、服务升级/停止/卸载、CLI 与 PATH 管理 |
@@ -112,7 +112,8 @@ P0 验收：
 - [x] 共享 Mac Apple Silicon/Intel 预览包的 release 构建、架构、ad-hoc 签名、归档与下载校验通过；仍需外部隔离运行时。
 - [ ] 接入真实硬件刘海、安全区、空间/菜单栏、原生玻璃与浮窗完整行为。
 - [x] 共享 Mac 正式运行时打包/bootstrap、Developer ID 签名、公证及安装回归：v0.6.0 的 ARM64/Intel 均通过。完整硬件行为另行验收。
-- [ ] 从旧 UI 模型解耦 EventKit 同步，通过桥接接入新客户端，保留同步关联。
+- [x] 从旧 UI 模型解耦 EventKit 同步，通过桥接接入新客户端，保留同步关联（2026-10-20：引擎移入 `AppleSyncKit`，通用版 macOS 包内置 `TodoCueAppleSync` 辅助程序，设置新增「同步」标签；沿用 `apple-sync.json` 与原开关；从另一客户端接管的关联在条目被重新找到前，消失只解除关联、不删除任务；旧版运行时暂停同步。见 [Apple 同步](apple-sync.md)）。
+- [ ] Apple 同步真机验收：Developer ID 正式包的授权归属与沿用、iPhone 往返、从 v0.5.3 关联接管。
 - [ ] 导入语言、尺寸、快捷键与同步偏好；支持 macOS 14+、Intel/Apple Silicon。
 - [ ] 保持同一数据目录只有一个生产客户端，提供旧版回退；达到功能和视觉验收后再停止维护 SwiftUI 页面。
 

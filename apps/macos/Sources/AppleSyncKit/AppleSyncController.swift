@@ -4,7 +4,7 @@ import CryptoKit
 import TodoCueKit
 
 /// The slice of the runtime API that sync writes through.
-protocol AppleSyncBackend: Sendable {
+public protocol AppleSyncBackend: Sendable {
     func fetchTask(_ id: String) async throws -> TodoTask
     func createTask(from payload: TaskPayload, idempotencyKey: String) async throws -> TodoTask
     func updateTask(_ id: String, _ payload: TaskPayload, expectedVersion: Int?) async throws -> TodoTask
@@ -15,11 +15,11 @@ protocol AppleSyncBackend: Sendable {
 }
 
 extension APIClient: AppleSyncBackend {
-    func fetchTask(_ id: String) async throws -> TodoTask { try await task(id).task }
-    func createTask(from payload: TaskPayload, idempotencyKey: String) async throws -> TodoTask {
+    public func fetchTask(_ id: String) async throws -> TodoTask { try await task(id).task }
+    public func createTask(from payload: TaskPayload, idempotencyKey: String) async throws -> TodoTask {
         try await createTask(payload, idempotencyKey: idempotencyKey).task
     }
-    func delete(_ id: String, expectedVersion: Int?) async throws {
+    public func delete(_ id: String, expectedVersion: Int?) async throws {
         try await deleteTask(id, expectedVersion: expectedVersion)
     }
 }
@@ -29,14 +29,14 @@ extension APIClient: AppleSyncBackend {
 /// TodoCue stays the source of truth: a round reads both sides, `AppleSyncPlanner` decides, and
 /// this class carries the plan out. Rounds are serialised; triggers that arrive mid-round re-run it.
 @MainActor
-final class AppleSyncController: ObservableObject {
-    @Published private(set) var access: [AppleSyncKind: AppleSyncAccess] = [:]
-    @Published private(set) var containers: [AppleSyncKind: AppleSyncContainer] = [:]
-    @Published private(set) var lastSyncAt: Date?
-    @Published private(set) var lastError: String?
-    @Published private(set) var isSyncing = false
+public final class AppleSyncController: ObservableObject {
+    @Published public private(set) var access: [AppleSyncKind: AppleSyncAccess] = [:]
+    @Published public private(set) var containers: [AppleSyncKind: AppleSyncContainer] = [:]
+    @Published public private(set) var lastSyncAt: Date?
+    @Published public private(set) var lastError: String?
+    @Published public private(set) var isSyncing = false
     /// Channels whose switch is being flipped (permission prompt, first round) — the UI holds them still.
-    @Published private(set) var changing: Set<AppleSyncKind> = []
+    @Published public private(set) var changing: Set<AppleSyncKind> = []
 
     /// A burst of triggers is coalesced, but never for longer than this.
     static let maxDebounce: TimeInterval = 5
@@ -44,11 +44,16 @@ final class AppleSyncController: ObservableObject {
     private let store: AppleItemStore
     private let stateURL: URL
     private let defaults: UserDefaults
+    /// Which client runs this controller ("swiftui", "desktop"); recorded in the state file.
+    private let client: String
     private var state: AppleSyncState
-    var backend: () -> AppleSyncBackend?
+    public var backend: () -> AppleSyncBackend?
     /// The todo tasks of a loaded board, or nil while none has arrived (nothing must be judged missing then).
-    var todoTasks: () -> [TodoTask]?
-    var now: () -> Date = Date.init
+    public var todoTasks: () -> [TodoTask]?
+    public var now: () -> Date = Date.init
+    /// While this returns a message, no round runs and the message is shown as the sync error
+    /// (the desktop helper: the SwiftUI app is syncing the same data).
+    public var pauseReason: () -> String? = { nil }
     private var pending: Task<Void, Never>?
     private var firstRequestAt: Date?
     private var running = false
@@ -59,54 +64,57 @@ final class AppleSyncController: ObservableObject {
     private var resuming: Set<AppleSyncKind> = []
     private var cancellables: Set<AnyCancellable> = []
 
-    init(store: AppleItemStore, stateURL: URL = AppleSyncState.defaultURL, defaults: UserDefaults = .standard,
-         backend: @escaping () -> AppleSyncBackend? = { nil }, todoTasks: @escaping () -> [TodoTask]? = { nil }) {
+    public init(store: AppleItemStore, stateURL: URL = AppleSyncState.defaultURL,
+                defaults: UserDefaults = AppleSyncPreferences.store(), client: String = "swiftui",
+                backend: @escaping () -> AppleSyncBackend? = { nil }, todoTasks: @escaping () -> [TodoTask]? = { nil }) {
         self.store = store
         self.stateURL = stateURL
         self.defaults = defaults
+        self.client = client
         self.backend = backend
         self.todoTasks = todoTasks
         self.state = AppleSyncState.load(from: stateURL)
+        // Links written by another client (the SwiftUI app before the desktop helper, or the other way
+        // round after a rollback) may be days old. Each one is marked until its item is seen again; the
+        // mark is saved with the next write, so a restart, or a channel that has no access yet, keeps it.
+        if state.client != client {
+            for index in state.links.indices { state.links[index].inherited = true }
+            state.client = client
+        }
         store.onChange = { [weak self] in self?.scheduleSync() }
         refreshAccess()
     }
 
-    /// Wire to the app model: board changes, reconnects and a slow heartbeat all trigger a round.
-    func attach(to model: AppModel) {
-        backend = { [weak model] in model?.canWrite == true ? model?.client : nil }
-        todoTasks = { [weak model] in
-            guard let model, model.connectionState.isOnline, model.context != nil else { return nil }
-            return model.allTasks
-        }
-        model.$allTasks.dropFirst().sink { [weak self] _ in self?.scheduleSync() }.store(in: &cancellables)
-        model.$connectionState.removeDuplicates().filter(\.isOnline).sink { [weak self] _ in self?.scheduleSync() }
-            .store(in: &cancellables)
+    /// Keeps a trigger subscription alive for as long as the controller.
+    public func retain(_ cancellable: AnyCancellable) { cancellables.insert(cancellable) }
+
+    /// Triggers every client wires the same way: a slow heartbeat, and access re-read on activation.
+    public func startHeartbeat() {
         Timer.publish(every: 300, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in self?.scheduleSync() }.store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in self?.refreshAccess() }.store(in: &cancellables)
-        scheduleSync()
     }
 
     // MARK: - Settings
 
-    func isEnabled(_ kind: AppleSyncKind) -> Bool { Prefs.isAppleSyncEnabled(kind, in: defaults) }
+    public func isEnabled(_ kind: AppleSyncKind) -> Bool { AppleSyncPreferences.isEnabled(kind, in: defaults) }
 
-    var isAnyEnabled: Bool { AppleSyncKind.allCases.contains(where: isEnabled) }
+    public var isAnyEnabled: Bool { AppleSyncKind.allCases.contains(where: isEnabled) }
 
-    func refreshAccess() {
+    public func refreshAccess() {
         let current = Dictionary(uniqueKeysWithValues: AppleSyncKind.allCases.map { ($0, store.access($0)) })
         if current != access { access = current }
     }
 
     /// Turns a channel on (asking macOS for access when it can still ask) or off. Returns a message when it could not.
     @discardableResult
-    func setEnabled(_ kind: AppleSyncKind, _ on: Bool) async -> String? {
+    public func setEnabled(_ kind: AppleSyncKind, _ on: Bool) async -> String? {
         guard !changing.contains(kind) else { return nil }
         changing.insert(kind)
         defer { changing.remove(kind) }
         guard on else {
-            Prefs.setAppleSyncEnabled(false, for: kind, in: defaults)
+            AppleSyncPreferences.setEnabled(false, for: kind, in: defaults)
             resuming.remove(kind)
             objectWillChange.send()
             return nil
@@ -123,14 +131,14 @@ final class AppleSyncController: ObservableObject {
                                   : L10n.tr("未获得提醒事项访问权限，请在系统设置 › 隐私与安全性 › 提醒事项中允许 TodoCue。")
         }
         if !isEnabled(kind) { resuming.insert(kind) }
-        Prefs.setAppleSyncEnabled(true, for: kind, in: defaults)
+        AppleSyncPreferences.setEnabled(true, for: kind, in: defaults)
         objectWillChange.send()
         await waitUntilIdle()
         await syncNow()
         return lastError
     }
 
-    func openPrivacySettings(_ kind: AppleSyncKind) {
+    public func openPrivacySettings(_ kind: AppleSyncKind) {
         let pane = kind == .event ? "Privacy_Calendars" : "Privacy_Reminders"
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
             NSWorkspace.shared.open(url)
@@ -138,8 +146,8 @@ final class AppleSyncController: ObservableObject {
     }
 
     /// Turns the channel off and deletes TodoCue's calendar or list from Apple's side. Tasks are untouched.
-    func removeData(_ kind: AppleSyncKind) async -> String? {
-        Prefs.setAppleSyncEnabled(false, for: kind, in: defaults)
+    public func removeData(_ kind: AppleSyncKind) async -> String? {
+        AppleSyncPreferences.setEnabled(false, for: kind, in: defaults)
         resuming.remove(kind)
         pending?.cancel()
         pending = nil
@@ -159,15 +167,14 @@ final class AppleSyncController: ObservableObject {
 
     /// Title for the container: plain for the real data, tagged for an isolated `TODOCUE_HOME` so a
     /// test runtime never adopts — and imports from — the real calendar.
-    static var containerTitle: String {
+    public static var containerTitle: String {
         let home = TodoCueHome.directory.standardizedFileURL
-        let real = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".todocue").standardizedFileURL
-        return home.path == real.path ? "TodoCue" : "TodoCue (\(home.lastPathComponent))"
+        return AppleSyncPreferences.isDefaultHome(home) ? "TodoCue" : "TodoCue (\(home.lastPathComponent))"
     }
 
     // MARK: - Rounds
 
-    func scheduleSync(after seconds: Double = 1) {
+    public func scheduleSync(after seconds: Double = 1) {
         guard isAnyEnabled else { return }
         if running { rerun = true; return }
         let now = Date()
@@ -187,7 +194,7 @@ final class AppleSyncController: ObservableObject {
         }
     }
 
-    func syncNow() async {
+    public func syncNow() async {
         if running { rerun = true; return }
         running = true
         isSyncing = true
@@ -219,6 +226,10 @@ final class AppleSyncController: ObservableObject {
         refreshAccess()
         let kinds = AppleSyncKind.allCases.filter { isEnabled($0) && store.access($0) == .granted }
         guard !kinds.isEmpty, let backend = backend(), let todo = todoTasks() else { return }
+        if let reason = pauseReason() {
+            lastError = reason
+            return
+        }
         var issues: [String] = []
         do {
             for kind in kinds {
@@ -303,6 +314,13 @@ final class AppleSyncController: ObservableObject {
             actions.removeAll(where: isDelete)
             issues.append(L10n.tr("有 \(deletions) 个已同步条目同时从 Apple 侧消失，为防误删，暂未删除对应任务。如确是你删除的，请在 TodoCue 中处理这些任务。"))
         }
+        // An inherited link's item may have gone while no client watched: after the same grace period
+        // and breaker, it is unlinked (and re-created next round), never taken as a deletion.
+        let inherited = Set(links.filter { $0.inherited == true }.map(\.taskId))
+        actions = actions.map {
+            if case .deleteTask(let id) = $0, inherited.contains(id) { return .unlink(taskId: id) }
+            return $0
+        }
 
         for action in actions {
             do {
@@ -318,6 +336,13 @@ final class AppleSyncController: ObservableObject {
             }
             persist()
         }
+        // Found this round: the item exists, so from now on a disappearance is a real one.
+        var settled = false
+        for link in state.links(kind) where link.inherited == true && itemsById[link.identifier] != nil {
+            update(kind, link.taskId) { $0.inherited = nil }
+            settled = true
+        }
+        if settled { persist() }
     }
 
     private func perform(_ action: AppleSyncAction, kind: AppleSyncKind, container: String, tasks: [String: TodoTask],

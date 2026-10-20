@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 import Foundation
+import AppleSyncKit
 import TodoCueKit
 
 enum ConnectionState: Equatable {

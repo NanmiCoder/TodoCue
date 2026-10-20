@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useEffect, type ReactNode, type ButtonHTMLAttributes } from "react";
+import { useId, useState, useEffect, type ReactNode, type ButtonHTMLAttributes, type Ref } from "react";
 import { Select, Switch, Slider } from "radix-ui";
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "@radix-ui/react-icons";
 import { motion } from "motion/react";
@@ -83,7 +83,7 @@ export function WidthSlider({ value, saving, en, onCommit }: { value: number; sa
   </SettingField>;
 }
 
-export function SettingsButton({ children, primary, className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean }) {
+export function SettingsButton({ children, primary, className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; ref?: Ref<HTMLButtonElement> }) {
   return <button type="button" {...props} className={`settings-button ${primary ? "is-primary" : ""} tw:inline-flex tw:items-center tw:justify-center tw:gap-2 tw:rounded-xl tw:px-3 tw:py-2.5 tw:text-xs tw:font-medium ${className}`}>{children}</button>;
 }
 

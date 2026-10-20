@@ -1,13 +1,15 @@
 import XCTest
 import TodoCueKit
-@testable import TodoCue
+@testable import AppleSyncKit
 
 @MainActor
-private final class FakeItemStore: AppleItemStore {
+final class FakeItemStore: AppleItemStore {
     struct Stored: Equatable { var snapshot: AppleItemSnapshot; var external: String }
 
     var onChange: (() -> Void)?
     var granted = true
+    /// Channels without access while the other one has it.
+    var denied: Set<AppleSyncKind> = []
     var sourceAvailable = true
     /// The account the containers currently live in (macOS can migrate a calendar between accounts).
     var source = "local"
@@ -20,7 +22,7 @@ private final class FakeItemStore: AppleItemStore {
     private(set) var saves = 0
     private var next = 0
 
-    func access(_ kind: AppleSyncKind) -> AppleSyncAccess { granted ? .granted : .denied }
+    func access(_ kind: AppleSyncKind) -> AppleSyncAccess { granted && !denied.contains(kind) ? .granted : .denied }
     func requestAccess(_ kind: AppleSyncKind) async -> Bool { granted }
 
     func container(_ kind: AppleSyncKind, identifier: String?, sourceIdentifier: String?, title: String) throws -> AppleSyncContainer {
@@ -80,7 +82,7 @@ private final class FakeItemStore: AppleItemStore {
     func only(_ kind: AppleSyncKind) -> String { items[kind]!.keys.sorted().first! }
 }
 
-private final class FakeBackend: AppleSyncBackend, @unchecked Sendable {
+final class FakeBackend: AppleSyncBackend, @unchecked Sendable {
     private let lock = NSLock()
     private var store: [String: TodoTask] = [:]
     private var byKey: [String: String] = [:]
@@ -206,9 +208,12 @@ final class AppleSyncControllerTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    private func make(_ store: FakeItemStore, _ backend: FakeBackend, kinds: [AppleSyncKind] = [.event]) -> AppleSyncController {
-        for kind in kinds { Prefs.setAppleSyncEnabled(true, for: kind, in: defaults) }
-        let sync = AppleSyncController(store: store, stateURL: dir.appendingPathComponent("apple-sync.json"), defaults: defaults,
+    private var stateURL: URL { dir.appendingPathComponent("apple-sync.json") }
+
+    private func make(_ store: FakeItemStore, _ backend: FakeBackend, kinds: [AppleSyncKind] = [.event],
+                      client: String = "swiftui") -> AppleSyncController {
+        for kind in kinds { AppleSyncPreferences.setEnabled(true, for: kind, in: defaults) }
+        let sync = AppleSyncController(store: store, stateURL: stateURL, defaults: defaults, client: client,
                                        backend: { backend }, todoTasks: { backend.todo })
         sync.now = { [unowned self] in self.clock }
         return sync
@@ -423,6 +428,135 @@ final class AppleSyncControllerTests: XCTestCase {
         await sync.syncNow()
         XCTAssertEqual(backend["a"]?.status, .todo)
         XCTAssertEqual(store.items[.event]!.count, 1, "the task is mirrored again")
+    }
+
+    // MARK: - Handing the links to another client
+
+    /// Links as v0.5.3 leaves them: it does not know the client marker and drops it when it saves.
+    private func handOver() throws {
+        var legacy = AppleSyncState.load(from: stateURL)
+        legacy.client = nil
+        try legacy.save(to: stateURL)
+    }
+
+    func testLinksLeftByAnotherClientAreUnlinkedNotDeleted() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
+        await make(store, backend).syncNow()
+        try handOver()
+        store.items[.event] = [:] // tidied on the phone while no client was running
+
+        let desktop = make(store, backend, client: "desktop")
+        await desktop.syncNow()
+        XCTAssertNotNil(desktop.links.first?.missingSince, "the grace period still applies")
+        advance(minutes: 11)
+        await desktop.syncNow()
+        XCTAssertTrue(desktop.links.isEmpty, "after the grace period the link is dropped, the task kept")
+        await desktop.syncNow()
+        XCTAssertEqual(backend["a"]?.status, .todo, "a disappearance across a client switch is never a deletion")
+        XCTAssertEqual(backend.calls, [])
+        XCTAssertEqual(store.items[.event]!.count, 1, "the task is mirrored again")
+        XCTAssertEqual(AppleSyncState.load(from: stateURL).client, "desktop")
+    }
+
+    func testABriefEmptyReadAfterATakeoverNeitherUnlinksNorDuplicates() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend((0..<10).map { Self.task("t\($0)", scheduledDate: "2026-10-09") })
+        await make(store, backend).syncNow()
+        try handOver()
+        let saved = store.items[.event]!
+        store.items[.event] = [:] // iCloud reports the calendar empty for a moment
+
+        let desktop = make(store, backend, client: "desktop")
+        await desktop.syncNow()
+        advance(minutes: 1)
+        await desktop.syncNow() // rounds keep coming while the calendar still reads empty
+        advance(minutes: 1)
+        store.items[.event]!.merge(saved) { current, _ in current } // the originals come back
+        await desktop.syncNow()
+        await desktop.syncNow()
+        XCTAssertEqual(store.items[.event]!.count, 10, "the originals are relinked, none re-created")
+        XCTAssertEqual(desktop.links.count, 10)
+        XCTAssertTrue(desktop.links.allSatisfy { $0.inherited == nil && $0.missingSince == nil })
+        XCTAssertEqual(backend.calls, [])
+    }
+
+    func testTakeoverMarkSurvivesAChannelWithoutAccessAndARestart() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
+        await make(store, backend, kinds: [.event, .reminder]).syncNow()
+        try handOver()
+        store.items[.event] = [:] // deleted on the phone while no client was running
+
+        store.denied = [.event] // the new client has Reminders access but not Calendar yet
+        await make(store, backend, kinds: [.event, .reminder], client: "desktop").syncNow()
+        XCTAssertEqual(AppleSyncState.load(from: stateURL).client, "desktop")
+
+        store.denied = [] // access granted after a restart
+        let restarted = make(store, backend, kinds: [.event, .reminder], client: "desktop")
+        await restarted.syncNow()
+        advance(minutes: 11)
+        await restarted.syncNow()
+        XCTAssertEqual(backend["a"]?.status, .todo, "the calendar link was never seen by this client")
+        XCTAssertEqual(backend.calls, [])
+    }
+
+    func testAnInheritedLinkSeenOnceFollowsTheDeletionRule() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
+        await make(store, backend).syncNow()
+        try handOver()
+
+        let desktop = make(store, backend, client: "desktop")
+        await desktop.syncNow()
+        XCTAssertNil(desktop.links.first?.inherited, "the item was found, so the mark is gone")
+        store.items[.event] = [:]
+        await desktop.syncNow()
+        advance(minutes: 11)
+        await desktop.syncNow()
+        XCTAssertNil(backend["a"], "deleted on the phone while this client watched: a real deletion")
+    }
+
+    func testAPausedRoundTouchesNothing() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
+        let sync = make(store, backend)
+        sync.pauseReason = { "旧版正在运行" }
+        await sync.syncNow()
+        XCTAssertTrue(store.items[.event]!.isEmpty)
+        XCTAssertEqual(sync.lastError, "旧版正在运行")
+        sync.pauseReason = { nil }
+        await sync.syncNow()
+        XCTAssertEqual(store.items[.event]!.count, 1)
+        XCTAssertNil(sync.lastError)
+    }
+
+    func testSameClientRestartKeepsTheDeletionRule() async throws {
+        let store = FakeItemStore()
+        let backend = FakeBackend([Self.task("a", scheduledDate: "2026-10-09")])
+        await make(store, backend, client: "desktop").syncNow()
+        store.items[.event] = [:] // deleted on the phone while the app was closed
+
+        let restarted = make(store, backend, client: "desktop")
+        await restarted.syncNow()
+        XCTAssertNotNil(restarted.links.first?.missingSince)
+        advance(minutes: 11)
+        await restarted.syncNow()
+        XCTAssertNil(backend["a"])
+    }
+
+    func testIsolatedHomesKeepTheirOwnSwitches() {
+        let real = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".todocue")
+        XCTAssertNil(AppleSyncPreferences.suiteName(home: real, bundleIdentifier: "com.todocue.app"),
+                     "inside the app the real data uses its own domain")
+        XCTAssertEqual(AppleSyncPreferences.suiteName(home: real.appendingPathComponent("/"), bundleIdentifier: nil),
+                       "com.todocue.app", "the desktop helper reads the switches the SwiftUI app wrote")
+        let a = AppleSyncPreferences.suiteName(home: dir.appendingPathComponent("a"), bundleIdentifier: "com.todocue.app")
+        let b = AppleSyncPreferences.suiteName(home: dir.appendingPathComponent("b"), bundleIdentifier: nil)
+        XCTAssertNotNil(a)
+        XCTAssertNotEqual(a, b)
+        XCTAssertFalse(a!.contains("/"))
+        XCTAssertNotEqual(a, "com.todocue.app")
     }
 
     func testDeletedContainerIsRecreatedWithoutCancellingTasks() async throws {

@@ -38,19 +38,6 @@ enum Prefs {
         set { UserDefaults.standard.set(newValue, forKey: notchDisableInFullscreen) }
     }
 
-    /// Mirror tasks into Apple Calendar / Reminders. Off until the user turns it on and grants access.
-    static func isAppleSyncEnabled(_ kind: AppleSyncKind, in defaults: UserDefaults = .standard) -> Bool {
-        defaults.object(forKey: appleSyncKey(kind)) as? Bool ?? false
-    }
-
-    static func setAppleSyncEnabled(_ on: Bool, for kind: AppleSyncKind, in defaults: UserDefaults = .standard) {
-        defaults.set(on, forKey: appleSyncKey(kind))
-    }
-
-    private static func appleSyncKey(_ kind: AppleSyncKind) -> String {
-        kind == .event ? "appleCalendarSyncEnabled" : "appleRemindersSyncEnabled"
-    }
-
     /// Displays without a camera notch get a drawn one in the menu bar, on whichever screen holds
     /// the pointer — the clamshell setup, or a Mac without a notch at all.
     static var notchOnDisplaysWithoutNotch: Bool {

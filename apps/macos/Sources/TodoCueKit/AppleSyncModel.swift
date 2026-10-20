@@ -83,6 +83,10 @@ public struct AppleSyncLink: Codable, Hashable, Sendable {
     /// Set when the item still exists but left sync (moved to another calendar, made recurring).
     /// A detached task is left alone instead of being deleted or re-created.
     public var detachedAt: String?
+    /// Taken over from another client (the SwiftUI app before the desktop helper, or back) and not seen
+    /// since. Its item may have been deleted while nobody watched, so a disappearance unlinks instead of
+    /// deleting the task. Cleared the first time the item is found.
+    public var inherited: Bool?
 
     public init(kind: AppleSyncKind, taskId: String, identifier: String, externalIdentifier: String? = nil,
                 taskVersion: Int, lastSnapshot: AppleItemSnapshot?, lastDesired: AppleItemSnapshot? = nil) {

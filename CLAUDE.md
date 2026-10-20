@@ -6,11 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Since v0.6.0 the shipped desktop client is the shared **React + Tauri 2** app in `apps/desktop` (macOS
 ARM64/Intel and Windows x64/ARM64). New UI work and fixes go there. `apps/macos` (SwiftUI/AppKit) is **not
-deleted**: it still owns Apple Calendar/Reminders sync (EventKit), real hardware-notch geometry and preference
-import, none of which are ported; v0.5.3 is the rollback for users who need them; and its source is the visual
-and behavioural reference the desktop UI is compared against. Do not add features to it unless they depend on one
-of those unported capabilities. Only one client may use a data directory at a time (the desktop app asks the
-user to quit a running SwiftUI app).
+deleted**: it still owns real hardware-notch geometry and preference import, neither of which is ported; v0.5.3
+is the rollback for users who need them; and its source is the visual and behavioural reference the desktop UI is
+compared against. Do not add features to it unless they depend on one of those unported capabilities. Apple
+Calendar/Reminders sync (EventKit) is shared: its engine lives in the `AppleSyncKit` SwiftPM target, which the
+SwiftUI app links and the desktop app ships on macOS as the `TodoCueAppleSync` helper (see `docs/apple-sync.md`).
+Only one client may use a data directory at a time (the desktop app asks the user to quit a running SwiftUI app).
 
 ## Commands
 
@@ -28,6 +29,7 @@ npx vitest run -t "recurring"                             # one test by name
 TODOCUE_HOME=/tmp/todocue-desktop-dev npm run desktop:dev   # isolated runtime on :47832 + Vite on :5173
                                                             # open http://127.0.0.1:5173/ (panel) and /?surface=notch
 npm run desktop:native       # Tauri dev window; point it at the same TODOCUE_HOME as a running runtime
+                             # (Apple sync needs TODOCUE_APPLE_SYNC_HELPER=apps/macos/.build/debug/TodoCueAppleSync)
 npm run desktop:check        # desktop:build (tsc + vite build) + cargo test for src-tauri
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml <name>   # one Rust test
 npm run desktop:macos [-- --release]    # shared Mac app/DMG (--release = Developer ID sign + notarize)
@@ -74,7 +76,7 @@ notifier helper ◄────────────────────�
 | `packages/client` | Portable typed `TodoCueClient` that takes an injected `transport`; used by the desktop frontend (no Node/fs dependency). |
 | `packages/cli` | commander CLI: task commands, `serve`, `service *`, `install`, `bootstrap`, `doctor`, `export`, `mcp`. `bootstrap.ts` + `launchagent.ts` (macOS) and `windows-service.ts` + `windows-integration.ts` (Windows scheduled task, CLI/PATH, uninstall) install the background runtime and `todocue` wrapper on first app launch. |
 | `apps/desktop` | The shipped client: `src/` React UI, `src-tauri/` Rust host. See below. |
-| `apps/macos` | Legacy SwiftUI client (see top): `TodoCueKit`, `TodoCue`, `TodoCueNotifier`. SwiftPM only, no third-party deps. |
+| `apps/macos` | Legacy SwiftUI client (see top): `TodoCueKit`, `TodoCue`, `TodoCueNotifier`, plus `AppleSyncKit` and the `TodoCueAppleSync` helper that the desktop app bundles in `Contents/Helpers`. SwiftPM only, no third-party deps. |
 | `skills/todocue` | The distributed Agent Skill — its CLI flag/behaviour descriptions must stay true to `packages/cli`. |
 
 **`docs/api.md` is the API contract**, referenced by the desktop client, the Swift client and the CLI. Update it in
@@ -115,7 +117,8 @@ helper's exact JSON contract, and Swift decoding tests are written against these
 - **Rust host** (`src-tauri/src`): `lib.rs` (commands, tray, windows, pointer polling), `platform.rs` (macOS
   glass/Spaces/click monitors, Windows virtual-desktop/activation), `notch_geometry.rs` / `panel_geometry.rs` /
   `panel_fade.rs` (pure logic kept testable), `export.rs`, `host_tray.rs`, `macos_home.rs` / `windows_home.rs` (data-directory
-  selection and per-directory routing), and `bin/` (`cli` and `notifier` helpers; `runtime-host` is the Windows
+  selection and per-directory routing), `apple_sync.rs` (starts and restarts the macOS `TodoCueAppleSync` helper, relays
+  `apple_sync_command` as JSON lines on its stdin and its status as `apple-sync:status`), and `bin/` (`cli` and `notifier` helpers; `runtime-host` is the Windows
   background-process supervisor). Keep logic that can be tested without a window in the pure
   modules; every platform-specific call needs a `#[cfg(target_os)]` branch and Linux must still compile.
 - **Platform differences go through `src/platform.ts`** (`platform`, `isPrimaryModifier`, `isSubmitChord`,

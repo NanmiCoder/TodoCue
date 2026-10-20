@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Tabs } from "radix-ui";
-import { BellIcon, MixerHorizontalIcon, DesktopIcon, ArchiveIcon, CheckIcon, ArrowTopRightIcon, ReloadIcon, CopyIcon, ChevronRightIcon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { BellIcon, MixerHorizontalIcon, DesktopIcon, ArchiveIcon, CheckIcon, ArrowTopRightIcon, ReloadIcon, CopyIcon, ChevronRightIcon, ExclamationTriangleIcon, CalendarIcon } from "@radix-ui/react-icons";
 import type { DoctorReport } from "@todocue/shared";
 import {
   copyText, loadNotificationStatus, native, openDataFolder, openNotificationSettings,
@@ -10,8 +10,9 @@ import {
   type DesktopSettings, type NotificationStatus,
 } from "./bridge.js";
 import { NotchPreferences } from "./NotchPreferences.js";
+import { AppleSyncSettings } from "./AppleSyncSettings.js";
 import { describeError } from "./errors.js";
-import { formatShortcut } from "./platform.js";
+import { formatShortcut, platform } from "./platform.js";
 import { createSettingsWriter } from "./settingsWriter.js";
 import { hintClass, SettingField, SettingSelect, SettingSwitch, SettingsButton, SettingsIntro, SettingsTransition, WidthSlider } from "./SettingsControls.js";
 import "./settings.css";
@@ -110,6 +111,8 @@ export function SettingsPage({ settings, setSettings, online, onError, onReconne
     { id: "general", label: text("通用", "General"), icon: MixerHorizontalIcon },
     { id: "notch", label: text("刘海", "Notch"), icon: DesktopIcon },
     { id: "notifications", label: text("通知", "Alerts"), icon: BellIcon },
+    // Apple Calendar / Reminders sync exists only on macOS (EventKit, via the host's helper).
+    ...(platform === "macos" ? [{ id: "sync", label: text("同步", "Sync"), icon: CalendarIcon }] : []),
     { id: "data", label: text("数据", "Data"), icon: ArchiveIcon },
   ];
   return <section className="settings-theme settings-page tw:flex tw:min-h-0 tw:flex-1 tw:flex-col tw:overflow-hidden" aria-label={text("偏好设置", "Preferences")}>
@@ -117,7 +120,7 @@ export function SettingsPage({ settings, setSettings, online, onError, onReconne
       setTab(value); setRecording(false); setMessage(null);
       if (contentRef.current) contentRef.current.scrollTop = 0;
     }} className="tw:flex tw:min-h-0 tw:flex-1 tw:flex-col">
-      <Tabs.List aria-label={text("设置分类", "Settings categories")} className="settings-tabs tw:mx-4 tw:mt-1 tw:grid tw:grid-cols-4 tw:gap-1 tw:border-b tw:border-(--s-line)">
+      <Tabs.List aria-label={text("设置分类", "Settings categories")} className={`settings-tabs tw:mx-4 tw:mt-1 tw:grid ${sections.length > 4 ? "tw:grid-cols-5" : "tw:grid-cols-4"} tw:gap-1 tw:border-b tw:border-(--s-line)`}>
         {sections.map(({ id, label, icon: Icon }) => <Tabs.Trigger key={id} value={id} className="settings-tab tw:flex tw:flex-col tw:items-center tw:gap-1.5 tw:px-1 tw:pt-3 tw:pb-3.5 tw:text-[10px] tw:font-medium"><Icon width={17} height={17} /><span>{label}</span></Tabs.Trigger>)}
       </Tabs.List>
       <div ref={contentRef} className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:overscroll-contain tw:px-5 tw:py-6">
@@ -180,6 +183,9 @@ export function SettingsPage({ settings, setSettings, online, onError, onReconne
             <p className={`${hintClass} tw:mt-5`}>{text("专注模式或系统勿扰可能暂时隐藏通知。", "Focus or Do Not Disturb may temporarily silence notifications.")}</p>
           </SettingsTransition>
         </Tabs.Content>
+        {platform === "macos" && <Tabs.Content value="sync" className="settings-tab-content">
+          <SettingsTransition><AppleSyncSettings language={language} /></SettingsTransition>
+        </Tabs.Content>}
         <Tabs.Content value="data" className="settings-tab-content">
           <SettingsTransition>
             <SettingsIntro title={text("你的数据，留在本机", "Yours. On this device.")}>{text("任务在本地保存，卸载或重装 App 后仍会保留。", "Tasks stay on your computer, even after you reinstall the app.")}</SettingsIntro>

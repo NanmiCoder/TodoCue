@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Builds the TodoCue macOS app and the TodoCueNotifier helper as ad-hoc signed .app bundles.
-# Usage: scripts/build-macos.sh [--debug]
+# Builds the TodoCue macOS app and the TodoCueNotifier helper as ad-hoc signed .app bundles, plus the
+# TodoCueAppleSync helper executable the shared desktop app bundles.
+# Usage: scripts/build-macos.sh [--debug | --helpers-only]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,10 +17,11 @@ CONFIG=release
 if [[ "${1:-}" == "--debug" ]]; then CONFIG=debug; fi
 
 echo "==> swift build -c $CONFIG"
-if [[ "${1:-}" != "--notifier-only" ]]; then
+if [[ "${1:-}" != "--helpers-only" ]]; then
   (cd "$PKG" && swift build -c "$CONFIG" --product TodoCue 2>&1 | tail -2)
 fi
 (cd "$PKG" && swift build -c "$CONFIG" --product TodoCueNotifier 2>&1 | tail -2)
+(cd "$PKG" && swift build -c "$CONFIG" --product TodoCueAppleSync 2>&1 | tail -2)
 BIN="$(cd "$PKG" && swift build -c "$CONFIG" --show-bin-path)"
 
 make_bundle() {
@@ -156,10 +158,15 @@ URL_TYPES='  <key>CFBundleURLTypes</key>
   <key>NSRemindersUsageDescription</key><string>TodoCue 会把待办同步到「TodoCue」提醒事项列表，并读取你在那里的修改。</string>'
 
 echo "==> assembling bundles"
-if [[ "${1:-}" != "--notifier-only" ]]; then
+if [[ "${1:-}" != "--helpers-only" ]]; then
   make_bundle "TodoCue" "com.todocue.app" "TodoCue" "$URL_TYPES" "$ROOT/scripts/app.entitlements.plist" "$PKG/Resources" >/dev/null
 fi
 make_bundle "TodoCueNotifier" "com.todocue.notifier" "TodoCueNotifier" "" >/dev/null
+# A bare executable, not a bundle: started by the desktop app, so macOS attributes Calendar and
+# Reminders access to TodoCue.app. package-macos.mjs signs it again inside the app.
+if [[ ! -x "$BIN/TodoCueAppleSync" ]]; then echo "missing build product $BIN/TodoCueAppleSync" >&2; exit 1; fi
+cp "$BIN/TodoCueAppleSync" "$OUT/TodoCueAppleSync"
+codesign --force --sign - "$OUT/TodoCueAppleSync" 2>/dev/null
 APP="$OUT/TodoCue.app"
 HELPER="$OUT/TodoCueNotifier.app"
 
@@ -167,3 +174,4 @@ echo
 echo "TodoCue app:      $APP"
 echo "Notifier helper:  $HELPER"
 echo "Helper binary:    $HELPER/Contents/MacOS/TodoCueNotifier"
+echo "Apple sync:       $OUT/TodoCueAppleSync"

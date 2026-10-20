@@ -5,6 +5,7 @@
 @source "./SettingsPage.tsx";
 @source "./SettingsControls.tsx";
 @source "./NotchPreferences.tsx";
+@source "./AppleSyncSettings.tsx";
 
 @font-face {
   font-family: "Geist Variable";

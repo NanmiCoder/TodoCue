@@ -62,7 +62,10 @@ public struct LocalizedText: ExpressibleByStringLiteral, ExpressibleByStringInte
 }
 
 public enum L10n {
-    public static var language: AppLanguage { LanguagePreferences.shared.language }
+    /// Set by a process that follows another client's language setting (the desktop app's sync
+    /// helper) instead of the SwiftUI app's stored preference.
+    public static var languageOverride: AppLanguage?
+    public static var language: AppLanguage { languageOverride ?? LanguagePreferences.shared.language }
     public static func tr(_ text: LocalizedText, language: AppLanguage? = nil) -> String {
         let template = (language ?? Self.language) == .english ? english[text.key] ?? text.key : text.key
         // Expand template matches once: a task title containing {1} stays literal.

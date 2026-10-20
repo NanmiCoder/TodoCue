@@ -519,6 +519,7 @@ extension L10n {
         "未命名任务": "Untitled task",
         "原来同步所用的账户当前不可用，已暂停同步。账户恢复后会自动继续；如需换账户，请先「移除同步数据」。": "The account sync was using is unavailable, so sync is paused. It resumes when the account is back; to switch accounts, use Remove synced data first.",
         "读取提醒事项失败": "Could not read reminders",
+        "旧版 TodoCue 正在运行，Apple 同步已暂停，退出旧版后会自动继续。": "The previous TodoCue is running, so Apple sync is paused. It resumes once that app quits.",
         "有 {0} 个已同步条目同时从 Apple 侧消失，为防误删，暂未删除对应任务。如确是你删除的，请在 TodoCue 中处理这些任务。": "{0} synced items disappeared from Apple's apps at once. To avoid accidental loss, their tasks were not deleted. If you deleted them on purpose, handle those tasks in TodoCue.",
         "目前只有写入权限，打开开关可申请完整访问": "Write-only access so far. Turn the switch on to request full access.",
     ]

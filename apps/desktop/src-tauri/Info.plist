@@ -6,4 +6,9 @@
     <key>CFBundleURLName</key><string>com.todocue.app</string>
     <key>CFBundleURLSchemes</key><array><string>todocue</string></array>
   </dict></array>
+  <!-- Apple sync runs in Contents/Helpers/TodoCueAppleSync; macOS attributes its access to this app. -->
+  <key>NSCalendarsFullAccessUsageDescription</key><string>TodoCue 会把有日期的待办同步到「TodoCue」日历，并读取你在那里的修改。</string>
+  <key>NSCalendarsUsageDescription</key><string>TodoCue 会把有日期的待办同步到「TodoCue」日历，并读取你在那里的修改。</string>
+  <key>NSRemindersFullAccessUsageDescription</key><string>TodoCue 会把待办同步到「TodoCue」提醒事项列表，并读取你在那里的修改。</string>
+  <key>NSRemindersUsageDescription</key><string>TodoCue 会把待办同步到「TodoCue」提醒事项列表，并读取你在那里的修改。</string>
 </dict></plist>

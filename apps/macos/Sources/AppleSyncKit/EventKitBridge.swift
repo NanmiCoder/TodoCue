@@ -2,23 +2,28 @@ import AppKit
 import EventKit
 import TodoCueKit
 
-enum AppleSyncAccess: Equatable {
+public enum AppleSyncAccess: String, Equatable, Sendable {
     /// `writeOnly` can be upgraded by asking again; two-way sync cannot read edits back without full access.
     case notDetermined, writeOnly, granted, denied
 }
 
 /// The dedicated calendar or reminder list TodoCue mirrors into.
-struct AppleSyncContainer: Equatable {
-    var identifier: String
-    var title: String
-    var sourceTitle: String
-    var sourceIdentifier: String
+public struct AppleSyncContainer: Equatable, Sendable {
+    public var identifier: String
+    public var title: String
+    public var sourceTitle: String
+    public var sourceIdentifier: String
     /// False when the container lives in a local or non-iCloud account — it will not reach the phone.
-    var isICloud: Bool
+    public var isICloud: Bool
+
+    public init(identifier: String, title: String, sourceTitle: String, sourceIdentifier: String, isICloud: Bool) {
+        self.identifier = identifier; self.title = title; self.sourceTitle = sourceTitle
+        self.sourceIdentifier = sourceIdentifier; self.isICloud = isICloud
+    }
 }
 
 /// Where a linked item is now.
-enum AppleItemLocation: Equatable {
+public enum AppleItemLocation: Equatable {
     case here(AppleItem)
     /// Still exists, but in another calendar or made recurring — out of sync's hands, not deleted.
     case elsewhere
@@ -27,7 +32,7 @@ enum AppleItemLocation: Equatable {
 
 /// Everything the sync controller needs from EventKit, behind a seam so tests can fake it.
 @MainActor
-protocol AppleItemStore: AnyObject {
+public protocol AppleItemStore: AnyObject {
     var onChange: (() -> Void)? { get set }
     func access(_ kind: AppleSyncKind) -> AppleSyncAccess
     func requestAccess(_ kind: AppleSyncKind) async -> Bool
@@ -66,12 +71,12 @@ private final class Once: @unchecked Sendable {
 }
 
 @MainActor
-final class EventKitStore: AppleItemStore {
+public final class EventKitStore: AppleItemStore {
     private var store = EKEventStore()
     private var observer: NSObjectProtocol?
-    var onChange: (() -> Void)?
+    public var onChange: (() -> Void)?
 
-    init() {
+    public init() {
         // `object: nil`: the store is replaced after access is granted and must keep reporting.
         observer = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.onChange?() }
@@ -84,7 +89,7 @@ final class EventKitStore: AppleItemStore {
 
     private static func entity(_ kind: AppleSyncKind) -> EKEntityType { kind == .event ? .event : .reminder }
 
-    func access(_ kind: AppleSyncKind) -> AppleSyncAccess {
+    public func access(_ kind: AppleSyncKind) -> AppleSyncAccess {
         switch EKEventStore.authorizationStatus(for: Self.entity(kind)) {
         case .fullAccess: return .granted
         case .notDetermined: return .notDetermined
@@ -94,7 +99,7 @@ final class EventKitStore: AppleItemStore {
         }
     }
 
-    func requestAccess(_ kind: AppleSyncKind) async -> Bool {
+    public func requestAccess(_ kind: AppleSyncKind) async -> Bool {
         let granted: Bool
         do {
             granted = kind == .event ? try await store.requestFullAccessToEvents()
@@ -137,7 +142,7 @@ final class EventKitStore: AppleItemStore {
         return calendar
     }
 
-    func container(_ kind: AppleSyncKind, identifier: String?, sourceIdentifier: String?, title: String) throws -> AppleSyncContainer {
+    public func container(_ kind: AppleSyncKind, identifier: String?, sourceIdentifier: String?, title: String) throws -> AppleSyncContainer {
         if let identifier, let existing = calendar(kind, identifier) { return Self.info(existing) }
         let sources: [EKSource]
         if let sourceIdentifier {
@@ -172,7 +177,7 @@ final class EventKitStore: AppleItemStore {
         throw lastError
     }
 
-    func items(_ kind: AppleSyncKind, in container: String) async throws -> [AppleItem] {
+    public func items(_ kind: AppleSyncKind, in container: String) async throws -> [AppleItem] {
         guard let calendar = calendar(kind, container) else { throw AppleSyncStoreError.containerMissing }
         switch kind {
         case .event:
@@ -206,7 +211,7 @@ final class EventKitStore: AppleItemStore {
         }
     }
 
-    func locate(_ kind: AppleSyncKind, identifier: String, externalIdentifier: String?, in container: String) -> AppleItemLocation {
+    public func locate(_ kind: AppleSyncKind, identifier: String, externalIdentifier: String?, in container: String) -> AppleItemLocation {
         let type = Self.entity(kind)
         var found = store.calendarItem(withIdentifier: identifier)
         if found == nil, let externalIdentifier {
@@ -221,7 +226,7 @@ final class EventKitStore: AppleItemStore {
         return .elsewhere
     }
 
-    func save(_ kind: AppleSyncKind, _ snapshot: AppleItemSnapshot, timezone: String, identifier: String?,
+    public func save(_ kind: AppleSyncKind, _ snapshot: AppleItemSnapshot, timezone: String, identifier: String?,
               in container: String) throws -> AppleItem {
         guard let calendar = calendar(kind, container) else { throw AppleSyncStoreError.containerMissing }
         let existing = identifier.flatMap { store.calendarItem(withIdentifier: $0) }
@@ -271,13 +276,13 @@ final class EventKitStore: AppleItemStore {
         }
     }
 
-    func delete(_ kind: AppleSyncKind, identifier: String) throws {
+    public func delete(_ kind: AppleSyncKind, identifier: String) throws {
         guard let item = store.calendarItem(withIdentifier: identifier) else { return }
         if let event = item as? EKEvent { try store.remove(event, span: .thisEvent, commit: true) }
         else if let reminder = item as? EKReminder { try store.remove(reminder, commit: true) }
     }
 
-    func removeContainer(_ kind: AppleSyncKind, identifier: String) throws {
+    public func removeContainer(_ kind: AppleSyncKind, identifier: String) throws {
         guard let calendar = calendar(kind, identifier) else { return }
         try store.removeCalendar(calendar, commit: true)
     }
