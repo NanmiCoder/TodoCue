@@ -498,6 +498,9 @@ body[data-surface="notch"] {
   width: 100%;
   color: #fff;
 }
+/* The band is a full-width button inside an overflow-hidden window: the global focus ring would be
+   clipped to a stray orange line under it. */
+.notch-band:focus-visible { outline: none; }
 .notch-housing {
   width: 185px;
   flex-shrink: 0;
