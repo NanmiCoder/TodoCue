@@ -488,12 +488,13 @@ mod mac_windows {
         }
     }
 
-    /// Visible normal application windows, front-to-back, excluding TodoCue and desktop elements.
-    pub fn visible_application_windows() -> Vec<Frame> {
+    /// On-screen windows, front-to-back, that `keep` accepts by whether TodoCue owns them, layer
+    /// and alpha. `None` when the window list cannot be read.
+    fn windows(options: u32, keep: impl Fn(bool, Option<f64>, Option<f64>) -> bool) -> Option<Vec<Frame>> {
         autoreleasepool(|_| unsafe {
-            let list = CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | EXCLUDE_DESKTOP_ELEMENTS, 0);
+            let list = CGWindowListCopyWindowInfo(options, 0);
             if list.is_null() {
-                return Vec::new();
+                return None;
             }
             let array = list as *mut AnyObject;
             let count: usize = msg_send![array, count];
@@ -501,9 +502,11 @@ mod mac_windows {
             for index in 0..count {
                 let entry: *mut AnyObject = msg_send![array, objectAtIndex: index];
                 if entry.is_null()
-                    || number(entry, "kCGWindowOwnerPID") == Some(std::process::id() as f64)
-                    || number(entry, "kCGWindowLayer") != Some(0.0)
-                    || number(entry, "kCGWindowAlpha") == Some(0.0) {
+                    || !keep(
+                        number(entry, "kCGWindowOwnerPID") == Some(std::process::id() as f64),
+                        number(entry, "kCGWindowLayer"),
+                        number(entry, "kCGWindowAlpha"),
+                    ) {
                     continue;
                 }
                 let key = NSString::from_str("kCGWindowBounds");
@@ -521,9 +524,36 @@ mod mac_windows {
                 }
             }
             CFRelease(list);
-            frames
+            Some(frames)
         })
     }
+
+    /// Visible normal application windows, front-to-back, excluding TodoCue and desktop elements.
+    pub fn visible_application_windows() -> Vec<Frame> {
+        windows(ON_SCREEN_ONLY | EXCLUDE_DESKTOP_ELEMENTS, |own, layer, alpha| {
+            !own && layer == Some(0.0) && alpha != Some(0.0)
+        })
+        .unwrap_or_default()
+    }
+
+    /// Visible windows at the status-bar level: the menu bar icons of every app, TodoCue's own
+    /// tray icon included (macOS 26 hosts them all in Control Center, earlier versions in each
+    /// app). The notch sits one level higher. Bounds and layer need no Screen Recording
+    /// permission; window names would.
+    pub fn status_bar_windows() -> Option<Vec<Frame>> {
+        let level = objc2_app_kit::NSStatusWindowLevel as f64;
+        windows(ON_SCREEN_ONLY, |_, layer, alpha| layer == Some(level) && alpha != Some(0.0))
+    }
+}
+
+/// Global top-left points of the menu bar icons on every screen; `None` when they cannot be read.
+#[cfg(target_os = "macos")]
+pub fn status_bar_windows() -> Option<Vec<Frame>> {
+    mac_windows::status_bar_windows()
+}
+#[cfg(not(target_os = "macos"))]
+pub fn status_bar_windows() -> Option<Vec<Frame>> {
+    None
 }
 
 /// Opacity of a window as a whole, glass included. macOS only; Windows fades the page with CSS

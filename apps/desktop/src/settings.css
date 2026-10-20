@@ -60,6 +60,8 @@
 .settings-preview-notch.preview-top { top: 22px; left: calc(50% - 27px); width: 54px; gap: 44px; border-radius: 5px; }
 .settings-preview-notch.preview-top > span { width: 4px; flex-shrink: 0; }
 .settings-preview-notch.preview-top.has-camera { top: 0; height: 12px; border-radius: 0 0 5px 5px; }
+/* Without a camera, macOS keeps the notch shape inside the menu bar strip (tw:h-5). */
+.settings-preview-notch.preview-top.in-menu-bar { top: 0; height: 1.25rem; border-radius: 0 0 5px 5px; }
 .settings-preview-notch.preview-left { top: 48%; left: 0; width: 30px; border-radius: 0 5px 5px 0; }
 .settings-preview-notch.preview-right { top: 48%; right: 0; width: 30px; border-radius: 5px 0 0 5px; }
 .settings-preview-notch.is-off { opacity: .15; }

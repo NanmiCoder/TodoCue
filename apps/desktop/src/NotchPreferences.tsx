@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import { CursorArrowIcon, DesktopIcon } from "@radix-ui/react-icons";
 import { loadNotchDisplays, native, type DesktopSettings, type NotchDisplay } from "./bridge.js";
 import { hintClass, SettingField, SettingSelect, SettingSwitch, SettingsIntro } from "./SettingsControls.js";
+import { platform } from "./platform.js";
 import { useReducedMotion } from "./useReducedMotion.js";
 
 function DisplayPreview({ placement, enabled, hasNotch, en }: {
@@ -21,7 +22,7 @@ function DisplayPreview({ placement, enabled, hasNotch, en }: {
       <div className="tw:h-1 tw:w-2/3 tw:rounded-full tw:bg-(--s-line) tw:opacity-60" />
     </div>
     <motion.div layout={!reduced} transition={{ type: "spring", stiffness: 320, damping: 30 }}
-      className={`settings-preview-notch preview-${placement} ${hasNotch ? "has-camera" : ""} ${enabled ? "" : "is-off"}`}>
+      className={`settings-preview-notch preview-${placement} ${hasNotch ? "has-camera" : platform === "macos" ? "in-menu-bar" : ""} ${enabled ? "" : "is-off"}`}>
       <span className="tw:size-1 tw:rounded-full tw:bg-[#d49b80]" /><span className="tw:h-0.5 tw:w-3 tw:rounded-full tw:bg-white/70" />
     </motion.div>
   </div>;
@@ -59,15 +60,20 @@ export function NotchPreferences({ settings, disabled, onChange }: {
     ...displays.map((d, i) => ({ value: d.id, label: `${i + 1}. ${d.name}`, detail: `${d.width} × ${d.height}${d.primary ? t(" · 主屏", " · Main") : ""}${d.hasNotch ? t(" · 内置刘海", " · Camera notch") : ""}` })),
   ];
   const locked = disabled || !settings.notchEnabled;
+  const hasNotch = (selected ?? displays.find(d => d.primary))?.hasNotch ?? false;
   return <>
     <SettingsIntro title={t("轻巧地，留在视线里", "A little presence")}>{t("悬停看今天，提醒时展开。选择最适合你的屏幕和位置。", "Hover for today. Open for a reminder. Find its place on your screen.")}</SettingsIntro>
     <div className="tw:mb-5"><SettingSwitch label={t("显示刘海", "Show notch")} checked={settings.notchEnabled} disabled={disabled} onChange={notchEnabled => void onChange({ notchEnabled })} /></div>
-    <DisplayPreview placement={settings.notchPlacement} enabled={settings.notchEnabled} hasNotch={(selected ?? displays.find(d => d.primary))?.hasNotch ?? false} en={en} />
+    <DisplayPreview placement={settings.notchPlacement} enabled={settings.notchEnabled} hasNotch={hasNotch} en={en} />
     <fieldset disabled={locked} className="settings-fields tw:grid tw:gap-5">
       <legend className="sr-only">{t("刘海位置与屏幕", "Notch position and screen")}</legend>
-      <SettingField label={t("停靠位置", "Dock position")} hint={settings.notchPlacement === "top"
-        ? t("贴住摄像头两侧，每侧仅留 22 点显示图标和数量，尽量给菜单栏留空间。", "Just 22 pt on each side of the camera for the icon and count, leaving more room for the menu bar.")
-        : t("贴边向内展开，把顶部空间留给其他 App。", "Opens inward from the edge, leaving the top clear.")}>
+      <SettingField label={t("停靠位置", "Dock position")} hint={settings.notchPlacement !== "top"
+        ? t("贴边向内展开，把顶部空间留给其他 App。", "Opens inward from the edge, leaving the top clear.")
+        : hasNotch
+          ? t("贴住摄像头两侧，每侧仅留 22 点显示图标和数量，尽量给菜单栏留空间。", "Just 22 pt on each side of the camera for the icon and count, leaving more room for the menu bar.")
+          : platform === "macos"
+            ? t("放进菜单栏的空位，宽度与内建屏刘海相同：中间空着就居中，否则紧挨图标而不挡住它们；放不下时退到菜单栏下方。", "Sits in a free spot of the menu bar, as wide as the built-in notch: centered when it can be, otherwise beside the icons without covering them, and below the menu bar when there is no room.")
+            : t("贴住屏幕顶部居中，避开任务栏。", "Centered at the top of the screen, clear of the taskbar.")}>
         {id => <RadioGroup.Root id={id} aria-labelledby={`${id}-label`} value={settings.notchPlacement} disabled={locked}
           onValueChange={value => void onChange({ notchPlacement: value as DesktopSettings["notchPlacement"] })}
           className="tw:flex tw:gap-1 tw:rounded-xl tw:bg-(--s-fill) tw:p-1">
