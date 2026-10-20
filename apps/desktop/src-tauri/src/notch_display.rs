@@ -31,6 +31,10 @@ pub struct Display {
     pub camera_height: f64,
     #[serde(skip)]
     pub camera_width: f64,
+    /// Height of the visible menu bar in points; 0 when it auto-hides, the screen has none, or on
+    /// Windows, whose top taskbar is not a menu bar.
+    #[serde(skip)]
+    pub menu_height: f64,
     #[serde(skip)]
     pub monitor: tauri::Monitor,
 }
@@ -54,6 +58,11 @@ pub fn list(window: &WebviewWindow) -> Result<Vec<Display>, String> {
             let has_notch = false;
             let camera_height = 0.0;
             let camera_width = 0.0;
+            // The work area is NSScreen.visibleFrame: it starts below a visible menu bar.
+            #[cfg(target_os = "macos")]
+            let menu_height = ((monitor.work_area().position.y - monitor.position().y) as f64 / scale).max(0.0);
+            #[cfg(not(target_os = "macos"))]
+            let menu_height = 0.0;
             #[cfg(target_os = "macos")]
             let (id, name, safe_top, has_notch, camera_height, camera_width) = native
                 .iter()
@@ -79,6 +88,7 @@ pub fn list(window: &WebviewWindow) -> Result<Vec<Display>, String> {
                 has_notch,
                 camera_height,
                 camera_width,
+                menu_height,
                 width: (monitor.size().width as f64 / scale).round() as u32,
                 height: (monitor.size().height as f64 / scale).round() as u32,
                 primary: primary

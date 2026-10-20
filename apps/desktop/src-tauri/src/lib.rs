@@ -146,6 +146,17 @@ struct Desktop {
     panel_fade: PanelFade,
     fitted_panel: Mutex<Option<(f64, f64)>>,
     tray: Mutex<Option<TrayState>>,
+    menu_slot: Mutex<Option<MenuSlot>>,
+    /// Host-loop ticks left in which the band looks for its menu bar place on every tick; set when
+    /// TodoCue's own menu bar icon changes width, which moves the icons beside the band.
+    menu_refresh: AtomicU64,
+}
+/// Where the band sits in a display's menu bar (its left edge in points, `None`: below the menu
+/// bar). Found while the band is collapsed and kept while it is open, so the card never leaves
+/// the band it grew from.
+struct MenuSlot {
+    display: String,
+    left: Option<f64>,
 }
 
 fn parse_target(argument: &str) -> Option<Target> {
@@ -907,6 +918,68 @@ fn target_display(window: &WebviewWindow) -> Result<Option<notch_display::Displa
     Ok(index.map(|i| displays[i].clone()))
 }
 
+/// Whether the band sits in this screen's menu bar: the top band on a screen without a camera
+/// housing, while its menu bar is visible.
+fn in_menu_bar(display: &notch_display::Display, placement: &notch_display::Placement) -> bool {
+    *placement == notch_display::Placement::Top
+        && display.camera_height <= 0.0
+        && display.menu_height >= notch_geometry::MIN_MENU_HEIGHT
+}
+
+/// Look at the menu bar icons on `display` and find the band's left edge, staying at `current`
+/// while that still fits.
+fn find_menu_slot(display: &notch_display::Display, placement: &notch_display::Placement, current: Option<f64>) -> Option<f64> {
+    let scale = display.monitor.scale_factor();
+    let screen = notch_geometry::Frame {
+        x: display.monitor.position().x as f64 / scale,
+        y: display.monitor.position().y as f64 / scale,
+        width: display.monitor.size().width as f64 / scale,
+        height: display.monitor.size().height as f64 / scale,
+    };
+    let width = notch_geometry::compact_width(display.camera_width, placement);
+    platform::status_bar_windows()
+        .and_then(|icons| notch_geometry::menu_bar_slot(screen, display.menu_height, &icons, width, current))
+}
+
+/// The band's center in points in the menu bar of `display`, or `None` to place it below the
+/// menu bar. Uses the stored place; only a display without one is looked at here.
+fn menu_bar_center(window: &WebviewWindow, display: &notch_display::Display) -> Option<f64> {
+    let desktop = window.state::<Desktop>();
+    let placement = desktop.settings.lock().unwrap().notch_placement.clone();
+    if !in_menu_bar(display, &placement) {
+        return None;
+    }
+    let mut stored = desktop.menu_slot.lock().unwrap();
+    let left = match stored.as_ref().filter(|slot| slot.display == display.id) {
+        Some(slot) => slot.left,
+        None => {
+            let left = find_menu_slot(display, &placement, None);
+            *stored = Some(MenuSlot { display: display.id.clone(), left });
+            left
+        }
+    };
+    let width = notch_geometry::compact_width(display.camera_width, &placement);
+    left.map(|left| left + width / 2.0)
+}
+
+/// Menu bar icons come and go: look for the collapsed band's place again. True when it moved.
+fn refresh_menu_slot(window: &WebviewWindow) -> bool {
+    let Ok(Some(display)) = target_display(window) else {
+        return false;
+    };
+    let desktop = window.state::<Desktop>();
+    let placement = desktop.settings.lock().unwrap().notch_placement.clone();
+    let mut stored = desktop.menu_slot.lock().unwrap();
+    if !in_menu_bar(&display, &placement) {
+        *stored = None;
+        return false;
+    }
+    let previous = stored.as_ref().filter(|slot| slot.display == display.id).map(|slot| slot.left);
+    let left = find_menu_slot(&display, &placement, previous.flatten());
+    *stored = Some(MenuSlot { display: display.id.clone(), left });
+    previous != Some(left)
+}
+
 fn position_notch_on(window: &WebviewWindow, display: &notch_display::Display) -> Result<(), String> {
     let monitor = &display.monitor;
     let scale = monitor.scale_factor();
@@ -919,13 +992,17 @@ fn position_notch_on(window: &WebviewWindow, display: &notch_display::Display) -
         x: work.position.x as f64, y: work.position.y as f64,
         width: work.size.width as f64, height: work.size.height as f64,
     }, display.safe_top, scale);
+    let screen = notch_geometry::Frame {
+        x: monitor.position().x as f64, y: monitor.position().y as f64,
+        width: monitor.size().width as f64, height: monitor.size().height as f64,
+    };
     let area = if settings.notch_placement == notch_display::Placement::Top {
-        notch_geometry::camera_work_area(notch_geometry::Frame {
-            x: monitor.position().x as f64, y: monitor.position().y as f64,
-            width: monitor.size().width as f64, height: monitor.size().height as f64,
-        }, area, display.camera_height)
+        notch_geometry::camera_work_area(screen, area, display.camera_height)
     } else { area };
-    let (x, y) = notch_geometry::dock_layout(area, size.width * scale, size.height * scale, &settings.notch_placement);
+    let (x, y) = match menu_bar_center(window, display) {
+        Some(center) => notch_geometry::menu_bar_layout(screen, center * scale, size.width * scale),
+        None => notch_geometry::dock_layout(area, size.width * scale, size.height * scale, &settings.notch_placement),
+    };
     // Tao converts physical positions with the *source* window scale on macOS. Use global
     // points explicitly when crossing displays, or a 1x/2x pair lands on the wrong screen.
     #[cfg(target_os = "macos")]
@@ -949,10 +1026,11 @@ fn notch_displays(window: WebviewWindow) -> Result<Vec<notch_display::Display>, 
 
 #[tauri::command]
 fn notch_metrics(window: WebviewWindow) -> Result<NotchMetrics, String> {
-    let (camera_width, camera_height) = target_display(&window)?.map_or((0.0, 0.0), |display| (display.camera_width, display.camera_height));
+    let (camera_width, camera_height, menu_height) = target_display(&window)?
+        .map_or((0.0, 0.0, 0.0), |display| (display.camera_width, display.camera_height, display.menu_height));
     let placement = window.state::<Desktop>().settings.lock().unwrap().notch_placement.clone();
     Ok(NotchMetrics {
-        band_height: notch_geometry::band_height(camera_height, &placement),
+        band_height: notch_geometry::band_height(camera_height, menu_height, &placement),
         compact_width: notch_geometry::compact_width(camera_width, &placement),
         housing_width: notch_geometry::housing_width(camera_width, &placement),
     })
@@ -1104,7 +1182,11 @@ fn refresh_tray(app: &tauri::AppHandle) {
         let _ = tray.set_tooltip(Some(host_tray::tooltip(state)));
         // Only macOS draws text beside the icon; Windows shows the count in the tooltip.
         #[cfg(target_os = "macos")]
-        let _ = tray.set_title(Some(host_tray::title(state)));
+        {
+            let _ = tray.set_title(Some(host_tray::title(state)));
+            // The icon's new width moves the icons beside the band once macOS lays them out again.
+            desktop.menu_refresh.store(8, Ordering::SeqCst);
+        }
     }
 }
 
@@ -1341,6 +1423,8 @@ pub fn run() {
                 panel_fade: PanelFade::default(),
                 fitted_panel: Mutex::new(None),
                 tray: Mutex::new(None),
+                menu_slot: Mutex::new(None),
+                menu_refresh: AtomicU64::new(0),
             });
             if let Some(shortcut) = &settings.shortcut {
                 if let Err(error) = app.global_shortcut().register(shortcut.as_str()) {
@@ -1473,6 +1557,8 @@ pub fn run() {
                         };
                         let _ = window.set_size(tauri::LogicalSize::new(width, height));
                         let _ = platform::configure(&window, state.keyboard, width, height);
+                        // Screens moved or the setting changed: a stored menu bar place is stale.
+                        *desktop.menu_slot.lock().unwrap() = None;
                         if position_notch(&window).is_ok() { layout = current_layout; }
                         if let Some(panel) = handle.get_webview_window("panel") {
                             if panel.is_visible().unwrap_or(false) {
@@ -1497,6 +1583,21 @@ pub fn run() {
                     // Panel layout must recover even when the optional notch is hidden.
                     if !should_show { pointer_inside = None; }
                     if !settings.notch_enabled { continue; }
+                    // Menu bar icons that come, go or change width move the collapsed band: twice a
+                    // second, and on every tick for a moment after TodoCue's own icon changed.
+                    // Only a band that has finished shrinking moves, so a closing card never hops.
+                    let quick = desktop.menu_refresh.load(Ordering::SeqCst) > 0;
+                    let at_rest = last_metrics.as_ref().is_none_or(|metrics| {
+                        window.inner_size().ok().zip(window.scale_factor().ok()).is_some_and(|(size, scale)| {
+                            let size = size.to_logical::<f64>(scale);
+                            (size.width - metrics.compact_width).abs() <= 1.0
+                                && (size.height - metrics.band_height).abs() <= 1.0
+                        })
+                    });
+                    if should_show && at_rest && !(state.expanded || state.stack) && (tick % 5 == 1 || quick) {
+                        if quick { desktop.menu_refresh.fetch_sub(1, Ordering::SeqCst); }
+                        if refresh_menu_slot(&window) { let _ = position_notch(&window); }
+                    }
                     if tick % 5 == 3 {
                         platform::follow_virtual_desktop(&window);
                     }

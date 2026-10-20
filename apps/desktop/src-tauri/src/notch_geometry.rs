@@ -30,10 +30,89 @@ pub fn housing_width(camera_width: f64, placement: &crate::notch_display::Placem
     else { 185.0 }
 }
 
-pub fn band_height(camera_height: f64, placement: &crate::notch_display::Placement) -> f64 {
-    if *placement == crate::notch_display::Placement::Top && camera_height.is_finite() && camera_height > 0.0 {
-        camera_height
-    } else { 32.0 }
+/// The band wraps the camera housing, or is as tall as a visible menu bar on a screen without one.
+pub fn band_height(camera_height: f64, menu_height: f64, placement: &crate::notch_display::Placement) -> f64 {
+    if *placement != crate::notch_display::Placement::Top { return 32.0; }
+    if camera_height.is_finite() && camera_height > 0.0 { camera_height }
+    else if menu_height.is_finite() && menu_height >= MIN_MENU_HEIGHT { menu_height }
+    else { 32.0 }
+}
+
+/// Anything shorter is not a menu bar the band could sit in (auto-hidden, or none on this screen).
+pub const MIN_MENU_HEIGHT: f64 = 18.0;
+/// Room kept at the left of a menu bar for the active app's own menus when icons push the band
+/// away from the center. Without the Accessibility permission nothing reports where they end; the
+/// widest of 22 running apps measured on a 1920-point screen (Chrome, 11 menus) ended at 594
+/// points. The center itself is always allowed, as it was for the original virtual notch.
+pub const APP_MENU_ROOM: f64 = 640.0;
+/// Space kept between the band and the nearest menu bar icon.
+pub const MENU_ICON_GAP: f64 = 8.0;
+/// A band that still fits stays where it is unless the best place moved further than this: an icon
+/// that changes width (TodoCue's own count, 18 points; a clock gaining a digit) must not make it
+/// hop, while an icon that comes or goes does move it.
+pub const MENU_SETTLE: f64 = 24.0;
+
+/// Left edge of the place where a band `width` wide fits in the visible menu bar of a screen
+/// without a camera housing: the screen's center when that is free, otherwise the free place
+/// nearest to it, kept out of the app menus' room. It covers no menu bar icon (`windows`: frames
+/// of the status-bar-level windows, of which only those in this menu bar count). macOS lays its
+/// icons out without knowing about the band, so this is how they stay where it put them. The
+/// band stays at `current` (its present left edge) while that still fits and the best place is
+/// within `MENU_SETTLE` of it. `None` when no gap is wide enough: the band then goes below the
+/// menu bar. All in points.
+pub fn menu_bar_slot(screen: Frame, menu_height: f64, windows: &[Frame], width: f64, current: Option<f64>) -> Option<f64> {
+    if !(width.is_finite() && width > 0.0 && menu_height.is_finite() && menu_height >= MIN_MENU_HEIGHT) {
+        return None;
+    }
+    let end = screen.x + screen.width;
+    let in_menu_bar = |icon: &&Frame| {
+        (icon.y - screen.y).abs() <= EDGE_TOLERANCE
+            && icon.y + icon.height <= screen.y + menu_height + EDGE_TOLERANCE
+            && icon.x < end
+            && icon.x + icon.width > screen.x
+    };
+    let mut taken: Vec<(f64, f64)> = windows
+        .iter()
+        .filter(in_menu_bar)
+        .map(|icon| {
+            let right = icon.x + icon.width;
+            // Menu bar managers (Ice, Hidden Bar, Bartender) hide icons by stretching one empty
+            // item thousands of points to the left; only its right end is a place to keep clear.
+            let spacer = icon.x < screen.x - EDGE_TOLERANCE || icon.width > screen.width / 2.0;
+            (if spacer { right } else { icon.x } - MENU_ICON_GAP, right + MENU_ICON_GAP)
+        })
+        .collect();
+    taken.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let ideal = screen.x + (screen.width - width) / 2.0;
+    let floor = screen.x + APP_MENU_ROOM.min((screen.width - width) / 2.0).max(0.0);
+    let mut best: Option<f64> = None;
+    let mut from = floor;
+    for &(start, stop) in taken.iter().chain([&(end, end)]) {
+        let to = start.min(end);
+        if to - from >= width {
+            let x = ideal.clamp(from, to - width);
+            if best.is_none_or(|best| (x - ideal).abs() < (best - ideal).abs()) {
+                best = Some(x);
+            }
+        }
+        from = from.max(stop);
+    }
+    let fits = |x: f64| {
+        x >= floor - EDGE_TOLERANCE
+            && x + width <= end + EDGE_TOLERANCE
+            && taken.iter().all(|&(start, stop)| x + width <= start || x >= stop)
+    };
+    match (best, current) {
+        (Some(best), Some(current)) if (best - current).abs() <= MENU_SETTLE && fits(current) => Some(current),
+        (best, _) => best,
+    }
+}
+
+/// Physical position of the band in the menu bar, or of the card grown from it: centered on the
+/// band's `center`, at the screen's top edge, kept on the screen.
+pub fn menu_bar_layout(screen: Frame, center: f64, width: f64) -> (i32, i32) {
+    let x = (center - width / 2.0).min(screen.x + screen.width - width).max(screen.x);
+    (x.round() as i32, screen.y.round() as i32)
 }
 
 /// All inputs are physical pixels on the target display. Keep the entire expanded shell in the
@@ -330,12 +409,146 @@ mod tests {
     #[test]
     fn the_band_matches_camera_height_without_dropping_below_it() {
         use crate::notch_display::Placement::*;
-        assert_eq!(band_height(32.0, &Top), 32.0);
-        assert_eq!(band_height(28.0, &Top), 28.0);
-        assert_eq!(band_height(40.0, &Top), 40.0);
-        assert_eq!(band_height(0.0, &Top), 32.0);
-        assert_eq!(band_height(f64::NAN, &Top), 32.0);
-        assert_eq!(band_height(40.0, &Left), 32.0);
+        assert_eq!(band_height(32.0, 33.0, &Top), 32.0);
+        assert_eq!(band_height(28.0, 0.0, &Top), 28.0);
+        assert_eq!(band_height(40.0, 0.0, &Top), 40.0);
+        assert_eq!(band_height(0.0, 0.0, &Top), 32.0);
+        assert_eq!(band_height(f64::NAN, f64::NAN, &Top), 32.0);
+        assert_eq!(band_height(40.0, 0.0, &Left), 32.0);
+    }
+    #[test]
+    fn without_a_camera_the_band_is_as_tall_as_a_visible_menu_bar() {
+        use crate::notch_display::Placement::*;
+        assert_eq!(band_height(0.0, 30.0, &Top), 30.0);
+        assert_eq!(band_height(0.0, 24.0, &Top), 24.0);
+        // Auto-hidden, or no menu bar on this screen.
+        assert_eq!(band_height(0.0, 0.0, &Top), 32.0);
+        assert_eq!(band_height(0.0, 30.0, &Right), 32.0);
+    }
+
+    // Measured 2026-10-20 on a BenQ RD280U, 1920 x 1280 points with a 30-point menu bar and
+    // icons from x = 979 to the right edge. The centered band (845 to 1074) covered three of them.
+    fn crowded_menu_bar() -> Vec<Frame> {
+        [979.0, 1013.0, 1051.0, 1089.0, 1121.0, 1159.0, 1191.0, 1313.0, 1347.0, 1382.0, 1414.0, 1468.0,
+            1512.0, 1550.0, 1588.0, 1630.0, 1668.0, 1700.0, 1742.0]
+            .windows(2)
+            .map(|pair| frame(pair[0], 0.0, pair[1] - pair[0], 30.0))
+            .chain([frame(1742.0, 0.0, 178.0, 30.0)])
+            .collect()
+    }
+    /// Icons 40 points wide side by side from `left` to `right`, as macOS lays them out.
+    fn icons_from(left: f64, right: f64) -> Vec<Frame> {
+        let mut icons = Vec::new();
+        let mut x = left;
+        while x < right {
+            icons.push(frame(x, 0.0, 40.0_f64.min(right - x), 30.0));
+            x += 40.0;
+        }
+        icons
+    }
+    /// Without a camera the band keeps the notch shape and width of the built-in screen.
+    const BAND: f64 = 229.0;
+    #[test]
+    fn a_crowded_menu_bar_moves_the_band_next_to_its_icons() {
+        let screen = frame(0.0, 0.0, 1920.0, 1280.0);
+        assert_eq!(compact_width(0.0, &crate::notch_display::Placement::Top), BAND);
+        let left = menu_bar_slot(screen, 30.0, &crowded_menu_bar(), BAND, None).unwrap();
+        assert_eq!(left, 979.0 - MENU_ICON_GAP - BAND);
+        // In 2x pixels, collapsed and as the 560-point card grown from it.
+        let pixels = frame(0.0, 0.0, 3840.0, 2560.0);
+        let center = (left + BAND / 2.0) * 2.0;
+        assert_eq!(menu_bar_layout(pixels, center, BAND * 2.0), (1484, 0));
+        assert_eq!(menu_bar_layout(pixels, center, 1120.0), (1153, 0));
+    }
+    #[test]
+    fn a_free_center_keeps_the_band_centered() {
+        let screen = frame(0.0, 0.0, 1920.0, 1280.0);
+        let icons = [frame(1400.0, 0.0, 520.0, 30.0)];
+        assert_eq!(menu_bar_slot(screen, 30.0, &icons, BAND, None), Some(845.5));
+        assert_eq!(menu_bar_slot(screen, 30.0, &[], BAND, None), Some(845.5));
+        // On a narrow screen too: the center is allowed even inside the app menus' room.
+        let narrow = frame(0.0, 0.0, 1440.0, 900.0);
+        let few = [frame(1140.0, 0.0, 300.0, 24.0)];
+        assert_eq!(menu_bar_slot(narrow, 24.0, &few, BAND, None), Some(605.5));
+    }
+    #[test]
+    fn the_band_takes_the_free_gap_nearest_the_center() {
+        let screen = frame(0.0, 0.0, 1920.0, 1280.0);
+        // Gaps 640 to 992 and 1108 to 1392 both fit; the first is nearer the center.
+        let icons = [frame(1000.0, 0.0, 100.0, 30.0), frame(1400.0, 0.0, 520.0, 30.0)];
+        assert_eq!(menu_bar_slot(screen, 30.0, &icons, BAND, None), Some(763.0));
+    }
+    #[test]
+    fn icons_never_push_the_band_into_the_app_menus_room() {
+        let screen = frame(0.0, 0.0, 1920.0, 1280.0);
+        assert_eq!(menu_bar_slot(screen, 30.0, &icons_from(900.0, 1920.0), BAND, None), Some(663.0));
+        assert_eq!(menu_bar_slot(screen, 30.0, &icons_from(860.0, 1920.0), BAND, None), None);
+        let narrow = frame(0.0, 0.0, 1440.0, 900.0);
+        assert_eq!(menu_bar_slot(narrow, 30.0, &icons_from(499.0, 1440.0), BAND, None), None);
+    }
+    #[test]
+    fn without_a_visible_menu_bar_there_is_no_slot() {
+        let screen = frame(0.0, 0.0, 1920.0, 1280.0);
+        assert_eq!(menu_bar_slot(screen, 0.0, &[], BAND, None), None);
+        assert_eq!(menu_bar_slot(screen, f64::NAN, &[], BAND, None), None);
+        assert_eq!(menu_bar_slot(screen, 30.0, &[], f64::NAN, None), None);
+    }
+    #[test]
+    fn only_icons_in_this_screens_menu_bar_count() {
+        let screen = frame(-1920.0, -1280.0, 1920.0, 1280.0);
+        let others = [
+            // Another screen's icon, a status-level window lower down, and a tall one.
+            frame(-1000.0, 0.0, 400.0, 30.0),
+            frame(-1100.0, -900.0, 400.0, 30.0),
+            frame(-1100.0, -1280.0, 400.0, 600.0),
+        ];
+        assert_eq!(menu_bar_slot(screen, 30.0, &others, BAND, None), Some(-1074.5));
+        let own = [frame(-1000.0, -1280.0, 400.0, 30.0)];
+        assert_eq!(menu_bar_slot(screen, 30.0, &own, BAND, None), Some(-1008.0 - BAND));
+    }
+    #[test]
+    fn an_icon_changing_width_does_not_make_the_band_hop() {
+        let screen = frame(0.0, 0.0, 1920.0, 1280.0);
+        let with_tray = |left: f64| {
+            let mut icons = crowded_menu_bar();
+            icons[0] = frame(left, 0.0, 1013.0 - left, 30.0);
+            icons
+        };
+        let placed = Some(742.0);
+        // TodoCue's own count disappears: its icon narrows by 18 points. The band stays.
+        assert_eq!(menu_bar_slot(screen, 30.0, &with_tray(997.0), BAND, placed), placed);
+        // It comes back: the band still fits.
+        assert_eq!(menu_bar_slot(screen, 30.0, &with_tray(979.0), BAND, placed), placed);
+        // An icon grown into the gap moves the band.
+        assert_eq!(menu_bar_slot(screen, 30.0, &with_tray(961.0), BAND, placed), Some(724.0));
+        // A new icon appears beside it: the band moves out of its way.
+        let mut more = crowded_menu_bar();
+        more.push(frame(899.0, 0.0, 80.0, 30.0));
+        assert_eq!(menu_bar_slot(screen, 30.0, &more, BAND, placed), Some(662.0));
+        // Icons went away and the center is free: further than the settle distance, so it moves.
+        assert_eq!(menu_bar_slot(screen, 30.0, &[frame(1400.0, 0.0, 520.0, 30.0)], BAND, Some(700.0)), Some(845.5));
+        // No room left: the band goes below the menu bar wherever it was.
+        assert_eq!(menu_bar_slot(screen, 30.0, &icons_from(600.0, 1920.0), BAND, placed), None);
+    }
+    #[test]
+    fn a_menu_bar_manager_spacer_only_keeps_its_right_end_clear() {
+        let screen = frame(0.0, 0.0, 1920.0, 1280.0);
+        let icons = [frame(1400.0, 0.0, 520.0, 30.0)];
+        // Ice and others stretch one empty item thousands of points to the left.
+        let spacer = |right: f64| frame(right - 10_000.0, 0.0, 10_000.0, 30.0);
+        let left_of_center = [spacer(700.0), icons[0]];
+        assert_eq!(menu_bar_slot(screen, 30.0, &left_of_center, BAND, None), Some(845.5));
+        let at_center = [spacer(950.0), icons[0]];
+        assert_eq!(menu_bar_slot(screen, 30.0, &at_center, BAND, None), Some(958.0));
+        // One wider than half the screen counts the same way even when it starts on it.
+        let wide = [frame(100.0, 0.0, 1200.0, 30.0), icons[0]];
+        assert_eq!(menu_bar_slot(screen, 30.0, &wide, BAND, None), Some(845.5));
+    }
+    #[test]
+    fn the_card_stays_on_the_screen_near_its_edges() {
+        let screen = frame(-3840.0, 0.0, 3840.0, 2560.0);
+        assert_eq!(menu_bar_layout(screen, -100.0, 1120.0), (-1120, 0));
+        assert_eq!(menu_bar_layout(screen, -3800.0, 1120.0), (-3840, 0));
     }
     #[test]
     fn placement_keeps_the_menu_bar_and_taskbar_free() {
