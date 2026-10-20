@@ -12,6 +12,13 @@ on:
       - scripts/tests/windows-bundler.test.mjs
       - scripts/smoke-windows-install.mjs
       - scripts/stage-runtime.mjs
+      - apps/macos/Package.swift
+      - apps/macos/Sources/TodoCueKit/**
+      - apps/macos/Sources/AppleSyncKit/**
+      - apps/macos/Sources/TodoCueAppleSync/**
+      - scripts/build-macos.sh
+      - scripts/package-macos.mjs
+      - scripts/app.entitlements.plist
       - package-lock.json
       - .github/workflows/desktop-preview.yml
 permissions:
@@ -121,6 +128,23 @@ jobs:
         id: rust-check
       - name: Build shared macOS Preview App
         run: npm run tauri --workspace @todocue/desktop -- build --bundles app --config '{"bundle":{"active":true}}'
+      # The same helper, place and entitlements as package-macos.mjs, so a break shows here and not at release.
+      - name: Bundle the Apple sync helper
+        env:
+          EXPECTED_MACHO: ${{ matrix.macho }}
+        run: |
+          bash scripts/build-macos.sh --helpers-only
+          app="apps/desktop/src-tauri/target/release/bundle/macos/TodoCue.app"
+          helper="$app/Contents/Helpers/TodoCueAppleSync"
+          mkdir -p "$app/Contents/Helpers"
+          cp apps/macos/build/TodoCueAppleSync "$helper"
+          /usr/bin/lipo "$helper" -verify_arch "$EXPECTED_MACHO"
+          /usr/bin/codesign --force --sign - --entitlements scripts/app.entitlements.plist "$helper"
+          /usr/bin/codesign --force --sign - --entitlements scripts/app.entitlements.plist "$app"
+          for target in "$app" "$helper"; do
+            /usr/bin/codesign -d --entitlements - --xml "$target" | grep -q com.apple.security.personal-information.calendars
+          done
+          /usr/libexec/PlistBuddy -c 'Print :NSRemindersFullAccessUsageDescription' "$app/Contents/Info.plist"
       - name: Verify and archive shared Preview App
         env:
           EXPECTED_MACHO: ${{ matrix.macho }}
