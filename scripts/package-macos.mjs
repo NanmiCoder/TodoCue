@@ -42,7 +42,7 @@ function copy(source, destination) {
 }
 
 run('npm', ['run', 'build']);
-run('/bin/bash', [path.join(root, 'scripts/build-macos.sh'), ...(desktop ? ['--notifier-only'] : [])]);
+run('/bin/bash', [path.join(root, 'scripts/build-macos.sh'), ...(desktop ? ['--helpers-only'] : [])]);
 fs.mkdirSync(out, { recursive: true });
 if (desktop) {
   run('npm', ['run', 'tauri', '--workspace', '@todocue/desktop', '--', 'build', '--bundles', 'app', '--config', '{"bundle":{"active":true}}'], {
@@ -84,6 +84,8 @@ for (const file of fs.readdirSync(prebuilds)) {
   if (file !== `darwin-${arch}.node`) fs.rmSync(path.join(prebuilds, file), { recursive: true, force: true });
 }
 copy(path.join(root, 'apps/macos/build/TodoCueNotifier.app'), path.join(app, 'Contents/Helpers/TodoCueNotifier.app'));
+// The SwiftUI app syncs with Apple Calendar / Reminders in-process; the shared app starts this helper.
+if (desktop) copy(path.join(root, 'apps/macos/build/TodoCueAppleSync'), path.join(app, 'Contents/Helpers/TodoCueAppleSync'));
 copy(path.join(root, 'skills/todocue'), path.join(resources, 'skills/todocue'));
 const runtimeDigest = createHash('sha256');
 for (const name of runtimePackages) {
@@ -115,6 +117,8 @@ console.log(`Signing ${identity === '-' ? 'with an ad-hoc identity' : 'with Deve
 sign(path.join(prebuilds, `darwin-${arch}.node`));
 sign(path.join(runtime, 'bin/node'), path.join(root, 'scripts/node.entitlements.plist'));
 sign(path.join(app, 'Contents/Helpers/TodoCueNotifier.app'));
+// Hardened runtime blocks Calendar and Reminders for the process that asks without this entitlement.
+if (desktop) sign(path.join(app, 'Contents/Helpers/TodoCueAppleSync'), path.join(root, 'scripts/app.entitlements.plist'));
 if (desktop) {
   // Cargo's Windows-only helper entrypoints are inert stubs on Mac; they are not shipped.
   for (const name of ['todocue-cli', 'todocue-runtime', 'TodoCueNotifier']) {
@@ -124,6 +128,12 @@ if (desktop) {
 // Hardened runtime blocks Calendar and Reminders without this entitlement.
 sign(app, path.join(root, 'scripts/app.entitlements.plist'));
 run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
+for (const target of desktop ? [app, path.join(app, 'Contents/Helpers/TodoCueAppleSync')] : [app]) {
+  const entitlements = execFileSync('/usr/bin/codesign', ['-d', '--entitlements', '-', '--xml', target], { encoding: 'utf8' });
+  if (!entitlements.includes('com.apple.security.personal-information.calendars')) {
+    throw new Error(`${target} lacks the Calendars entitlement; Apple sync would be refused.`);
+  }
+}
 
 console.log('Checking the bundled runtime without Homebrew or repository dependencies…');
 run(path.join(runtime, 'bin/node'), ['--input-type=module', '-e', `

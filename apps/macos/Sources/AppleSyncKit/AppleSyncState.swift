@@ -2,7 +2,7 @@ import Foundation
 import TodoCueKit
 
 /// Links and containers, kept next to the runtime's data so `TODOCUE_HOME` isolates them too.
-struct AppleSyncState: Codable, Equatable {
+public struct AppleSyncState: Codable, Equatable {
     var calendarId: String?
     var reminderListId: String?
     /// The account each container lives in. Kept after the container is gone so sync never wanders
@@ -10,6 +10,9 @@ struct AppleSyncState: Codable, Equatable {
     var calendarSourceId: String?
     var reminderSourceId: String?
     var links: [AppleSyncLink] = []
+    /// The client that last completed a round over these links. Clients older than this field drop it
+    /// when they save, which is what makes the next client treat the links as possibly stale.
+    var client: String?
 
     func containerId(_ kind: AppleSyncKind) -> String? { kind == .event ? calendarId : reminderListId }
     func sourceId(_ kind: AppleSyncKind) -> String? { kind == .event ? calendarSourceId : reminderSourceId }
@@ -34,7 +37,7 @@ struct AppleSyncState: Codable, Equatable {
         links.removeAll { $0.kind == kind && $0.taskId == taskId }
     }
 
-    static var defaultURL: URL { TodoCueHome.directory.appendingPathComponent("apple-sync.json") }
+    public static var defaultURL: URL { TodoCueHome.directory.appendingPathComponent("apple-sync.json") }
 
     static func load(from url: URL) -> AppleSyncState {
         guard let data = try? Data(contentsOf: url),

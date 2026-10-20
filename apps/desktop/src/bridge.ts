@@ -272,6 +272,55 @@ export async function openDataFolder(_path?: string): Promise<{ opened: boolean 
     throw error;
   }
 }
+export type AppleSyncKind = "event" | "reminder";
+export type AppleSyncAccess = "notDetermined" | "writeOnly" | "granted" | "denied";
+export interface AppleSyncChannel {
+  enabled: boolean;
+  access: AppleSyncAccess;
+  /** The switch is being flipped (permission prompt, first round): hold it still. */
+  changing: boolean;
+  /** The calendar or list in use, only for a channel that is on. */
+  container?: { title: string; sourceTitle: string; isICloud: boolean } | null;
+}
+export interface AppleSyncStatus {
+  event: AppleSyncChannel;
+  reminder: AppleSyncChannel;
+  syncing: boolean;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  /** The helper has read a board from the runtime. */
+  connected: boolean;
+}
+/** `available`: this host ships the macOS sync helper; `running`: it is up; `status`: its last report. */
+export interface AppleSyncSnapshot {
+  available: boolean;
+  running: boolean;
+  status: AppleSyncStatus | null;
+}
+export type AppleSyncCommand =
+  | { command: "status" | "syncNow" | "refreshAccess" }
+  | { command: "setEnabled"; kind: AppleSyncKind; enabled: boolean }
+  | { command: "removeData" | "openPrivacySettings"; kind: AppleSyncKind };
+const appleSyncUnavailable: AppleSyncSnapshot = { available: false, running: false, status: null };
+/** Apple Calendar / Reminders sync runs in the macOS host's helper (`apple_sync.rs`). */
+export async function loadAppleSync(): Promise<AppleSyncSnapshot> {
+  if (!native) return appleSyncUnavailable;
+  try {
+    return await invoke<AppleSyncSnapshot>("apple_sync_status");
+  } catch (error) {
+    if (missingCommand(error)) return appleSyncUnavailable;
+    throw error;
+  }
+}
+export async function onAppleSync(handler: (snapshot: AppleSyncSnapshot) => void): Promise<() => void> {
+  if (!native) return () => undefined;
+  return listen<AppleSyncSnapshot>("apple-sync:status", (event) => handler(event.payload));
+}
+/** Resolves to the message the old SwiftUI settings showed under the switches, or null. */
+export async function sendAppleSync(command: AppleSyncCommand): Promise<string | null> {
+  const { message } = await invoke<{ message: string | null }>("apple_sync_command", { command });
+  return message;
+}
 export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);

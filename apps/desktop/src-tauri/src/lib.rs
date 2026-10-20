@@ -1,3 +1,4 @@
+mod apple_sync;
 #[cfg(target_os = "macos")]
 mod macos_home;
 mod export;
@@ -12,6 +13,7 @@ mod runtime;
 mod tray_icon;
 mod windows_home;
 
+use apple_sync::AppleSync;
 use runtime::{Request, Runtime, Status};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -242,6 +244,19 @@ async fn runtime_subscribe(
 ) -> Result<Status, String> {
     Ok(runtime.inner().subscribe(app).await)
 }
+/// Apple Calendar / Reminders sync: `{ available, running, status }` (see `apple_sync.rs`).
+#[tauri::command]
+fn apple_sync_status(sync: State<'_, Arc<AppleSync>>) -> Value {
+    sync.snapshot()
+}
+#[tauri::command]
+async fn apple_sync_command(
+    sync: State<'_, Arc<AppleSync>>,
+    command: Value,
+) -> Result<Value, String> {
+    let message = sync.command(&command).await?;
+    Ok(json!({ "message": message }))
+}
 #[tauri::command]
 fn settings_load(app: tauri::AppHandle, desktop: State<'_, Desktop>) -> Option<Settings> {
     if !desktop.home.join("desktop-preview-settings.json").exists() {
@@ -327,6 +342,9 @@ fn settings_save(
     }
     *current = settings.clone();
     drop(current);
+    if language_changed {
+        app.state::<Arc<AppleSync>>().set_language(&settings.language);
+    }
     if tray_needs_refresh(language_changed, changed_startup) {
         refresh_tray(&app);
     }
@@ -1365,6 +1383,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             runtime_request,
             runtime_subscribe,
+            apple_sync_status,
+            apple_sync_command,
             settings_load,
             settings_save,
             panel_show,
@@ -1409,6 +1429,20 @@ pub fn run() {
                 })
                 .unwrap_or_default();
             app.manage(Arc::new(Runtime::new(home.clone())));
+            let apple_sync = Arc::new(AppleSync::default());
+            #[cfg(target_os = "macos")]
+            if let Some(helper) = std::env::current_exe().ok().and_then(|executable| {
+                apple_sync::helper_path(
+                    &executable,
+                    std::env::var_os("TODOCUE_APPLE_SYNC_HELPER").map(PathBuf::from),
+                )
+            }) {
+                let handle = app.handle().clone();
+                apple_sync.start(helper, home.clone(), settings.language.clone(), move |status| {
+                    let _ = handle.emit_to("panel", "apple-sync:status", status);
+                });
+            }
+            app.manage(apple_sync);
             let target = std::env::args().find_map(|arg| parse_target(&arg));
             app.manage(Desktop {
                 home,

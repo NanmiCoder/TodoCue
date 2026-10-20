@@ -11,8 +11,11 @@ Minimum macOS 14, SwiftPM only (no Xcode project), no third-party dependencies.
 | `Sources/TodoCueKit` | API client, Codable models (docs/api.md), SSE client, date helpers |
 | `Sources/TodoCue` | The app: `AppDelegate`, `AppModel`, `StatusItemController`, `SidePanelController`, `NotchController`, SwiftUI views |
 | `Sources/TodoCueNotifier` | Notification helper (`status` / `request` / `deliver` / click handling) |
+| `Sources/AppleSyncKit` | Apple Calendar / Reminders sync engine (EventKit store, controller, link state), shared by both clients |
+| `Sources/TodoCueAppleSync` | Headless sync helper the desktop app starts on macOS; JSON lines on stdin/stdout ([docs/apple-sync.md](../../docs/apple-sync.md)) |
 | `Tests/TodoCueKitTests` | Decoding + SSE parser tests against docs/api.md fixtures |
-| `build/` | Output of `scripts/build-macos.sh` (`TodoCue.app`, `TodoCueNotifier.app`) |
+| `Tests/AppleSyncKitTests` | Sync controller and helper protocol tests (fake EventKit store and backend) |
+| `build/` | Output of `scripts/build-macos.sh` (`TodoCue.app`, `TodoCueNotifier.app`, `TodoCueAppleSync`) |
 
 ## Installable DMG
 
