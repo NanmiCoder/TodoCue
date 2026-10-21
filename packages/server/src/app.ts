@@ -8,6 +8,7 @@ import {
   PeriodicActionInput,
   PeriodicClaimInput,
   PeriodicReceiptInput,
+  PeriodicAwayInput,
   ATTACHMENT_BODY_LIMIT,
   AddAttachmentsInput,
   MoveTaskInput,
@@ -254,6 +255,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const result = engine.periodic.action(idOf(req), parse(PeriodicActionInput, req.body));
     return "deleted" in result ? result : { reminder: result };
   });
+  app.post(`${API_PREFIX}/periodic-reminders/away`, async (req) => engine.periodic.away(parse(PeriodicAwayInput, req.body)));
   app.post(`${API_PREFIX}/periodic-reminders/:id/claim`, async (req) => ({ reminder: engine.periodic.claim(idOf(req), parse(PeriodicClaimInput, req.body)) }));
   app.post(`${API_PREFIX}/periodic-reminders/:id/receipt`, async (req) => ({ reminder: engine.periodic.receipt(idOf(req), parse(PeriodicReceiptInput, req.body)) }));
 

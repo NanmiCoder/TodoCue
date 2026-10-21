@@ -1,4 +1,6 @@
 mod apple_sync;
+mod away_tracker;
+mod idle;
 #[cfg(target_os = "macos")]
 mod macos_home;
 mod export;
@@ -43,6 +45,8 @@ struct Settings {
     quiet_fullscreen: bool,
     shortcut: Option<String>,
     autostart: bool,
+    /// Being away from the computer counts as the break a habit reminder asks for.
+    away_counts_as_break: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -56,6 +60,7 @@ impl Default for Settings {
             quiet_fullscreen: true,
             shortcut: None,
             autostart: false,
+            away_counts_as_break: true,
         }
     }
 }
@@ -1310,6 +1315,45 @@ async fn export_json(
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// The runtime call that tells habit reminders the user was away from the computer.
+fn away_request(minutes: u32) -> Request {
+    Request {
+        method: "POST".into(),
+        path: "/periodic-reminders/away".into(),
+        body: Some(json!({ "minutes": minutes })),
+        idempotency_key: None,
+    }
+}
+/// Polls the system idle time; when the user comes back after a long enough absence, the runtime
+/// is told so a habit reminder counts it as the break it asks for. Does nothing where the
+/// platform has no idle reading, or while `awayCountsAsBreak` is off. Failures are ignored: the
+/// next absence reports again.
+fn spawn_away_watcher(handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let mut tracker = away_tracker::AwayTracker::default();
+        loop {
+            std::thread::sleep(Duration::from_secs(away_tracker::POLL_INTERVAL_SECS));
+            let enabled = handle
+                .state::<Desktop>()
+                .settings
+                .lock()
+                .map_or(true, |settings| settings.away_counts_as_break);
+            let wall = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_secs());
+            let Some(idle) = idle::idle_seconds().filter(|_| enabled) else {
+                tracker.reset();
+                continue;
+            };
+            if let Some(minutes) = tracker.observe(wall, idle) {
+                let runtime = handle.state::<Arc<Runtime>>().inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = runtime.request(away_request(minutes)).await;
+                });
+            }
+        }
+    });
+}
 pub fn run() {
     let context = tauri::generate_context!();
     let launch_home = home();
@@ -1548,6 +1592,7 @@ pub fn run() {
             }
             platform::monitor_notch_clicks(app.handle()).map_err(std::io::Error::other)?;
             build_tray(app, &settings.language)?;
+            spawn_away_watcher(app.handle().clone());
             let handle = app.handle().clone();
             // Native pointer polling keeps screen-following independent of WebView focus.
             std::thread::spawn(move || {
@@ -1936,6 +1981,22 @@ mod tests {
         assert_eq!(settings.notch_placement, notch_display::Placement::Top);
         assert!(settings.notch_display.is_none());
         assert!(serde_json::from_str::<Settings>(r#"{"notchPlacement":"invalid"}"#).is_err());
+    }
+    #[test]
+    fn away_counts_as_a_break_unless_an_old_or_new_settings_file_says_otherwise() {
+        let old: Settings = serde_json::from_str(r#"{"notchEnabled":true,"language":"en"}"#).unwrap();
+        assert!(old.away_counts_as_break);
+        assert!(Settings::default().away_counts_as_break);
+        let off: Settings = serde_json::from_str(r#"{"awayCountsAsBreak":false}"#).unwrap();
+        assert!(!off.away_counts_as_break);
+        assert_eq!(serde_json::to_value(&off).unwrap()["awayCountsAsBreak"], false);
+    }
+    #[test]
+    fn the_away_report_goes_to_an_allowed_runtime_path_with_the_minutes() {
+        let request = away_request(12);
+        assert!(runtime::validate_path(&request.path).is_ok());
+        assert_eq!(request.method, "POST");
+        assert_eq!(request.body, Some(json!({ "minutes": 12 })));
     }
     #[test]
     fn pinned_display_and_side_placement_round_trip() {

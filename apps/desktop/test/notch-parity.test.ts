@@ -75,9 +75,14 @@ describe("next-step countdown and cue meta wording", () => {
     expect(taskCountdown({}, now, "en")).toBeNull();
   });
   it("describes a periodic rule by interval and a task by countdown", () => {
-    const periodic = { intervalMinutes: 30, currentOccurrence: { result: "pending", fireAt: "2026-10-17T09:15:00.000Z" } } as never;
-    expect(cueMeta({ ...cue("p"), periodic }, now, "zh-CN")).toBe("每 30 分钟 · 已等 45 分钟");
-    expect(cueMeta({ ...cue("p"), periodic }, now, "en")).toBe("Every 30 minutes · Waiting 45 min");
+    const periodic = { intervalMinutes: 30, currentOccurrence: { result: "pending", scheduledAt: "2026-10-17T09:15:00.000Z", fireAt: "2026-10-17T09:55:00.000Z", round: 1, followUps: 0 } } as never;
+    // Overdue counts from when the cue was first due: a follow-up or snooze does not reset it.
+    expect(cueMeta({ ...cue("p"), periodic }, now, "zh-CN")).toBe("每 30 分钟 · 已超 45 分钟");
+    expect(cueMeta({ ...cue("p"), periodic }, now, "en")).toBe("Every 30 minutes · 45 min overdue");
+    const snoozed = { intervalMinutes: 40, currentOccurrence: { result: "pending", scheduledAt: "2026-10-17T09:15:00.000Z", fireAt: "2026-10-17T09:55:00.000Z", round: 4, followUps: 1, snoozes: 2 } } as never;
+    expect(cueMeta({ ...cue("p"), periodic: snoozed }, now, "zh-CN")).toBe("每 40 分钟 · 已超 45 分钟 · 已推迟 2 次");
+    const fresh = { intervalMinutes: 40, currentOccurrence: { result: "pending", scheduledAt: "2026-10-17T10:00:00.000Z", fireAt: "2026-10-17T10:00:00.000Z", round: 1, followUps: 0, snoozes: 0 } } as never;
+    expect(cueMeta({ ...cue("p"), periodic: fresh }, now, "zh-CN")).toBe("每 40 分钟 · 刚刚");
     const task = { scheduledAt: "2026-10-17T10:05:00.000Z" } as never;
     expect(cueMeta({ ...cue("t"), task }, now, "zh-CN")).toBe("任务提醒 · 还有 5 分钟");
     expect(cueMeta({ ...cue("t"), count: 3 }, now, "zh-CN")).toBe("还有 2 件事等你，点开看看。");

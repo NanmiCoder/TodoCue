@@ -1,6 +1,6 @@
 # Periodic reminders
 
-Use `context` first for the runtime timezone. The title and interval are required. Defaults: all seven days, 09:00–18:00, mode `fixed`, runtime timezone, enabled. A completed save returns `{ reminder }` with ID, configuration `version`, state `revision`, Chinese `summary`, `state`, `nextFireAt` (UTC) and `currentOccurrence`. Saving a rule is not proof of notification delivery.
+Use `context` first for the runtime timezone. The title and interval are required. Defaults: all seven days, 09:00–18:00, mode `after_completion`, `followUpMinutes` 10, runtime timezone, enabled. A completed save returns `{ reminder }` with ID, configuration `version`, state `revision`, Chinese `summary`, `state`, `nextFireAt` (UTC) and `currentOccurrence`. Saving a rule is not proof of notification delivery.
 
 “周一、三、六，九点到六点，每半小时提醒起来活动”:
 
@@ -19,7 +19,8 @@ todocue --json periodic add '喝水' --every 1h --between 09:00-12:00 --between 
 - `--every` accepts integer minutes, `30m`, or `1h`; range 1–1440 minutes.
 - `--weekdays` accepts day names or numbers 1=Monday through 7=Sunday; weekends can be selected freely.
 - Repeat `--between HH:mm-HH:mm` for multiple non-overlapping windows. No overnight windows; `24:00` is allowed only as an end. At least one window must be longer than the interval. The first fixed slot is start + interval; the end is excluded.
-- `--mode fixed` is the default for “every half hour”. Fixed slots are unaffected by completion.
+- `--mode after_completion` is the default and fits habits (stand up, drink water, rest eyes): the timer counts from when the user finishes, so a cue never arrives a minute after they got up. `--mode fixed` is for clock-aligned times (“on the hour”, “at :30”); its slots are unaffected by completion. Pass `--mode fixed` only when the user asks for fixed clock times.
+- `--follow-up <minutes>` (0–120, default 10; `0` = off) applies to `after_completion`: a cue that was shown and ignored is asked again after that many minutes, up to 3 times, then stays on the notch. Map “remind me again if I don’t react” to it. The desktop app also treats 5+ minutes away from the computer as a break and restarts the timer (user setting “Time away counts as a break”); there is no CLI flag for that.
 - `--mode after_completion` maps “after I finish / after I confirm, count again”. Without confirmation the card stays on the notch (or folds into its count) and the rule waits, including over lunch. It resets on the next active day. Completion re-arms from the actual confirmation time; if the target is outside a window, the next window starts a full interval later.
 - `--tz` explicitly overrides the runtime IANA timezone. Do not invent a timezone from a location guess.
 - Sleep/offline reminders are not replayed. The Mac runtime must run; notch cards additionally require the App. System notifications are used when the App cannot claim a notch delivery. A displayed card never times out: it stays until completed, snoozed or paused, and a fixed rule that fires again before that merges into the same row.
@@ -45,6 +46,6 @@ Completion/snooze target the returned current occurrence and round. An old card 
 
 ## MCP and App
 
-Use `todocue_create_periodic_reminder`, `todocue_list_periodic_reminders`, `todocue_get_periodic_reminder`, `todocue_update_periodic_reminder`, and `todocue_periodic_action`. Inputs mirror the Local API: `intervalMinutes`, `weekdays`, `windows: [{start,end}]`, `mode`, `timezone`, `enabled`, plus `idempotencyKey`; edits/actions accept `expectedVersion`. Action values: `pause`, `resume`, `pause_today`, `complete`, `snooze`, `delete`. Completion/snooze include `occurrenceId` and `round`.
+Use `todocue_create_periodic_reminder`, `todocue_list_periodic_reminders`, `todocue_get_periodic_reminder`, `todocue_update_periodic_reminder`, and `todocue_periodic_action`. Inputs mirror the Local API: `intervalMinutes`, `weekdays`, `windows: [{start,end}]`, `mode`, `followUpMinutes`, `timezone`, `enabled`, plus `idempotencyKey`; edits/actions accept `expectedVersion`. Action values: `pause`, `resume`, `pause_today`, `complete`, `snooze`, `delete`. Completion/snooze include `occurrenceId` and `round`.
 
-When the user asks to see a rule, open `todocue://periodic/RULE_ID` using the existing App entrypoint. It opens the management page and highlights that rule. The user can create through Move/Water/Custom templates and editable interval/day/window options, without installing or configuring a model.
+When the user asks to see a rule, open `todocue://periodic/RULE_ID` using the existing App entrypoint. It opens the management page and highlights that rule. The user can create through Movement/Eyes/Water/Custom templates (each fills a suitable interval, timing and follow-up) and editable interval/day/window options, without installing or configuring a model.

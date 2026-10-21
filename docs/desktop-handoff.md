@@ -156,6 +156,7 @@ Windows 包在对应 Windows 主机运行 `npm run windows:preview`。PR #17/#18
 - 前一轮 UI 对照阶段的本地 `npm run check`：175 个 Vitest（25 文件）、24 个脚本测试、CLI/MCP 冒烟、release check 通过；`desktop:check` 前端构建和 Rust 11+5 通过；当时 macOS Preview 与原 SwiftUI 对照 App 构建通过。
 - `7ad1b95` 的 [Quality CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147359) 全通过：Linux 完整检查、Swift Apple Silicon 275（4 跳过）/Intel 275（11 跳过），均 0 失败。Intel VM 跳过无 GPU 的原生动画检查，截图测试需 opt-in。本地 CLT 缺 XCTest 的限制仍如实保留。
 - [Desktop CI](https://github.com/NanmiCoder/TodoCue/actions/runs/38571147367) 全通过：Windows 两种架构实际包/后台七组检查，macOS 前端/Rust 检查。Windows 平台的 Vitest 174 通过/1 跳过、脚本 19 通过/5 跳过；平台专属跳过不与本地计数混淆。
+- 周期提醒习惯型计时（追提醒、离开电脑算休息）的自动检查、真实运行时验证与待办的真机清单见 [docs/qa/periodic-habit-timing.md](qa/periodic-habit-timing.md)；空闲时间读取在 macOS 真机与 Windows 上均未验证。
 - 实际浏览器/原生证据与截图、布局 JSON 已保存到仓库的两份 QA 记录；没有保存连接 token 或测试数据库。浏览器不替代原生窗口交互，AX 不替代物理鼠标。
 - 本机虚拟刘海完整键盘/粘贴/回车与箭头延迟响应输入通过；真实外部鼠标、候选窗口及 Windows GUI 仍需按清单独立验收。Mac Intel Tauri release 预览包已构建并验证归档；正式共享运行时、EventKit 及客户端切换尚未完成。
 - 最新 [Quality / 四架构 Desktop / 原 SwiftUI 公证构建](qa/desktop-builds/README.md)全通过：208 项 Vitest、34 项脚本测试，Swift 两架构均 0 失败，Windows 各十组安装检查，以及两种共享 Mac App 下载后的架构/签名/校验和核对。历史计数保留，不与最新计数混淆。

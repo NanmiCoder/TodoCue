@@ -53,7 +53,17 @@ import {
   COMPLETED_MAX,
   COMPLETED_PAGE,
 } from "./completed.js";
-import { nextFireLabel, nextWindow, periodicStateLabel, validatePeriodic, WEEKDAY_PRESETS } from "./periodic.js";
+import {
+  FOLLOW_UP_CHOICES,
+  followUpLabel,
+  nextFireLabel,
+  nextWindow,
+  PERIODIC_TEMPLATES,
+  periodicStateLabel,
+  timingExample,
+  validatePeriodic,
+  WEEKDAY_PRESETS,
+} from "./periodic.js";
 import { isCompositionKey } from "./quickAdd.js";
 import { useTextAreaSize } from "./useTextAreaSize.js";
 
@@ -815,7 +825,11 @@ export function PeriodicPage({
             <p className="muted">
               {zh
                 ? rule.summary
-                : `${rule.windows.map((window) => `${window.start}–${window.end}`).join(", ")} · Every ${rule.intervalMinutes} minutes`}
+                : `${rule.windows.map((window) => `${window.start}–${window.end}`).join(", ")} · Every ${rule.intervalMinutes} minutes${
+                    rule.mode === "after_completion"
+                      ? `, counted from your last break${rule.followUpMinutes > 0 ? `, asks again after ${rule.followUpMinutes} min` : ""}`
+                      : ""
+                  }`}
             </p>
             <div>
               <span className={rule.state === "waiting" ? "accent" : "muted"}>
@@ -899,7 +913,8 @@ export function newPeriodicDraft(
       intervalMinutes: rule?.intervalMinutes ?? 30,
       weekdays: rule?.weekdays ?? [1, 2, 3, 4, 5, 6, 7],
       windows: rule?.windows ?? [{ start: "09:00", end: "18:00" }],
-      mode: rule?.mode ?? "fixed",
+      mode: rule?.mode ?? "after_completion",
+      followUpMinutes: rule?.followUpMinutes ?? 10,
       enabled: rule?.enabled ?? true,
       timezone:
         rule?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -1039,33 +1054,26 @@ export function PeriodicForm({
     >
       <div className="page-scroll">
         <div className="template-pills">
-          {[
-            zh ? "活动" : "Movement",
-            zh ? "喝水" : "Water",
-            zh ? "自定义" : "Custom",
-          ].map((text, i) => (
+          {PERIODIC_TEMPLATES.map((template) => (
             <button
               className="pill secondary"
-              key={text}
+              key={template.key}
               onClick={() =>
                 setConfig({
                   ...config,
-                  title:
-                    i === 0
-                      ? zh
-                        ? "起来活动一下"
-                        : "Time to move"
-                      : i === 1
-                        ? zh
-                          ? "喝点水"
-                          : "Have some water"
-                        : "",
+                  title: template.title[zh ? 0 : 1],
+                  intervalMinutes: template.intervalMinutes,
+                  mode: "after_completion",
+                  followUpMinutes: template.followUpMinutes,
                 })
               }
             >
-              {text}
+              {zh ? template.zh : template.en}
             </button>
           ))}
+          <button className="pill secondary" onClick={() => setConfig({ ...config, title: "" })}>
+            {zh ? "自定义" : "Custom"}
+          </button>
         </div>
         <div className="surface-card">
           <textarea
@@ -1110,6 +1118,56 @@ export function PeriodicForm({
             {zh ? "分钟" : "minutes"}
           </label>
           {fieldError("interval")}
+          <div className="mode-cards" role="radiogroup" aria-label={zh ? "计时方式" : "Timing"}>
+            {(
+              [
+                ["after_completion", zh ? "从上次完成算起" : "From your last break", zh ? "站起来、喝水、护眼：你完成后才重新计时" : "Stand, drink, rest your eyes: the clock restarts when you finish"],
+                ["fixed", zh ? "固定时刻" : "On the clock", zh ? "整点、开会：按钟点提醒，不看你有没有完成" : "Hourly, meetings: fires on the clock whether or not you finished"],
+              ] as const
+            ).map(([mode, name, hint]) => (
+              <button
+                type="button"
+                role="radio"
+                key={mode}
+                aria-checked={config.mode === mode}
+                className={`mode-card ${config.mode === mode ? "selected" : ""}`}
+                onClick={() => setConfig({ ...config, mode })}
+              >
+                <strong>{name}</strong>
+                <span>{hint}</span>
+              </button>
+            ))}
+          </div>
+          {timingExample(config, language) && <p className="settings-hint">{timingExample(config, language)}</p>}
+          {config.mode === "after_completion" && (
+            <>
+              <label className="field-row">
+                {zh ? "没响应时" : "If you don't answer"}
+                <select
+                  aria-label={zh ? "没响应时" : "If you don't answer"}
+                  value={config.followUpMinutes ?? 10}
+                  onChange={(event) => setConfig({ ...config, followUpMinutes: Number(event.target.value) })}
+                >
+                  {[...new Set([...FOLLOW_UP_CHOICES, config.followUpMinutes ?? 10])]
+                    .sort((a, b) => a - b)
+                    .map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {followUpLabel(minutes, language)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <p className="settings-hint">
+                {(config.followUpMinutes ?? 10) > 0
+                  ? zh
+                    ? "最多再提醒 3 次，之后提醒会留在刘海上等你；你离开电脑几分钟，也算休息过。"
+                    : "Up to 3 more times, then it waits on the notch. A few minutes away from the computer counts as a break."
+                  : zh
+                    ? "不会再次弹出，提醒会留在刘海上等你；你离开电脑几分钟，也算休息过。"
+                    : "It won’t pop up again; it waits on the notch. A few minutes away from the computer counts as a break."}
+              </p>
+            </>
+          )}
           <div className="weekday-picker">
             {(zh
               ? ["一", "二", "三", "四", "五", "六", "日"]
@@ -1222,28 +1280,6 @@ export function PeriodicForm({
         </div>
         <details className="surface-card">
           <summary>{zh ? "更多设置" : "More settings"}</summary>
-          <label className="field-row">
-            {zh ? "计时方式" : "Timing"}
-            <select
-              value={config.mode}
-              onChange={(event) =>
-                setConfig({
-                  ...config,
-                  mode: event.target.value as "fixed" | "after_completion",
-                })
-              }
-            >
-              <option value="fixed">{zh ? "固定时间点" : "Fixed times"}</option>
-              <option value="after_completion">
-                {zh ? "完成后重新计时" : "After completion"}
-              </option>
-            </select>
-          </label>
-          <p className="settings-hint">
-            {config.mode === "fixed"
-              ? zh ? "按时段起点提醒，完成不会改变后续时间。" : "Reminds from each window’s start; completing doesn’t shift later times."
-              : zh ? "确认完成后才计时；未确认则等待，下个生效日重新开始。" : "The timer starts once you confirm; unconfirmed it waits and restarts the next active day."}
-          </p>
           <label className="field-row">
             {zh ? "时区" : "Timezone"}
             <input

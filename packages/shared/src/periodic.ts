@@ -11,9 +11,14 @@ export const PERIODIC_DEFAULTS = {
   intervalMinutes: 30,
   weekdays: [1, 2, 3, 4, 5, 6, 7],
   windows: [{ start: "09:00", end: "18:00" }],
-  mode: "fixed" as const,
+  mode: "after_completion" as const,
+  followUpMinutes: 10,
   enabled: true,
 };
+/** After this many unanswered follow-ups a habit reminder stops re-asking and just stays pending. */
+export const PERIODIC_MAX_FOLLOW_UPS = 3;
+/** The shortest absence that counts as having stood up (see PeriodicAwayInput). */
+export const PERIODIC_MIN_AWAY_MINUTES = 3;
 
 export function minuteOfDay(time: string): number {
   const [hour, minute] = time.split(":").map(Number);
@@ -26,6 +31,8 @@ const fields = {
   weekdays: z.array(Weekday).min(1).max(7),
   windows: z.array(PeriodicWindow).min(1).max(24),
   mode: PeriodicMode,
+  /** after_completion only: re-ask this many minutes after an unanswered cue; 0 turns it off. */
+  followUpMinutes: z.number().int().min(0).max(120),
   timezone: IanaTimezone,
   enabled: z.boolean(),
 };
@@ -51,7 +58,7 @@ export type PeriodicConfig = z.infer<typeof PeriodicConfig>;
 export const CreatePeriodicReminderInput = z.object({
   ...fields,
   weekdays: fields.weekdays.optional(), windows: fields.windows.optional(), mode: fields.mode.optional(),
-  timezone: fields.timezone.optional(), enabled: fields.enabled.optional(),
+  followUpMinutes: fields.followUpMinutes.optional(), timezone: fields.timezone.optional(), enabled: fields.enabled.optional(),
 }).strict();
 export type CreatePeriodicReminderInput = z.infer<typeof CreatePeriodicReminderInput>;
 export const UpdatePeriodicReminderInput = z.object(fields).partial().extend({ expectedVersion: z.number().int().optional() }).strict();
@@ -70,10 +77,16 @@ export const PeriodicOccurrence = z.object({
   channel: z.string().nullable(), offeredAt: InstantUtc.nullable(), claimToken: z.string().nullable(),
   claimedAt: InstantUtc.nullable(), displayedAt: InstantUtc.nullable(), handledAt: InstantUtc.nullable(),
   lastError: z.string().nullable(), createdAt: InstantUtc, updatedAt: InstantUtc,
+  /** Unanswered re-asks of this occurrence (round also counts snoozes). */
+  followUps: z.number().int().nonnegative().default(0),
+  /** Snoozes the user chose on this occurrence; unlike followUps it is never reset. */
+  snoozes: z.number().int().nonnegative().default(0),
+  /** Who closed a completed occurrence: the user, or an absence from the computer. */
+  handledVia: z.enum(["user", "away"]).optional(),
 });
 export type PeriodicOccurrence = z.infer<typeof PeriodicOccurrence>;
 export const PeriodicReminder = z.object({
-  ...fields, id: z.string(), version: z.number().int(), revision: z.number().int().nonnegative().default(0), pausedOn: z.string().nullable(),
+  ...fields, followUpMinutes: fields.followUpMinutes.default(PERIODIC_DEFAULTS.followUpMinutes), id: z.string(), version: z.number().int(), revision: z.number().int().nonnegative().default(0), pausedOn: z.string().nullable(),
   stateDate: z.string(), nextFireAt: InstantUtc.nullable(), currentOccurrenceId: z.string().nullable(),
   createdAt: InstantUtc, updatedAt: InstantUtc,
   summary: z.string(), state: z.enum(["scheduled", "waiting", "paused_today", "paused"]),
@@ -86,11 +99,15 @@ export const PeriodicActionInput = z.object({
   round: z.number().int().optional(), minutes: z.number().int().min(1).max(1440).optional(),
 }).strict();
 export type PeriodicActionInput = z.infer<typeof PeriodicActionInput>;
+/** "I was away from the computer for this long": counts as a break for habit (after_completion) rules. */
+export const PeriodicAwayInput = z.object({ minutes: z.number().int().min(PERIODIC_MIN_AWAY_MINUTES).max(1440) }).strict();
+export type PeriodicAwayInput = z.infer<typeof PeriodicAwayInput>;
 export const PeriodicClaimInput = z.object({ occurrenceId: z.string(), round: z.number().int(), token: z.string().min(1).max(128) }).strict();
 export const PeriodicReceiptInput = PeriodicClaimInput.extend({ displayed: z.boolean() });
 
 export function periodicSummary(config: PeriodicConfig): string {
   const names = ["", "一", "二", "三", "四", "五", "六", "日"];
   const days = config.weekdays.length === 7 ? "每天" : `每周${config.weekdays.map((d) => names[d]).join("、")}`;
-  return `${days} · ${config.windows.map((w) => `${w.start}–${w.end}`).join("、")} · 每 ${config.intervalMinutes} 分钟${config.mode === "after_completion" ? "（完成后重新计时）" : ""}`;
+  return `${days} · ${config.windows.map((w) => `${w.start}–${w.end}`).join("、")} · 每 ${config.intervalMinutes} 分钟${config.mode === "after_completion"
+    ? `（完成后重新计时${config.followUpMinutes > 0 ? `，没响应 ${config.followUpMinutes} 分钟后再提醒` : ""}）` : ""}`;
 }

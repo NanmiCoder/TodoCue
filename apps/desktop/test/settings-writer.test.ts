@@ -12,7 +12,7 @@ function deferred() {
 function fixture(save: (settings: DesktopSettings) => Promise<void>) {
   let settings: DesktopSettings = {
     language: "en", width: 340, height: 600, notchEnabled: true,
-    notchDisplay: null, notchPlacement: "top", quietFullscreen: true,
+    notchDisplay: null, notchPlacement: "top", quietFullscreen: true, awayCountsAsBreak: true,
     shortcut: null, autostart: false,
   };
   const busy = vi.fn(), failed = vi.fn();

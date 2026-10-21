@@ -42,7 +42,7 @@ export function buildMcpServer(getClient: () => TodoCueClient): McpServer {
 
   server.registerTool("todocue_create_periodic_reminder", {
     title: "Create periodic reminder",
-    description: "Create one interval reminder rule, not tasks or calendar events. Only title and intervalMinutes are required. Defaults: every day, 09:00–18:00, fixed slots, runtime timezone, enabled. mode=after_completion waits for confirmation; next active day resets. Returns normalized config, Chinese summary, state and nextFireAt. Preserve idempotencyKey when retrying.",
+    description: "Create one interval reminder rule, not tasks or calendar events. Only title and intervalMinutes are required. Defaults: every day, 09:00–18:00, mode=after_completion (the timer counts from when the user finishes, for habits like standing up or drinking water), followUpMinutes=10, runtime timezone, enabled. Pass mode=fixed only for clock-aligned times such as on the hour; fixed slots ignore completion. followUpMinutes (0–120, 0=off) re-asks an ignored habit cue up to 3 times, after which it waits until answered; it resets on the next active day. Returns normalized config, Chinese summary, state and nextFireAt. Preserve idempotencyKey when retrying.",
     inputSchema: CreatePeriodicReminderInput.extend({ idempotencyKey: z.string().optional() }),
   }, async ({ idempotencyKey, ...input }) => run(() => c().createPeriodicReminder(input, { idempotencyKey })));
   server.registerTool("todocue_list_periodic_reminders", {

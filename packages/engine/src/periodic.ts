@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { DateTime } from "luxon";
 import {
   CreatePeriodicReminderInput, UpdatePeriodicReminderInput, PeriodicActionInput,
-  normalizePeriodicConfig, periodicSummary, minuteOfDay, TodoCueError,
+  normalizePeriodicConfig, periodicSummary, minuteOfDay, TodoCueError, PeriodicAwayInput,
+  PERIODIC_DEFAULTS, PERIODIC_MAX_FOLLOW_UPS,
   type PeriodicConfig, type PeriodicReminder, type PeriodicOccurrence, type EventType,
 } from "@todocue/shared";
 import type { SqliteDatabase } from "./db.js";
@@ -101,10 +102,14 @@ export class PeriodicStore {
     } catch (error) { this.events = []; throw error; }
   }
   private changed(rule: Rule, type: EventType = "periodic.updated") { this.events.push([type, rule.id]); }
+  /** Rules saved before followUpMinutes existed read as the default, so they pick up the follow-up too. */
+  private hydrate(data: string): Rule {
+    return { revision: 0, followUpMinutes: PERIODIC_DEFAULTS.followUpMinutes, ...JSON.parse(data) } as Rule;
+  }
   private raw(id: string): Rule {
     const row = this.db.prepare("SELECT data FROM periodic_reminders WHERE id = ?").get(id) as { data: string } | undefined;
     if (!row) throw TodoCueError.notFound("periodic reminder", id);
-    return { revision: 0, ...JSON.parse(row.data) } as Rule;
+    return this.hydrate(row.data);
   }
   private save(rule: Rule) {
     rule.revision = (rule.revision ?? 0) + 1;
@@ -132,7 +137,7 @@ export class PeriodicStore {
   get(id: string): PeriodicReminder { return this.expand(this.raw(id)); }
   list(query?: string): PeriodicReminder[] {
     const rows = this.db.prepare("SELECT data FROM periodic_reminders ORDER BY id").all() as { data: string }[];
-    return rows.map((r) => this.expand({ revision: 0, ...JSON.parse(r.data) } as Rule)).filter((r) => !query || r.title.toLowerCase().includes(query.toLowerCase()));
+    return rows.map((r) => this.expand(this.hydrate(r.data))).filter((r) => !query || r.title.toLowerCase().includes(query.toLowerCase()));
   }
   history(id: string): PeriodicOccurrence[] {
     this.raw(id);
@@ -178,7 +183,7 @@ export class PeriodicStore {
       const rule = this.raw(id); this.checkVersion(rule, patch.expectedVersion);
       const { expectedVersion: _, ...fields } = patch;
       const config = normalizePeriodicConfig({ title: rule.title, intervalMinutes: rule.intervalMinutes,
-        weekdays: rule.weekdays, windows: rule.windows, mode: rule.mode, timezone: rule.timezone, enabled: rule.enabled, ...fields }, this.timezone);
+        weekdays: rule.weekdays, windows: rule.windows, mode: rule.mode, followUpMinutes: rule.followUpMinutes, timezone: rule.timezone, enabled: rule.enabled, ...fields }, this.timezone);
       assertTimezone(config.timezone);
       this.expireCurrent(rule, true);
       Object.assign(rule, config); rule.version++;
@@ -226,10 +231,8 @@ export class PeriodicStore {
           } else if (rule.mode === "fixed" && rule.nextFireAt && millis(rule.nextFireAt) <= until.getTime()) {
             occurrence.result = "expired"; rule.currentOccurrenceId = null;
           } else {
-            occurrence.fireAt = toUtcIso(until); occurrence.round++;
-            occurrence.delivery = "scheduled"; occurrence.channel = null; occurrence.claimToken = null;
-            occurrence.offeredAt = null; occurrence.claimedAt = null; occurrence.displayedAt = null;
-            rule.nextFireAt = occurrence.fireAt;
+            // Snoozing is an answer: the unanswered follow-up count starts over, the snooze count does not.
+            this.rearm(rule, occurrence, until); occurrence.followUps = 0; occurrence.snoozes = (occurrence.snoozes ?? 0) + 1;
           }
         }
         this.saveOccurrence(occurrence);
@@ -237,10 +240,48 @@ export class PeriodicStore {
       this.save(rule); this.changed(rule); return this.expand(rule);
     });
   }
+  /** Offers the same occurrence again at `at` as the next round (snooze and follow-up). */
+  private rearm(rule: Rule, occurrence: PeriodicOccurrence, at: Date) {
+    occurrence.fireAt = toUtcIso(at); occurrence.round++;
+    occurrence.delivery = "scheduled"; occurrence.channel = null; occurrence.claimToken = null;
+    occurrence.offeredAt = null; occurrence.claimedAt = null; occurrence.displayedAt = null;
+    rule.nextFireAt = occurrence.fireAt;
+  }
+  /** A habit cue that was shown and ignored: ask again, a few times, instead of going quiet. */
+  private followUpDue(rule: Rule, occurrence: PeriodicOccurrence): boolean {
+    return rule.mode === "after_completion" && rule.followUpMinutes > 0 && occurrence.result === "pending"
+      && (occurrence.delivery === "displayed" || occurrence.delivery === "submitted")
+      && (occurrence.followUps ?? 0) < PERIODIC_MAX_FOLLOW_UPS && periodicIsActive(rule, this.now())
+      && this.now().getTime() - millis(occurrence.fireAt) >= rule.followUpMinutes * 60_000;
+  }
+  /**
+   * The user was away from the computer: for habit rules that is the break the cue asks for.
+   * A pending cue is closed as completed (`handledVia: "away"`) and the timer restarts from now.
+   */
+  away(input: PeriodicAwayInput): { reset: string[] } {
+    PeriodicAwayInput.parse(input);
+    return this.transaction(() => {
+      const reset: string[] = [];
+      for (const item of this.list()) {
+        const rule = this.raw(item.id), today = localDateOf(this.now(), rule.timezone);
+        if (rule.mode !== "after_completion" || !rule.enabled || rule.pausedOn === today
+          || this.newActiveDay(rule) || !periodicIsActive(rule, this.now())) continue;
+        const occurrence = rule.currentOccurrenceId ? this.occurrence(rule.currentOccurrenceId) : null;
+        if (occurrence?.result === "pending") {
+          occurrence.result = "completed"; occurrence.handledAt = this.nowIso(); occurrence.handledVia = "away";
+          this.saveOccurrence(occurrence);
+        }
+        rule.currentOccurrenceId = null;
+        rule.nextFireAt = nextPeriodicAt(rule, this.now());
+        this.save(rule); this.changed(rule); reset.push(rule.id);
+      }
+      return { reset };
+    });
+  }
   private newOccurrence(rule: Rule, at: string): PeriodicOccurrence {
     return { id: `po_${randomUUID()}`, ruleId: rule.id, ruleVersion: rule.version, scheduledAt: at,
       fireAt: at, round: 1, delivery: "scheduled", result: "pending", channel: null, offeredAt: null,
-      claimToken: null, claimedAt: null, displayedAt: null, handledAt: null, lastError: null,
+      claimToken: null, claimedAt: null, displayedAt: null, handledAt: null, lastError: null, followUps: 0, snoozes: 0,
       createdAt: this.nowIso(), updatedAt: this.nowIso() };
   }
   private current(id: string, occurrenceId: string, round: number): { rule: Rule; occurrence: PeriodicOccurrence } {
@@ -332,6 +373,16 @@ export class PeriodicStore {
             occurrence.delivery = "claimed"; occurrence.channel = "system"; occurrence.claimedAt = this.nowIso();
             this.saveOccurrence(occurrence); this.save(rule); this.changed(rule); deliver.push({ rule, occurrence });
           }
+        } else if (catchUp) {
+          // Startup/wake: the time the machine was off is not time the user ignored the cue, so the
+          // wait before the next follow-up starts over instead of firing on the very next tick.
+          if (rule.mode === "after_completion" && occurrence.result === "pending"
+            && (occurrence.delivery === "displayed" || occurrence.delivery === "submitted")) {
+            occurrence.fireAt = this.nowIso(); this.saveOccurrence(occurrence);
+          }
+        } else if (this.followUpDue(rule, occurrence)) {
+          this.rearm(rule, occurrence, this.now()); occurrence.followUps = (occurrence.followUps ?? 0) + 1;
+          this.saveOccurrence(occurrence); this.save(rule); this.changed(rule);
         }
       }
       const cutoff = iso(this.now().getTime() - 30 * 86400_000);

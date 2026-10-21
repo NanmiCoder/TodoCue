@@ -29,16 +29,18 @@ function options(command: Command, requireInterval = false): Command {
   return interval
     .option("--weekdays <days>", "mon,wed,sat or 1,3,6; default every day")
     .option("--between <range>", "HH:mm-HH:mm; repeat for multiple windows; default 09:00-18:00", (value: string, previous: string[]) => [...previous, value], [])
-    .option("--mode <mode>", "fixed | after_completion (default fixed)")
+    .option("--mode <mode>", "after_completion (default: the timer restarts when you complete) | fixed (clock-aligned times)")
+    .option("--follow-up <minutes>", "after_completion: re-ask this many minutes after an unanswered cue, up to 3 times; 0 = off (default 10)")
     .option("--tz <timezone>", "IANA timezone (default runtime timezone)")
     .option("--idempotency-key <key>", "preserve this key and payload on retry");
 }
-type Options = { every?: string; weekdays?: string; between: string[]; mode?: "fixed" | "after_completion"; tz?: string; idempotencyKey?: string; expect?: string; title?: string };
+type Options = { every?: string; weekdays?: string; between: string[]; mode?: "fixed" | "after_completion"; followUp?: string; tz?: string; idempotencyKey?: string; expect?: string; title?: string };
 function patch(opts: Options): UpdatePeriodicReminderInput {
   return { ...(opts.every !== undefined ? { intervalMinutes: parsePeriodicInterval(opts.every) } : {}),
     ...(opts.weekdays !== undefined ? { weekdays: parseWeekdays(opts.weekdays) } : {}),
     ...(opts.between.length ? { windows: parsePeriodicWindows(opts.between) } : {}),
-    ...(opts.mode !== undefined ? { mode: opts.mode } : {}), ...(opts.tz !== undefined ? { timezone: opts.tz } : {}),
+    ...(opts.mode !== undefined ? { mode: opts.mode } : {}),
+    ...(opts.followUp !== undefined ? { followUpMinutes: Number(opts.followUp) } : {}), ...(opts.tz !== undefined ? { timezone: opts.tz } : {}),
     ...(opts.expect !== undefined ? { expectedVersion: Number(opts.expect) } : {}) };
 }
 export function registerPeriodicCommands(program: Command, ctx: { client: () => TodoCueClient; out: () => OutputOptions }): void {

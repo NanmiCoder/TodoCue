@@ -85,10 +85,76 @@ export function nextFireLabel(nextFireAt: string | null | undefined, timezone: s
 }
 
 /** What the state pill on a rule row says. */
-export function periodicStateLabel(rule: Pick<PeriodicReminder, "state" | "nextFireAt" | "timezone">, language: string, now = new Date()): string {
+export function periodicStateLabel(rule: Pick<PeriodicReminder, "state" | "nextFireAt" | "timezone"> & Partial<Pick<PeriodicReminder, "currentOccurrence">>, language: string, now = new Date()): string {
   const en = language === "en";
-  if (rule.state === "waiting") return en ? "Waiting" : "等待确认";
+  if (rule.state === "waiting") {
+    const overdue = overdueMinutes(rule as Pick<PeriodicReminder, "currentOccurrence">, now.getTime());
+    if (overdue >= 1) return en ? `${overdue} min overdue` : `已超时 ${overdue} 分钟`;
+    return en ? "Waiting" : "等待确认";
+  }
   if (rule.state === "paused_today") return en ? "Paused today" : "今天暂停";
   if (rule.state === "paused") return en ? "Paused" : "已暂停";
   return nextFireLabel(rule.nextFireAt, rule.timezone, language, now);
+}
+
+/** Minutes the current cue has been waiting since it was first due; snoozes and follow-ups do not reset it. */
+export function overdueMinutes(rule: Pick<PeriodicReminder, "currentOccurrence">, now: number): number {
+  const occurrence = rule.currentOccurrence;
+  if (occurrence?.result !== "pending") return 0;
+  const due = Date.parse(occurrence.scheduledAt ?? occurrence.fireAt);
+  return Number.isFinite(due) ? Math.max(0, Math.floor((now - due) / 60000)) : 0;
+}
+
+/** From here on a waiting habit cue is drawn as overdue. */
+export const OVERDUE_WARN_MINUTES = 10;
+
+/**
+ * Snoozes the user chose on the current cue. Occurrences saved before `snoozes` existed never had
+ * follow-ups either, so every extra round of theirs was a snooze.
+ */
+export function snoozeCount(rule: Pick<PeriodicReminder, "currentOccurrence">): number {
+  const occurrence = rule.currentOccurrence;
+  if (occurrence?.result !== "pending") return 0;
+  return occurrence.snoozes ?? Math.max(0, occurrence.round - 1);
+}
+
+/** Choices for "if I don't answer, ask again after …" (0 = never). */
+export const FOLLOW_UP_CHOICES = [0, 5, 10, 15, 30] as const;
+
+export function followUpLabel(minutes: number, language: string): string {
+  const en = language === "en";
+  if (minutes <= 0) return en ? "Don't ask again" : "不再提醒";
+  return en ? `Ask again after ${minutes} min` : `${minutes} 分钟后再提醒`;
+}
+
+/** One-tap starting points; each carries the timing that suits it, not only a title. */
+export const PERIODIC_TEMPLATES = [
+  { key: "move", zh: "活动", en: "Movement", title: ["起来活动一下", "Time to move"], intervalMinutes: 40, followUpMinutes: 10 },
+  { key: "eyes", zh: "护眼", en: "Eyes", title: ["看看远处，放松眼睛", "Look far away, rest your eyes"], intervalMinutes: 20, followUpMinutes: 0 },
+  { key: "water", zh: "喝水", en: "Water", title: ["喝点水", "Have some water"], intervalMinutes: 60, followUpMinutes: 0 },
+] as const;
+
+function clock(minutes: number): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
+/**
+ * A worked example of the chosen timing inside the first window, so the difference between "counted
+ * from when you finish" and "on the clock" is visible instead of explained. Null when it would not fit.
+ */
+export function timingExample(config: Pick<CreatePeriodicReminderInput, "mode" | "intervalMinutes" | "windows">, language: string): string | null {
+  const interval = config.intervalMinutes;
+  const first = [...(config.windows ?? [])].sort((a, b) => a.start.localeCompare(b.start))[0];
+  const startAt = first ? minute(first.start) : null;
+  const endAt = first ? minute(first.end, true) : null;
+  if (!Number.isInteger(interval) || interval < 2 || startAt === null || endAt === null) return null;
+  const due = startAt + interval;
+  const done = due + Math.max(1, Math.min(7, Math.floor(interval / 4)));
+  const next = config.mode === "fixed" ? due + interval : done + interval;
+  if (next >= endAt) return null;
+  const en = language === "en";
+  if (config.mode === "fixed")
+    return en ? `e.g. cue at ${clock(due)}, you finish at ${clock(done)} → next stays ${clock(next)}` : `例：${clock(due)} 提醒，你 ${clock(done)} 完成 → 下次仍是 ${clock(next)}`;
+  return en ? `e.g. cue at ${clock(due)}, you finish at ${clock(done)} → next ${clock(next)}` : `例：${clock(due)} 提醒，你 ${clock(done)} 完成 → 下次 ${clock(next)}`;
 }

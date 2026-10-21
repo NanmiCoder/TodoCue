@@ -57,6 +57,7 @@ import {
   type QuickLookClose,
   type Cue,
 } from "./model.js";
+import { OVERDUE_WARN_MINUTES, overdueMinutes } from "./periodic.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Icon } from "./icons.js";
 import { TaskMetadata } from "./metadata.js";
@@ -1460,6 +1461,8 @@ function CueCard({
   const reduced = useReducedMotion();
   const meta = cueMeta(cue, now, language);
   const periodic = !!cue.periodic;
+  // A habit cue left unanswered for a while turns warm so it reads as "overdue", not as wallpaper.
+  const metaClass = `cue-meta ${cue.periodic && overdueMinutes(cue.periodic, now) >= OVERDUE_WARN_MINUTES ? "is-late" : ""}`;
   const repeat = cue.repeats > 1 && (
     <span className="cue-repeat" aria-label={n(`已累计 ${cue.repeats} 次未完成`, `${cue.repeats} unanswered`)}>×{cue.repeats}</span>
   );
@@ -1499,7 +1502,7 @@ function CueCard({
               <button className="cue-title" onClick={onOpen} aria-label={n(`打开提醒任务 ${cue.title}`, `Open ${cue.title}`)}>
                 {cue.title}
               </button>
-              <p className="cue-meta">{meta}</p>
+              <p className={metaClass}>{meta}</p>
             </div>
             <button
               className="icon-button cue-fold"
@@ -1532,7 +1535,7 @@ function CueCard({
           </span>
           <button className="cue-title" onClick={onOpen} aria-label={n(`打开提醒任务 ${cue.title}`, `Open ${cue.title}`)}>
             <strong>{cue.title}</strong>
-            <span className="cue-meta">{meta}</span>
+            <span className={metaClass}>{meta}</span>
           </button>
           {repeat}
           {more}
