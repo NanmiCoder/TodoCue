@@ -58,4 +58,18 @@ describe("periodic API", () => {
     expect((await f.request("POST", `/${rule.id}/action`, done, "done")).json()).toEqual(first.json());
     expect((await f.request("POST", `/${rule.id}/receipt`, { ...claim, displayed: true })).statusCode).toBe(409);
   });
+  it("habit is the default, follow-up is configurable, and the away route restarts the timer", async () => {
+    const f = fixture();
+    const rule = (await f.request("POST", "", input)).json().reminder;
+    expect(rule).toMatchObject({ mode: "after_completion", followUpMinutes: 10 });
+    expect((await f.request("POST", "", { ...input, followUpMinutes: 200 })).statusCode).toBe(400);
+    expect((await f.request("PATCH", `/${rule.id}`, { followUpMinutes: 0, expectedVersion: 1 })).json().reminder.followUpMinutes).toBe(0);
+    expect((await app.inject({ method: "POST", url: "/v1/periodic-reminders/away", payload: { minutes: 5 } })).statusCode).toBe(401);
+    expect((await f.request("POST", "/away", { minutes: 1 })).statusCode).toBe(400);
+    f.clock.set("2026-09-07T01:50:00Z");
+    const away = await f.request("POST", "/away", { minutes: 6 });
+    expect(away.statusCode).toBe(200);
+    expect(away.json()).toEqual({ reset: [rule.id] });
+    expect(f.engine.periodic.get(rule.id).nextFireAt).toBe("2026-09-07T02:20:00.000Z");
+  });
 });

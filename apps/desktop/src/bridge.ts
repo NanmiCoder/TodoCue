@@ -22,6 +22,8 @@ export interface DesktopSettings {
   notchDisplay: { id: string; name: string } | null;
   notchPlacement: "top" | "left" | "right";
   quietFullscreen: boolean;
+  /** Time away from the computer counts as the break a habit reminder asks for (host reads the idle time). */
+  awayCountsAsBreak: boolean;
   shortcut: string | null;
   autostart: boolean;
 }
@@ -53,6 +55,7 @@ export const defaults: DesktopSettings = {
   notchDisplay: null,
   notchPlacement: "top",
   quietFullscreen: true,
+  awayCountsAsBreak: true,
   shortcut: null,
   autostart: false,
 };

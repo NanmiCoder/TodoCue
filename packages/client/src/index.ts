@@ -117,6 +117,10 @@ export class TodoCueClient {
   periodicAction(id: string, input: PeriodicActionInput, opts?: RequestOptions) {
     return this.request<{ reminder?: PeriodicReminder; deleted?: boolean; id?: string }>("POST", `/periodic-reminders/${encodeURIComponent(id)}/action`, input, opts);
   }
+  /** The user was away from the computer for `minutes`: habit reminders count it as a break. */
+  periodicAway(minutes: number) {
+    return this.request<{ reset: string[] }>("POST", "/periodic-reminders/away", { minutes });
+  }
   periodicOccurrences(id: string) {
     return this.request<{ occurrences: PeriodicOccurrence[] }>("GET", `/periodic-reminders/${encodeURIComponent(id)}/occurrences`);
   }

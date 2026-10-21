@@ -158,6 +158,7 @@ export function SettingsPage({ settings, setSettings, online, onError, onReconne
                 </div>}
               </SettingField>
               <SettingSwitch label={text("登录时启动", "Open at login")} hint={native ? text("登录电脑后，TodoCue 自动就位。", "Ready when you sign in to your computer.") : text("在桌面 App 中设置。", "Available in the desktop app.")} checked={settings.autostart} disabled={!native || saving} onChange={autostart => void persist({ autostart })} />
+              <SettingSwitch label={text("离开电脑也算休息", "Time away counts as a break")} hint={native ? text("离开电脑 5 分钟以上，“从上次完成算起”的提醒会当作你已经起身，并重新计时。只读取多久没碰键盘鼠标，不读内容。", "Five minutes or more away from the computer counts as having stood up for “from your last break” reminders, and the timer restarts. Only the time since the last input is read, never what you type.") : text("在桌面 App 中设置。", "Available in the desktop app.")} checked={settings.awayCountsAsBreak} disabled={!native || saving} onChange={awayCountsAsBreak => void persist({ awayCountsAsBreak })} />
             </fieldset>
           </SettingsTransition>
         </Tabs.Content>

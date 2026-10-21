@@ -32,4 +32,16 @@ describe("periodic CLI", () => {
         windows: [{ start: "09:00", end: "12:00" }, { start: "13:00", end: "18:00" }], mode: "after_completion" });
     } finally { write.mockRestore(); }
   });
+  it("passes --follow-up through, including 0 to switch it off", async () => {
+    const create = vi.fn().mockResolvedValue({ reminder: {} }), update = vi.fn().mockResolvedValue({ reminder: {} });
+    const program = new Command();
+    registerPeriodicCommands(program, { client: () => ({ createPeriodicReminder: create, updatePeriodicReminder: update } as unknown as TodoCueClient), out: () => ({ json: true }) });
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      await program.parseAsync(["periodic", "add", "站起来", "--every", "40m", "--follow-up", "15"], { from: "user" });
+      expect(create.mock.calls[0]![0]).toEqual({ title: "站起来", intervalMinutes: 40, followUpMinutes: 15 });
+      await program.parseAsync(["periodic", "edit", "p_1", "--follow-up", "0"], { from: "user" });
+      expect(update.mock.calls[0]![1]).toEqual({ followUpMinutes: 0 });
+    } finally { write.mockRestore(); }
+  });
 });

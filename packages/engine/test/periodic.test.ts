@@ -4,10 +4,11 @@ import { MemoryNotifier, nextPeriodicAt, Scheduler, TaskEngine } from "../src/in
 import { makeEngine } from "./helpers.js";
 
 const input = { title: "起来活动一下", intervalMinutes: 30 };
-function fixture(mode: "fixed" | "after_completion" = "fixed") {
+/** Follow-ups are off unless a test asks for them, so the older tests keep exercising the bare timer. */
+function fixture(mode: "fixed" | "after_completion" = "fixed", followUpMinutes = 0) {
   const { engine, clock, db } = makeEngine();
   const notifier = new MemoryNotifier();
-  const reminder = engine.periodic.create({ ...input, mode });
+  const reminder = engine.periodic.create({ ...input, mode, followUpMinutes });
   return { engine, clock, db, notifier, reminder };
 }
 async function offer(f: ReturnType<typeof fixture>, at = "2026-09-07T01:30:00Z") {
@@ -214,7 +215,7 @@ describe("periodic reminders", () => {
   });
   it("rechecks active hours before every asynchronous system delivery", async () => {
     const { engine, clock, notifier } = makeEngine({ now: "2026-09-07T01:58:30Z" });
-    for (const title of ["one", "two"]) engine.periodic.create({ title, intervalMinutes: 1, windows: [{ start: "09:00", end: "10:00" }] });
+    for (const title of ["one", "two"]) engine.periodic.create({ title, intervalMinutes: 1, mode: "fixed", windows: [{ start: "09:00", end: "10:00" }] });
     clock.set("2026-09-07T01:59:00Z"); await engine.periodic.tick(notifier); clock.advance(3000);
     const sent: string[] = [];
     notifier.deliver = async () => { sent.push(clock.now().toISOString()); clock.set("2026-09-07T02:00:01Z"); return "memory"; };
@@ -265,8 +266,113 @@ describe("periodic reminders", () => {
     expect(nextPeriodicAt(split, new Date("2026-11-01T05:10:00Z"))).toBe("2026-11-01T05:45:00.000Z");
   });
   it("skips nonexistent DST slots and picks a folded wall-clock slot only once", () => {
-    const config = normalizePeriodicConfig({ ...input, timezone: "America/New_York", windows: [{ start: "01:00", end: "04:00" }] }, "UTC");
+    const config = normalizePeriodicConfig({ ...input, mode: "fixed", timezone: "America/New_York", windows: [{ start: "01:00", end: "04:00" }] }, "UTC");
     expect(nextPeriodicAt(config, new Date("2026-03-08T06:30:00Z"))).toBe("2026-03-08T07:00:00.000Z");
     expect(nextPeriodicAt(config, new Date("2026-11-01T05:30:00Z"))).toBe("2026-11-01T07:00:00.000Z");
+  });
+  it("new rules are habit rules that re-ask after ten minutes, and say so in the summary", () => {
+    const { engine } = makeEngine();
+    const rule = engine.periodic.create(input);
+    expect(rule).toMatchObject({ mode: "after_completion", followUpMinutes: 10 });
+    expect(rule.summary).toBe("每天 · 09:00–18:00 · 每 30 分钟（完成后重新计时，没响应 10 分钟后再提醒）");
+    expect(engine.periodic.create({ ...input, followUpMinutes: 0 }).summary).toBe("每天 · 09:00–18:00 · 每 30 分钟（完成后重新计时）");
+    expect(() => engine.periodic.create({ ...input, followUpMinutes: 121 })).toThrow();
+    expect(() => engine.periodic.create({ ...input, followUpMinutes: -1 })).toThrow();
+  });
+  it("re-asks an ignored habit cue as the next round of the same occurrence, at most three times", async () => {
+    const f = fixture("after_completion", 10); const occurrence = await offer(f); claim(f, occurrence);
+    f.clock.set("2026-09-07T01:39:00Z"); await f.engine.periodic.tick(f.notifier);
+    expect(f.engine.periodic.get(f.reminder.id).currentOccurrence).toMatchObject({ id: occurrence.id, round: 1, followUps: 0 });
+    for (const [round, at] of [[2, "01:40:00"], [3, "01:50:00"], [4, "02:00:00"]] as const) {
+      // The tick that decides to re-ask schedules it; the next tick (5 s later in production) offers it.
+      f.clock.set(`2026-09-07T${at}Z`); await f.engine.periodic.tick(f.notifier); await f.engine.periodic.tick(f.notifier);
+      const current = f.engine.periodic.get(f.reminder.id).currentOccurrence!;
+      expect(current).toMatchObject({ id: occurrence.id, round, followUps: round - 1, delivery: "offered", result: "pending" });
+      claim(f, current);
+    }
+    f.clock.set("2026-09-07T05:00:00Z"); await f.engine.periodic.tick(f.notifier);
+    const waiting = f.engine.periodic.get(f.reminder.id);
+    expect(waiting.state).toBe("waiting");
+    expect(waiting.currentOccurrence).toMatchObject({ id: occurrence.id, round: 4, followUps: 3, delivery: "displayed" });
+    expect(waiting.nextFireAt).toBeNull();
+    expect(f.engine.periodic.history(f.reminder.id)).toHaveLength(1);
+  });
+  it("does not re-ask when follow-ups are off, for fixed rules, outside the window, or after a snooze that has not fired", async () => {
+    const off = fixture("after_completion", 0); claim(off, await offer(off));
+    off.clock.set("2026-09-07T03:00:00Z"); await off.engine.periodic.tick(off.notifier);
+    expect(off.engine.periodic.get(off.reminder.id).currentOccurrence?.round).toBe(1);
+    const fixed = fixture("fixed", 10); claim(fixed, await offer(fixed));
+    fixed.clock.set("2026-09-07T01:45:00Z"); await fixed.engine.periodic.tick(fixed.notifier);
+    expect(fixed.engine.periodic.get(fixed.reminder.id).currentOccurrence?.followUps).toBe(0);
+    const closing = fixture("after_completion", 10);
+    closing.engine.periodic.update(closing.reminder.id, { windows: [{ start: "09:00", end: "09:45" }] });
+    claim(closing, await offer(closing));
+    closing.clock.set("2026-09-07T01:46:00Z"); await closing.engine.periodic.tick(closing.notifier);
+    expect(closing.engine.periodic.get(closing.reminder.id).currentOccurrence).toMatchObject({ round: 1, followUps: 0 });
+    const snoozed = fixture("after_completion", 10); const first = await offer(snoozed); claim(snoozed, first);
+    snoozed.engine.periodic.action(snoozed.reminder.id, { action: "snooze", occurrenceId: first.id, round: 1, minutes: 20 });
+    snoozed.clock.set("2026-09-07T01:49:00Z"); await snoozed.engine.periodic.tick(snoozed.notifier);
+    expect(snoozed.engine.periodic.get(snoozed.reminder.id).currentOccurrence).toMatchObject({ round: 2, delivery: "scheduled" });
+  });
+  it("a snooze counts as an answer and gives the occurrence a fresh set of follow-ups", async () => {
+    const f = fixture("after_completion", 10); const first = await offer(f); claim(f, first);
+    f.clock.set("2026-09-07T01:40:00Z"); await f.engine.periodic.tick(f.notifier); await f.engine.periodic.tick(f.notifier);
+    const second = f.engine.periodic.get(f.reminder.id).currentOccurrence!; claim(f, second);
+    expect(second.followUps).toBe(1);
+    f.engine.periodic.action(f.reminder.id, { action: "snooze", occurrenceId: second.id, round: second.round, minutes: 5 });
+    expect(f.engine.periodic.get(f.reminder.id).currentOccurrence).toMatchObject({ round: 3, followUps: 0, delivery: "scheduled" });
+  });
+  it("rules saved before followUpMinutes existed read as the default", () => {
+    const f = fixture("after_completion");
+    const { followUpMinutes: _, ...legacy } = f.engine.periodic.get(f.reminder.id);
+    f.db.prepare("UPDATE periodic_reminders SET data = ? WHERE id = ?").run(JSON.stringify(legacy), legacy.id);
+    expect(f.engine.periodic.get(legacy.id).followUpMinutes).toBe(10);
+    expect(f.engine.periodic.list()[0]!.followUpMinutes).toBe(10);
+    expect(f.engine.periodic.update(legacy.id, { title: "legacy" }).followUpMinutes).toBe(10);
+  });
+  it("being away counts as the break: closes a pending cue, restarts the habit timer, leaves fixed rules alone", async () => {
+    const habit = fixture("after_completion", 10); claim(habit, await offer(habit));
+    const fixedRule = habit.engine.periodic.create({ ...input, mode: "fixed" });
+    const fixedNext = fixedRule.nextFireAt;
+    habit.clock.set("2026-09-07T01:50:00Z");
+    expect(habit.engine.periodic.away({ minutes: 5 })).toEqual({ reset: [habit.reminder.id] });
+    const after = habit.engine.periodic.get(habit.reminder.id);
+    expect(after).toMatchObject({ state: "scheduled", currentOccurrence: null, nextFireAt: "2026-09-07T02:20:00.000Z" });
+    expect(habit.engine.periodic.history(habit.reminder.id)[0]).toMatchObject({ result: "completed", handledVia: "away" });
+    expect(habit.engine.periodic.get(fixedRule.id).nextFireAt).toBe(fixedNext);
+    // Counting down with nothing pending: the timer simply restarts from the moment of return.
+    habit.clock.set("2026-09-07T02:10:00Z"); habit.engine.periodic.away({ minutes: 8 });
+    expect(habit.engine.periodic.get(habit.reminder.id).nextFireAt).toBe("2026-09-07T02:40:00.000Z");
+  });
+  it("away is ignored for paused, disabled and out-of-window rules and for absences shorter than the minimum", async () => {
+    const f = fixture("after_completion"); const before = f.engine.periodic.get(f.reminder.id).nextFireAt;
+    expect(() => f.engine.periodic.away({ minutes: 2 })).toThrow();
+    f.clock.set("2026-09-07T01:10:00Z"); f.engine.periodic.action(f.reminder.id, { action: "pause_today" });
+    expect(f.engine.periodic.away({ minutes: 10 })).toEqual({ reset: [] });
+    f.engine.periodic.action(f.reminder.id, { action: "resume" });
+    f.clock.set("2026-09-07T11:00:00Z"); // 19:00 local, after the window
+    expect(f.engine.periodic.away({ minutes: 10 })).toEqual({ reset: [] });
+    expect(before).toBe("2026-09-07T01:30:00.000Z");
+  });
+  it("counts the user's snoozes separately from automatic follow-ups", async () => {
+    const f = fixture("after_completion", 10); const first = await offer(f); claim(f, first);
+    f.clock.set("2026-09-07T01:40:00Z"); await f.engine.periodic.tick(f.notifier); await f.engine.periodic.tick(f.notifier);
+    const second = f.engine.periodic.get(f.reminder.id).currentOccurrence!; claim(f, second);
+    expect(second).toMatchObject({ round: 2, followUps: 1, snoozes: 0 });
+    f.engine.periodic.action(f.reminder.id, { action: "snooze", occurrenceId: second.id, round: second.round, minutes: 5 });
+    // One snooze after one follow-up: three rounds, but exactly one snooze.
+    expect(f.engine.periodic.get(f.reminder.id).currentOccurrence).toMatchObject({ round: 3, followUps: 0, snoozes: 1 });
+  });
+  it("a startup or wake pass restarts the follow-up wait instead of re-asking on the next tick", async () => {
+    const f = fixture("after_completion", 10); const occurrence = await offer(f); claim(f, occurrence);
+    f.clock.set("2026-09-07T03:00:00Z"); await f.engine.periodic.tick(f.notifier, true);   // the laptop was closed for 90 minutes
+    f.clock.advance(5000); await f.engine.periodic.tick(f.notifier);
+    expect(f.engine.periodic.get(f.reminder.id).currentOccurrence).toMatchObject({ id: occurrence.id, round: 1, followUps: 0, delivery: "displayed" });
+    f.clock.set("2026-09-07T03:09:00Z"); await f.engine.periodic.tick(f.notifier);
+    expect(f.engine.periodic.get(f.reminder.id).currentOccurrence?.round).toBe(1);
+    f.clock.set("2026-09-07T03:10:06Z"); await f.engine.periodic.tick(f.notifier);
+    expect(f.engine.periodic.get(f.reminder.id).currentOccurrence).toMatchObject({ round: 2, followUps: 1 });
+    // The overdue clock is the original due time, untouched by the wake.
+    expect(f.engine.periodic.get(f.reminder.id).currentOccurrence?.scheduledAt).toBe("2026-09-07T01:30:00.000Z");
   });
 });

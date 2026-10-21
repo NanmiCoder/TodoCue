@@ -1,6 +1,7 @@
 import { TodoCueClient, type Board } from "@todocue/client";
 import type { PeriodicReminder, RuntimeEvent, Task } from "@todocue/shared";
 import { describeError, isVersionConflict } from "./errors.js";
+import { overdueMinutes, snoozeCount } from "./periodic.js";
 
 export interface Cue {
   key: string;
@@ -21,6 +22,15 @@ export function visibleCues(cues: Cue[], featuredKey: string | null) {
 }
 
 /** Pure state logic, shared by both windows and exercised with the real runtime. */
+/**
+ * The runtime re-arms an ignored cue as its next round and offers it again within one scheduler
+ * pass. The row stays put meanwhile (and the next arrival adds ×N); a snooze, which resets
+ * `followUps`, is the user's answer and still removes it.
+ */
+function awaitingFollowUp(occurrence: NonNullable<PeriodicReminder["currentOccurrence"]>) {
+  return occurrence.delivery === "scheduled" && (occurrence.followUps ?? 0) > 0;
+}
+
 export class CueStack {
   entries: Cue[] = [];
   private seen = new Map<string, number>();
@@ -60,8 +70,9 @@ export class CueStack {
           !rule.enabled ||
           rule.state.startsWith("paused") ||
           rule.currentOccurrence?.result !== "pending" ||
-          !["offered", "claimed", "displayed", "submitted"].includes(
-            rule.currentOccurrence.delivery,
+          !(
+            ["offered", "claimed", "displayed", "submitted"].includes(rule.currentOccurrence.delivery) ||
+            awaitingFollowUp(rule.currentOccurrence)
           )
         )
           return false;
@@ -324,10 +335,13 @@ export function cueMeta(cue: Cue, now: number, language: string): string {
   if (cue.periodic) {
     const rule = cue.periodic;
     const every = en ? `Every ${rule.intervalMinutes} minutes` : `每 ${rule.intervalMinutes} 分钟`;
-    const due = rule.currentOccurrence?.result === "pending" ? Date.parse(rule.currentOccurrence.fireAt) : NaN;
-    const waited = Number.isFinite(due) ? Math.max(0, Math.floor((now - due) / 60000)) : 0;
-    if (waited <= 0) return `${every} · ${en ? "Just now" : "刚刚"}`;
-    return `${every} · ${en ? `Waiting ${waited} min` : `已等 ${waited} 分钟`}`;
+    const waited = overdueMinutes(rule, now);
+    const snoozed = snoozeCount(rule);
+    if (waited <= 0 && snoozed <= 0) return `${every} · ${en ? "Just now" : "刚刚"}`;
+    const parts = [every];
+    if (waited > 0) parts.push(en ? `${waited} min overdue` : `已超 ${waited} 分钟`);
+    if (snoozed > 0) parts.push(en ? `snoozed ${snoozed}×` : `已推迟 ${snoozed} 次`);
+    return parts.join(" · ");
   }
   const more = (cue.count ?? 1) - 1;
   if (more > 0) return en ? `${more} more waiting. Take a look.` : `还有 ${more} 件事等你，点开看看。`;
