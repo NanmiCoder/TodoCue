@@ -785,6 +785,7 @@ pub fn glass(_window: &WebviewWindow) -> Result<(), String> {
 
 /// Native identity is independent of resolution, scale, arrangement and localized display name.
 #[cfg(target_os = "macos")]
+#[derive(Clone)]
 pub struct DisplayDetails {
     pub id: String,
     pub name: String,
@@ -796,8 +797,39 @@ pub struct DisplayDetails {
     pub camera_width: f64,
 }
 
+/// Last complete answer of `display_details`. While screens are being plugged in or the Mac wakes,
+/// the main thread can stay busy past the read's timeout; the last known notch and menu bar
+/// geometry is far closer to the truth than failing the placement of the notch window.
+#[cfg(target_os = "macos")]
+static LAST_DISPLAY_DETAILS: std::sync::Mutex<Option<Vec<DisplayDetails>>> = std::sync::Mutex::new(None);
+
+#[cfg(target_os = "macos")]
+thread_local! {
+    /// Whether this thread's latest `display_details` call fell back to the cached answer.
+    static DETAILS_STALE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 #[cfg(target_os = "macos")]
 pub fn display_details(window: &WebviewWindow) -> Result<Vec<DisplayDetails>, String> {
+    let read = read_display_details(window);
+    DETAILS_STALE.set(read.is_err());
+    crate::notch_display::or_last_known(read, &LAST_DISPLAY_DETAILS)
+}
+
+/// True when the calling thread's latest screen read failed and an older one was used instead.
+/// A placement made from it is provisional: callers that remember "placed for this layout" must
+/// not, so the placement is tried again with a fresh read.
+#[cfg(target_os = "macos")]
+pub fn display_details_stale() -> bool {
+    DETAILS_STALE.get()
+}
+#[cfg(not(target_os = "macos"))]
+pub fn display_details_stale() -> bool {
+    false
+}
+
+#[cfg(target_os = "macos")]
+fn read_display_details(window: &WebviewWindow) -> Result<Vec<DisplayDetails>, String> {
     on_main_thread(window, |_| {
         use objc2::{msg_send, MainThreadMarker};
         use objc2_app_kit::{NSScreen, NSStatusBar};

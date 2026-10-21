@@ -39,6 +39,23 @@ pub struct Display {
     pub monitor: tauri::Monitor,
 }
 
+/// A successful read replaces `cache`; a failed one falls back to the last success so a transient
+/// failure (a main thread busy with a display reconfiguration) does not abort placing the notch.
+/// With nothing cached yet the error stands.
+pub fn or_last_known<T: Clone>(
+    read: Result<Vec<T>, String>,
+    cache: &std::sync::Mutex<Option<Vec<T>>>,
+) -> Result<Vec<T>, String> {
+    let mut cache = cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    match read {
+        Ok(value) => {
+            *cache = Some(value.clone());
+            Ok(value)
+        }
+        Err(error) => cache.clone().ok_or(error),
+    }
+}
+
 pub fn list(window: &WebviewWindow) -> Result<Vec<Display>, String> {
     let monitors = window.available_monitors().map_err(|e| e.to_string())?;
     let primary = window.primary_monitor().map_err(|e| e.to_string())?;
@@ -142,6 +159,15 @@ mod tests {
             Some(1)
         );
         assert_eq!(selected_index(&[], Some("external"), None, None), None);
+    }
+    #[test]
+    fn a_failed_display_read_falls_back_to_the_last_complete_one() {
+        let cache = std::sync::Mutex::new(None);
+        assert_eq!(or_last_known::<u8>(Err("busy".into()), &cache), Err("busy".into()));
+        assert_eq!(or_last_known(Ok(vec![1_u8, 2]), &cache), Ok(vec![1, 2]));
+        assert_eq!(or_last_known(Err("busy".into()), &cache), Ok(vec![1, 2]));
+        assert_eq!(or_last_known(Ok(vec![3_u8]), &cache), Ok(vec![3]));
+        assert_eq!(or_last_known(Err("busy".into()), &cache), Ok(vec![3]));
     }
     #[test]
     fn follow_mode_keeps_the_current_screen_and_recovers_if_it_disappears() {

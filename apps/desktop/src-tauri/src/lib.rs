@@ -876,7 +876,9 @@ async fn notch_present(
                 .map_err(|e| e.to_string())?;
             let interactive = desktop.notch.lock().unwrap().keyboard;
             platform::configure(&window, interactive, width, height)?;
-            position_notch(&window)?;
+            // One frame that cannot read the screens (they are being reconfigured) must not end
+            // the animation and strand the window mid-way; the next frame or the host loop (which retries while the read is stale) places it again.
+            let _ = position_notch(&window);
             if finished {
                 break;
             }
@@ -1593,7 +1595,10 @@ pub fn run() {
                         let _ = platform::configure(&window, state.keyboard, width, height);
                         // Screens moved or the setting changed: a stored menu bar place is stale.
                         *desktop.menu_slot.lock().unwrap() = None;
-                        if position_notch(&window).is_ok() { layout = current_layout; }
+                        // A placement made from a cached screen read is provisional: keep trying.
+                        if position_notch(&window).is_ok() && !platform::display_details_stale() {
+                            layout = current_layout;
+                        }
                         if let Some(panel) = handle.get_webview_window("panel") {
                             if panel.is_visible().unwrap_or(false) {
                                 let _ = fit_panel(&panel, &settings, false);
