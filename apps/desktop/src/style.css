@@ -3158,3 +3158,57 @@ body[data-native="false"][data-surface="notch"] .notch { height: 100%; }
 .notch-overflow-count { font-size: 10px; }
 .notch-top .notch-badge { width: 18px; height: 18px; }
 .notch-top .notch-badge .numeral { font-size: 10px; }
+
+/* Standing notification strip: a graphite tile above the list, quiet unless something is wrong. */
+.notify-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.notify-strip > svg {
+  flex-shrink: 0;
+  color: var(--orange);
+}
+.notify-strip.notify-error > svg {
+  color: #ff938e;
+}
+.notify-message {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.notify-action {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #ffffff1f;
+  color: #fff;
+  transition: background 0.18s var(--ease-snap), transform 0.18s var(--ease-snap);
+}
+.notify-action:hover:not(:disabled) {
+  background: #ffffff33;
+}
+.notify-action:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.notify-action:disabled {
+  opacity: 0.5;
+}
+.notify-action:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .notify-action {
+    transition: none;
+  }
+  .notify-action:active:not(:disabled) {
+    transform: none;
+  }
+}

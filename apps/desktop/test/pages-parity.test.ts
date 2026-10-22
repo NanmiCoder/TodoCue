@@ -248,7 +248,7 @@ describe("notification status", () => {
     expect(notificationStatus(undefined, "windows", "en").state).toBe("unknown");
   });
   it("words the results of testing and requesting", () => {
-    expect(testResultLabel({ ok: true, channel: "toast" }, "zh-CN")).toBe("已提交系统（toast）");
+    expect(testResultLabel({ ok: true, channel: "toast" }, "zh-CN")).toBe("已提交给系统（toast），没看到的话请检查专注模式和通知样式");
     expect(testResultLabel({ ok: false }, "en")).toBe("Could not send");
     expect(requestResultLabel({ authorization: "authorized", needsSystemSettings: false }, "macos", "zh-CN")).toBe("已授权");
     expect(requestResultLabel({ authorization: "denied", needsSystemSettings: true }, "windows", "zh-CN")).toMatch(/专注助手/);
