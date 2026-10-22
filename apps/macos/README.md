@@ -49,10 +49,10 @@ Every command prints exactly one JSON line on stdout.
 
 | Command | Output |
 |---|---|
-| `status` | `{"ok":true,"authorization":"authorized\|provisional\|denied\|notDetermined","alertStyle":"none\|banner\|alert"}` |
+| `status` | `{"ok":true,"authorization":"authorized\|provisional\|denied\|notDetermined","alertStyle":"none\|banner\|alert","alertSetting":S,"notificationCenterSetting":S,"soundSetting":S,"visible":bool}` where `S` is `enabled\|disabled\|notSupported\|unknown`. `visible` is true only when authorization is `authorized`/`provisional` **and** a banner/alert or Notification Center is on |
 | `request` | state-aware, always **exit 0**. Emits the `status` shape plus `needsSystemSettings` (see below) |
-| `open-settings` | opens System Settings › Notifications with TodoCueNotifier revealed: `{"ok":true,"url":"x-apple.systempreferences:…"}` |
-| `deliver --id <id> --title <t> [--body b] [--subtitle s] [--task-id tid] [--thread th] [--sound]` | `{"ok":true,"channel":"helper","authorization":"…"}` (exit 0) or `{"ok":false,"error":"…"}` (exit 1; `notifications denied` when authorization is denied) |
+| `open-settings` | opens System Settings › Notifications with the TodoCue row revealed (looked up by bundle id `com.todocue.notifier`): `{"ok":true,"url":"x-apple.systempreferences:…"}` |
+| `deliver --id <id> --title <t> [--body b] [--subtitle s] [--task-id tid] [--thread th] [--sound] [--home dir]` | success: `{"ok":true,"channel":"helper",…status fields}` (exit 0). Failure: `{"ok":false,"error":"…",…status fields}` (exit 1) — the request is **not** submitted when authorization is `denied`, `notDetermined`, or authorized-but-invisible (style None and Notification Center off); `error` is user-presentable, e.g. `notifications not authorized yet (notDetermined); open TodoCue settings and allow notifications` |
 | *(no args)* | launched by macOS for a notification click/action; handles it and exits (5 s idle timeout) |
 
 **`request` only prompts once.** macOS never shows the notification permission prompt twice for the same
@@ -70,8 +70,19 @@ bridge turns a non-zero exit into an exception carrying only the `error` field, 
 
 Delivered notifications use the stable identifier passed with `--id` (re-delivery replaces the old one),
 category `TODOCUE_REMINDER` with actions `COMPLETE` (完成) and `SNOOZE` (10 分钟后提醒), and
-`userInfo.taskId`. On click the helper opens `todocue://task/<taskId>`; `COMPLETE`/`SNOOZE` call
+`userInfo.taskId`. Interruption level is always `.active`: `.timeSensitive` needs an entitlement the helper
+does not have, so it would be a no-op that merely looks like it breaks through Focus.
+On click the helper opens `todocue://task/<taskId>`; `COMPLETE`/`SNOOZE` call
 `POST /v1/tasks/<id>/complete` / `POST /v1/tasks/<id>/snooze {"minutes":10}` with the token from connection.json.
+If the runtime is offline or the call fails, the helper falls back to opening `todocue://task/<taskId>` (periodic
+cues: `todocue://periodic/<id>`) instead of failing silently.
+
+`--home <dir>` is stored in `userInfo.home`. macOS relaunches the helper for a click **without arguments**, so
+the click handler reads the data directory from there to find `connection.json`; without `--home` it uses
+`$TODOCUE_HOME` / `~/.todocue` as before.
+
+The helper's `CFBundleDisplayName` is `TodoCue` (what System Settings › Notifications lists), while
+`CFBundleName` stays `TodoCueNotifier` and the bundle id `com.todocue.notifier` is unchanged.
 
 Expected install locations searched by `todocue install` / `doctor`:
 `~/.todocue/bin/TodoCueNotifier.app` (copied by install) or `apps/macos/build/TodoCueNotifier.app` (dev checkout).
@@ -121,8 +132,8 @@ bottom; date/repeat options unfold only when needed. See [design rationale and v
 
 - The app is not sandboxed. The DMG builder uses a Developer ID when available; notarization requires `TODOCUE_NOTARY_PROFILE`. Plain Swift builds use an ad-hoc signature. The login item requires the `.app`
   to stay at a stable path (copy it to `/Applications` or `~/Applications`).
-- Notification authorization is per bundle: the helper's bundle identifier `com.todocue.notifier` is what
-  appears in System Settings › Notifications.
+- Notification authorization is per bundle: it is recorded under the helper's bundle identifier
+  `com.todocue.notifier`, which System Settings › Notifications lists as "TodoCue" (display name).
 - macOS prompts for notification permission **once per bundle, ever**. After a denial the prompt cannot be
   brought back — no API exists to reset it and `tccutil` does not cover notifications (they are not
   TCC-managed). The only recovery is enabling the app by hand in System Settings › Notifications, which is

@@ -23,8 +23,16 @@ public enum TodoCueHome {
 
     public static var connectionFile: URL { directory.appendingPathComponent("connection.json") }
 
-    public static func loadConnection() -> ConnectionInfo? {
-        guard let data = try? Data(contentsOf: connectionFile) else { return nil }
+    /// Resolves an explicit data directory (e.g. the notifier's `--home`, remembered in a
+    /// notification's userInfo) and falls back to `directory` when none is given.
+    public static func directory(explicit home: String?) -> URL {
+        guard let home, !home.isEmpty else { return directory }
+        return URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true)
+    }
+
+    public static func loadConnection(home: String? = nil) -> ConnectionInfo? {
+        let file = directory(explicit: home).appendingPathComponent("connection.json")
+        guard let data = try? Data(contentsOf: file) else { return nil }
         return try? JSONDecoder().decode(ConnectionInfo.self, from: data)
     }
 }

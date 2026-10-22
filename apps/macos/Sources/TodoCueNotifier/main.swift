@@ -9,7 +9,7 @@ import TodoCueKit
 //   TodoCueNotifier status
 //   TodoCueNotifier request
 //   TodoCueNotifier open-settings
-//   TodoCueNotifier deliver --id <id> --title <t> [--body <b>] [--subtitle <s>] [--task-id <id>] [--thread <id>] [--sound]
+//   TodoCueNotifier deliver --id <id> --title <t> [--body <b>] [--subtitle <s>] [--task-id <id>] [--thread <id>] [--sound] [--home <dir>]
 //   TodoCueNotifier              (launched by macOS for a notification response)
 //
 // Prints exactly one JSON line on stdout for the command forms.
@@ -96,8 +96,30 @@ func requireBundle() {
     }
 }
 
+func settingString(_ s: UNNotificationSetting) -> String {
+    switch s {
+    case .enabled: return "enabled"
+    case .disabled: return "disabled"
+    case .notSupported: return "notSupported"
+    @unknown default: return "unknown"
+    }
+}
+
+/// Plain-string view of the live settings; the decision rules live in TodoCueKit
+/// (`NotificationSnapshot`) so they are unit tested.
+func snapshot(_ s: UNNotificationSettings) -> NotificationSnapshot {
+    NotificationSnapshot(
+        authorization: authString(s.authorizationStatus),
+        alertStyle: alertStyleString(s.alertStyle),
+        alertSetting: settingString(s.alertSetting),
+        notificationCenterSetting: settingString(s.notificationCenterSetting),
+        soundSetting: settingString(s.soundSetting))
+}
+
 func statusPayload(_ settings: UNNotificationSettings) -> [String: Any] {
-    ["ok": true, "authorization": authString(settings.authorizationStatus), "alertStyle": alertStyleString(settings.alertStyle)]
+    var p = snapshot(settings).statusFields
+    p["ok"] = true
+    return p
 }
 
 /// Opens System Settings › Notifications, ideally with our own row revealed.
@@ -149,25 +171,32 @@ final class ResponseDelegate: NSObject, UNUserNotificationCenterDelegate {
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         handled = true
-        let taskId = response.notification.request.content.userInfo["taskId"] as? String
-        let action = response.actionIdentifier
         let info = response.notification.request.content.userInfo
+        let taskId = info["taskId"] as? String
+        let action = response.actionIdentifier
+        // The data directory that issued this notification (`deliver --home`). macOS relaunches
+        // us without arguments, so userInfo is the only place it survives.
+        let home = info["home"] as? String
         let periodicId = info["periodicId"] as? String
         let occurrenceId = info["occurrenceId"] as? String
         let round = info["round"] as? Int
         Task {
             if let periodicId {
-                await handlePeriodic(action: action, id: periodicId, occurrenceId: occurrenceId, round: round)
-            } else { await handle(action: action, taskId: taskId) }
+                await handlePeriodic(action: action, id: periodicId, occurrenceId: occurrenceId, round: round, home: home)
+            } else { await handle(action: action, taskId: taskId, home: home) }
             completionHandler()
             exit(0)
         }
     }
 
-    func handlePeriodic(action: String, id: String, occurrenceId: String?, round: Int?) async {
+    func handlePeriodic(action: String, id: String, occurrenceId: String?, round: Int?, home: String?) async {
         switch action {
         case actionComplete, actionSnooze:
-            guard let occurrenceId, let round, let client = APIClient.fromHome() else { return }
+            guard let occurrenceId, let round, let client = APIClient.fromHome(home) else {
+                // Runtime offline or no connection.json: same visible fallback as a failed action.
+                if let url = URL(string: "todocue://periodic/\(id)") { NSWorkspace.shared.open(url) }
+                return
+            }
             do {
                 _ = try await client.periodicAction(id, action: action == actionComplete ? "complete" : "snooze",
                     occurrenceId: occurrenceId, round: round, idempotencyKey: "notification:\(occurrenceId):\(round):\(action)")
@@ -181,18 +210,26 @@ final class ResponseDelegate: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    func handle(action: String, taskId: String?) async {
+    func handle(action: String, taskId: String?, home: String?) async {
         switch action {
-        case actionComplete:
-            if let taskId, let client = APIClient.fromHome() { _ = try? await client.complete(taskId) }
-        case actionSnooze:
-            if let taskId, let client = APIClient.fromHome() { _ = try? await client.snooze(taskId, minutes: 10) }
+        case actionComplete, actionSnooze:
+            // Never swallow a failure: if the runtime is offline or rejects the call, open the
+            // task in the panel so the user can finish it by hand (same as periodic reminders).
+            var done = false
+            if let taskId, let client = APIClient.fromHome(home) {
+                do {
+                    if action == actionComplete { _ = try await client.complete(taskId) }
+                    else { _ = try await client.snooze(taskId, minutes: 10) }
+                    done = true
+                } catch {
+                    done = false
+                }
+            }
+            if !done, let url = NotificationFallback.taskURL(taskId: taskId) { NSWorkspace.shared.open(url) }
         case UNNotificationDismissActionIdentifier:
             break
         default:
-            let url: URL
-            if let taskId { url = URL(string: "todocue://task/\(taskId)")! } else { url = URL(string: "todocue://open")! }
-            NSWorkspace.shared.open(url)
+            if let url = NotificationFallback.taskURL(taskId: taskId) { NSWorkspace.shared.open(url) }
         }
     }
 }
@@ -249,7 +286,7 @@ case "open-settings":
 case "deliver":
     requireBundle()
     guard let id = args.options["id"], let title = args.options["title"] else {
-        emit(["ok": false, "error": "usage: deliver --id <id> --title <title> [--body b] [--subtitle s] [--task-id t] [--thread th] [--sound]"], exit: 2)
+        emit(["ok": false, "error": "usage: deliver --id <id> --title <title> [--body b] [--subtitle s] [--task-id t] [--thread th] [--sound] [--home dir]"], exit: 2)
     }
     registerCategory(center)
     let content = UNMutableNotificationContent()
@@ -264,20 +301,36 @@ case "deliver":
     if let periodicId = args.options["periodic-id"] { info["periodicId"] = periodicId }
     if let occurrenceId = args.options["occurrence-id"] { info["occurrenceId"] = occurrenceId }
     if let value = args.options["round"], let round = Int(value) { info["round"] = round }
+    // Remember which data directory issued this cue: the click relaunches us without arguments.
+    if let home = args.options["home"], !home.isEmpty { info["home"] = home }
     content.userInfo = info
-    content.interruptionLevel = args.options["periodic-id"] == nil ? .timeSensitive : .active
+    // `.timeSensitive` needs the Time Sensitive Notifications entitlement, which this helper
+    // does not have (ad-hoc / Developer ID without it): macOS silently treats it as `.active`,
+    // while the level reads as if it broke through Focus. Use `.active` for every cue.
+    content.interruptionLevel = .active
     let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
     center.getNotificationSettings { settings in
-        let denied = settings.authorizationStatus == .denied
+        let snap = snapshot(settings)
+        // Refuse before add(): the system accepts requests it will never show (notDetermined,
+        // denied, style None), and a false ok:true makes the runtime mark the cue as sent.
+        if let reason = snap.deliveryError {
+            var p = snap.statusFields
+            p["ok"] = false
+            p["error"] = reason
+            emit(p, exit: 1)
+        }
         center.removeDeliveredNotifications(withIdentifiers: [id])
         center.add(request) { err in
             if let err {
-                emit(["ok": false, "error": err.localizedDescription, "authorization": authString(settings.authorizationStatus)], exit: 1)
+                var p = snap.statusFields
+                p["ok"] = false
+                p["error"] = err.localizedDescription
+                emit(p, exit: 1)
             }
-            if denied {
-                emit(["ok": false, "error": "notifications denied", "authorization": "denied"], exit: 1)
-            }
-            emit(["ok": true, "channel": "helper", "authorization": authString(settings.authorizationStatus)], exit: 0)
+            var p = snap.statusFields
+            p["ok"] = true
+            p["channel"] = "helper"
+            emit(p, exit: 0)
         }
     }
     RunLoop.main.run()

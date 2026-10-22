@@ -44,7 +44,7 @@ make_bundle() {
   <key>CFBundleIdentifier</key><string>$bundle_id</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>$name</string>
-  <key>CFBundleDisplayName</key><string>$name</string>
+  <key>CFBundleDisplayName</key><string>${display_name:-$name}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
@@ -161,7 +161,9 @@ echo "==> assembling bundles"
 if [[ "${1:-}" != "--helpers-only" ]]; then
   make_bundle "TodoCue" "com.todocue.app" "TodoCue" "$URL_TYPES" "$ROOT/scripts/app.entitlements.plist" "$PKG/Resources" >/dev/null
 fi
-make_bundle "TodoCueNotifier" "com.todocue.notifier" "TodoCueNotifier" "" >/dev/null
+# Display name "TodoCue" so System Settings > Notifications matches the main app; CFBundleName and the
+# bundle id (authorization is keyed by it) stay unchanged.
+display_name="TodoCue" make_bundle "TodoCueNotifier" "com.todocue.notifier" "TodoCueNotifier" "" >/dev/null
 # A bare executable, not a bundle: started by the desktop app, so macOS attributes Calendar and
 # Reminders access to TodoCue.app. package-macos.mjs signs it again inside the app.
 if [[ ! -x "$BIN/TodoCueAppleSync" ]]; then echo "missing build product $BIN/TodoCueAppleSync" >&2; exit 1; fi
