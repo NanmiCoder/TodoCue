@@ -31,6 +31,14 @@ export interface NotifierStatus {
    * has recorded a decision, or Windows app notifications have been disabled.
    */
   needsSystemSettings?: boolean;
+  /** macOS alert style reported by the helper ("none" | "banner" | "alert"). */
+  alertStyle?: string | null;
+  /** False when a notification would be accepted but not shown to the user. Undefined = unknown. */
+  visible?: boolean;
+  /** True when the helper is missing and only the osascript fallback is available. */
+  degraded?: boolean;
+  /** Windows: the toast AppUserModelID is registered. */
+  registered?: boolean;
 }
 
 export interface OpenSettingsResult {
@@ -55,12 +63,15 @@ export interface NotificationSink {
 export class MemoryNotifier implements NotificationSink {
   delivered: NotificationPayload[] = [];
   failNext: string | null = null;
+  /** Fails every delivery until cleared, for tests that need a sustained outage. */
+  failing: string | null = null;
   authorization: NotificationAuthorization = "authorized";
   /** Set by tests to simulate macOS refusing to prompt again. */
   needsSystemSettings = false;
   /** Number of times `openSystemSettings()` was called. */
   settingsOpened = 0;
   async deliver(payload: NotificationPayload): Promise<string> {
+    if (this.failing) throw new Error(this.failing);
     if (this.failNext) {
       const err = this.failNext;
       this.failNext = null;
@@ -136,7 +147,9 @@ export class HelperNotifier implements NotificationSink {
   private async runHelper(args: string[], timeoutMs = 15_000): Promise<Record<string, unknown>> {
     const helper = this.resolveHelper();
     if (!helper) throw new Error("NOTIFIER_UNAVAILABLE: TodoCueNotifier helper not found");
-    const homeArgs = process.platform === "win32" && this.opts.home ? ["--home", this.opts.home] : [];
+    // The helper is relaunched by the system without arguments when a notification is clicked, so
+    // it records the originating data directory at delivery time (macOS userInfo, Windows launch URL).
+    const homeArgs = this.opts.home && args[0] === "deliver" ? ["--home", this.opts.home] : process.platform === "win32" && this.opts.home ? ["--home", this.opts.home] : [];
     const { stdout } = await execFileP(helper, [...(this.opts.helperArgs ?? []), ...args, ...homeArgs], { timeout: timeoutMs, maxBuffer: 1024 * 1024, windowsHide: true }).catch((e: unknown) => {
       const err = e as { stdout?: string; stderr?: string; message: string };
       // The helper prints a JSON line even on failure; surface it.
@@ -194,6 +207,7 @@ export class HelperNotifier implements NotificationSink {
         available: false,
         path: null,
         authorization: "unknown",
+        degraded: this.opts.allowOsascriptFallback ?? process.platform === "darwin",
         detail: (this.opts.allowOsascriptFallback ?? process.platform === "darwin")
           ? "helper not installed; reminders fall back to osascript notifications (no click-through)"
           : "helper not installed",
@@ -201,12 +215,7 @@ export class HelperNotifier implements NotificationSink {
     }
     try {
       const res = await this.runHelper(["status"], 10_000);
-      return {
-        available: true,
-        path: helper,
-        authorization: normalizeAuth(res.authorization),
-        detail: typeof res.alertStyle === "string" ? `alert style: ${res.alertStyle}` : null,
-      };
+      return { available: true, path: helper, ...statusFields(res) };
     } catch (e) {
       return { available: false, path: helper, authorization: "unknown", detail: (e as Error).message };
     }
@@ -219,13 +228,7 @@ export class HelperNotifier implements NotificationSink {
       // The timeout stays generous: this is the one call that blocks on a human answering
       // the system prompt. Every other state returns immediately.
       const res = await this.runHelper(["request"], 120_000);
-      return {
-        available: true,
-        path: helper,
-        authorization: normalizeAuth(res.authorization),
-        detail: typeof res.alertStyle === "string" ? `alert style: ${res.alertStyle}` : null,
-        needsSystemSettings: res.needsSystemSettings === true,
-      };
+      return { available: true, path: helper, ...statusFields(res), needsSystemSettings: res.needsSystemSettings === true };
     } catch (e) {
       return { available: true, path: helper, authorization: "unknown", detail: (e as Error).message };
     }
@@ -242,6 +245,18 @@ export class HelperNotifier implements NotificationSink {
       return { ok: false, url: null };
     }
   }
+}
+
+/** Fields every helper `status` / `request` reply carries; newer helpers add the visibility ones. */
+function statusFields(res: Record<string, unknown>): Pick<NotifierStatus, "authorization" | "detail" | "alertStyle" | "visible" | "registered"> {
+  const alertStyle = typeof res.alertStyle === "string" ? res.alertStyle : null;
+  return {
+    authorization: normalizeAuth(res.authorization),
+    detail: alertStyle ? `alert style: ${alertStyle}` : null,
+    alertStyle,
+    ...(typeof res.visible === "boolean" ? { visible: res.visible } : {}),
+    ...(typeof res.registered === "boolean" ? { registered: res.registered } : {}),
+  };
 }
 
 function normalizeAuth(v: unknown): NotificationAuthorization {

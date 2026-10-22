@@ -1066,6 +1066,14 @@ export class TaskEngine {
     }
     if (pending && pending.fire_at === task.reminderAt) return;
     if (pending) this.cancelPendingReminders(task.id);
+    // Editing an unrelated field must not re-arm a reminder that was already handled: without
+    // this, any updateTask after delivery inserts a fresh pending row for the past fire time and
+    // the scheduler announces it again as a "missed" reminder. A reminder time that actually
+    // changes yields a different fire_at and is not affected.
+    const handled = this.db
+      .prepare("SELECT 1 FROM reminders WHERE task_id = ? AND fire_at = ? AND status IN ('submitted', 'missed', 'failed') LIMIT 1")
+      .get(task.id, task.reminderAt);
+    if (handled) return;
     const nowIso = this.nowIso();
     const id = newReminderId();
     this.db
@@ -1127,23 +1135,31 @@ export class TaskEngine {
   markReminderSubmitted(id: string, channel: string, status: "submitted" | "missed" = "submitted"): void {
     const nowIso = this.nowIso();
     const row = this.db.prepare("SELECT task_id FROM reminders WHERE id = ?").get(id) as { task_id: string } | undefined;
-    this.db
+    // Only a still-pending row is updated: when the task was completed or edited while the
+    // notification was being handed over, the row is already cancelled and must stay that way.
+    const res = this.db
       .prepare(
-        "UPDATE reminders SET status = ?, channel = ?, submitted_at = ?, attempts = attempts + 1, last_error = NULL, updated_at = ? WHERE id = ?",
+        "UPDATE reminders SET status = ?, channel = ?, submitted_at = ?, attempts = attempts + 1, last_error = NULL, updated_at = ? WHERE id = ? AND status = 'pending'",
       )
       .run(status, channel, nowIso, nowIso, id);
-    this.emit("reminder.updated", id, row ? { taskId: row.task_id } : undefined);
+    if (res.changes > 0) this.emit("reminder.updated", id, row ? { taskId: row.task_id } : undefined);
   }
 
-  markReminderFailed(id: string, error: string, opts: { retryInMs?: number; maxAttempts?: number } = {}): void {
+  /**
+   * Records a failed delivery. With `retryInMs` the reminder stays pending and is tried again after
+   * that delay; it becomes terminally `failed` when `maxAttempts` or `giveUpAt` is reached, or when
+   * no retry is requested.
+   */
+  markReminderFailed(id: string, error: string, opts: { retryInMs?: number; maxAttempts?: number; giveUpAt?: string } = {}): void {
     const nowIso = this.nowIso();
-    const row = this.db.prepare("SELECT task_id, attempts FROM reminders WHERE id = ?").get(id) as
-      | { task_id: string; attempts: number }
+    const row = this.db.prepare("SELECT task_id, attempts, status FROM reminders WHERE id = ?").get(id) as
+      | { task_id: string; attempts: number; status: string }
       | undefined;
-    if (!row) return;
+    if (!row || row.status !== "pending") return;
     const attempts = row.attempts + 1;
-    const max = opts.maxAttempts ?? 3;
-    if (attempts >= max || opts.retryInMs === undefined) {
+    const exhausted = opts.maxAttempts !== undefined && attempts >= opts.maxAttempts;
+    const expired = opts.giveUpAt !== undefined && nowIso >= opts.giveUpAt;
+    if (exhausted || expired || opts.retryInMs === undefined) {
       this.db
         .prepare("UPDATE reminders SET status = 'failed', attempts = ?, last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE id = ?")
         .run(attempts, error, nowIso, id);
@@ -1154,6 +1170,44 @@ export class TaskEngine {
         .run(attempts, error, next, nowIso, id);
     }
     this.emit("reminder.updated", id, { taskId: row.task_id });
+  }
+
+  /**
+   * Puts recently failed reminders back in the queue (startup, wake, notification permission
+   * granted). Only rows whose task is still open with the same reminder time qualify, and only
+   * within `windowMs` of the fire time so an old backlog is not announced days later.
+   */
+  requeueFailedReminders(windowMs: number): number {
+    const nowIso = this.nowIso();
+    const since = toUtcIso(new Date(this.now().getTime() - windowMs));
+    const res = this.db
+      .prepare(
+        `UPDATE reminders SET status = 'pending', next_attempt_at = NULL, updated_at = ?
+         WHERE status = 'failed' AND fire_at >= ?
+           AND EXISTS (SELECT 1 FROM tasks t WHERE t.id = reminders.task_id AND t.status = 'todo' AND t.reminder_at = reminders.fire_at)`,
+      )
+      .run(nowIso, since);
+    if (res.changes > 0) this.emit("reminder.updated", null);
+    return res.changes;
+  }
+
+  /** What `doctor` needs to tell whether reminders are actually getting out. */
+  reminderDiagnostics(overdueAfterMs = 120_000, recentWindowMs = 24 * 3_600_000): {
+    overduePending: number;
+    retrying: number;
+    /** Failures newer than `recentWindowMs`: the ones a re-send can still help. Older ones are history. */
+    recentFailed: number;
+    lastError: { message: string; at: string } | null;
+  } {
+    const recentSince = toUtcIso(new Date(this.now().getTime() - recentWindowMs));
+    const recentFailed = this.db.prepare("SELECT COUNT(*) AS n FROM reminders WHERE status = 'failed' AND fire_at >= ?").get(recentSince) as { n: number };
+    const cutoff = toUtcIso(new Date(this.now().getTime() - overdueAfterMs));
+    const overdue = this.db.prepare("SELECT COUNT(*) AS n FROM reminders WHERE status = 'pending' AND fire_at <= ?").get(cutoff) as { n: number };
+    const retrying = this.db.prepare("SELECT COUNT(*) AS n FROM reminders WHERE status = 'pending' AND last_error IS NOT NULL").get() as { n: number };
+    const last = this.db
+      .prepare("SELECT last_error, updated_at FROM reminders WHERE last_error IS NOT NULL AND status IN ('pending', 'failed') ORDER BY updated_at DESC LIMIT 1")
+      .get() as { last_error: string; updated_at: string } | undefined;
+    return { overduePending: overdue.n, retrying: retrying.n, recentFailed: recentFailed.n, lastError: last ? { message: last.last_error, at: last.updated_at } : null };
   }
 
   /** Task rows for a set of reminders, used by the scheduler to build notification text. */

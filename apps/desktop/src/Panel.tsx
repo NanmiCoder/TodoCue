@@ -8,7 +8,7 @@ import {
 } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import type { CreateTaskInput, Task, UpdateTaskInput } from "@todocue/shared";
+import type { CreateTaskInput, RuntimeEvent, Task, UpdateTaskInput } from "@todocue/shared";
 import { TodoCueError } from "@todocue/shared";
 import {
   client,
@@ -33,7 +33,8 @@ import { afterTaskDeleted, removeTolerantly } from "./deletion.js";
 import { latestTask as latestOf } from "./taskLookup.js";
 import { returnFocusTarget } from "./menuModel.js";
 import { useToasts } from "./useToasts.js";
-import { EmptyState, emptyCopy, NotFoundPage, OfflineBanner } from "./states.js";
+import { EmptyState, emptyCopy, NotFoundPage, NotificationStrip, OfflineBanner } from "./states.js";
+import { useNotificationHealth } from "./useNotificationHealth.js";
 import { SettingsPage } from "./SettingsPage.js";
 import { Gauge, Mark, Numeral, TaskRow } from "./components.js";
 import { Composer } from "./Composer.js";
@@ -94,7 +95,9 @@ export function Panel() {
     revision: eventRevision,
     refresh,
     reconnect,
-  } = useRuntime();
+  } = useRuntime((event) => healthEvent.current(event));
+  // useRuntime starts before the toast slot exists; reminder events reach the health hook through this ref.
+  const healthEvent = useRef<(event: RuntimeEvent) => void>(() => undefined);
   const [settings, setSettings] = useState<DesktopSettings>(defaults);
   const [view, setView] = useState<"today" | "upcoming" | "all">("today");
   const [route, setRoute] = useState<Route>("list");
@@ -151,6 +154,11 @@ export function Panel() {
     (message: string | null) => (message ? notify({ message, kind: "error" }) : clearErrors()),
     [notify, clearErrors],
   );
+  const health = useNotificationHealth({ online: connection.online, language: settings.language, notify });
+  healthEvent.current = health.onEvent;
+  // Settings (or the system settings behind it) may have changed things while the strip was out of sight.
+  const refreshHealth = health.refresh;
+  useEffect(() => { if (route === "list") void refreshHealth(); }, [route, refreshHealth]);
   const drafts = useRef(new Map<string, TaskDraft>());
   const quickRequest = useRef(new QuickAddRequest());
   const quickFocusRevision = useRef(0);
@@ -1144,6 +1152,18 @@ export function Panel() {
                         {settings.language === "en" ? "Saving the move…" : "正在保存移动…"}
                       </div>
                     )}
+                    <AnimatePresence initial={false}>
+                      {health.banner && (
+                        <NotificationStrip
+                          key="notification-strip"
+                          banner={health.banner}
+                          busy={health.busy}
+                          reduced={!!reduced}
+                          language={settings.language}
+                          onAction={(type) => void health.run(type)}
+                        />
+                      )}
+                    </AnimatePresence>
                     <AnimatePresence initial={false} mode="popLayout">
                     {view === "today" && next && (
                       <motion.section

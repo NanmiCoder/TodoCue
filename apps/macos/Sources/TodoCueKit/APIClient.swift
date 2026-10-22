@@ -38,8 +38,10 @@ public struct APIClient: Sendable {
         self.baseURL = baseURL; self.token = token; self.session = session
     }
 
-    public static func fromHome() -> APIClient? {
-        guard let c = TodoCueHome.loadConnection() else { return nil }
+    /// `home` overrides `$TODOCUE_HOME` / `~/.todocue` (the notifier passes the data directory
+    /// that issued the notification).
+    public static func fromHome(_ home: String? = nil) -> APIClient? {
+        guard let c = TodoCueHome.loadConnection(home: home) else { return nil }
         return APIClient(connection: c)
     }
 

@@ -8,7 +8,9 @@
 !macroend
 !macro NSIS_HOOK_POSTINSTALL
   WriteRegStr HKCU "Software\Classes\AppUserModelId\${BUNDLEID}" "DisplayName" "TodoCue"
-  WriteRegStr HKCU "Software\Classes\AppUserModelId\${BUNDLEID}" "IconUri" "$INSTDIR\${MAINBINARYNAME}.exe"
+  ; No IconUri: the installer ships no image file and an .exe is not a valid toast icon.
+  ; Drop the value older builds wrote. TodoCueNotifier re-creates DisplayName if this key is ever missing.
+  DeleteRegValue HKCU "Software\Classes\AppUserModelId\${BUNDLEID}" "IconUri"
   WriteRegStr HKCU "Software\Classes\todocue" "" "URL:TodoCue"
   WriteRegStr HKCU "Software\Classes\todocue" "URL Protocol" ""
   WriteRegStr HKCU "Software\Classes\todocue\shell\open\command" "" '$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\"'
@@ -40,8 +42,8 @@
   todocue_uninstall_done:
 !macroend
 !macro NSIS_HOOK_POSTUNINSTALL
-  ReadRegStr $0 HKCU "Software\Classes\AppUserModelId\${BUNDLEID}" "IconUri"
-  StrCmp $0 "$INSTDIR\${MAINBINARYNAME}.exe" 0 todocue_appid_done
+  ReadRegStr $0 HKCU "Software\Classes\AppUserModelId\${BUNDLEID}" "DisplayName"
+  StrCmp $0 "TodoCue" 0 todocue_appid_done
     DeleteRegKey HKCU "Software\Classes\AppUserModelId\${BUNDLEID}"
   todocue_appid_done:
   ReadRegStr $0 HKCU "Software\Classes\todocue\shell\open\command" ""

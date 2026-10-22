@@ -75,7 +75,8 @@ CLI, MCP, the native macOS client and the shared desktop preview are thin client
 | GET | `/v1/events` | SSE, optional `Last-Event-ID` | stream of RuntimeEvent |
 | GET | `/v1/export` | – | ExportBundle |
 | GET | `/v1/doctor` | – | DoctorReport |
-| POST | `/v1/notifications/request-authorization` | – | `{ authorization, available, detail, needsSystemSettings }` |
+| POST | `/v1/reminders/retry-failed` | – | `{ requeued }` — 把最近 24 小时内投递失败的提醒重新放回队列 |
+| POST | `/v1/notifications/request-authorization` | – | `{ authorization, available, detail, needsSystemSettings, requeued }` |
 | POST | `/v1/notifications/open-settings` | – | `{ ok, url }` |
 | POST | `/v1/notifications/test` | `{ title?, body? }` | `{ ok, channel }` |
 
@@ -83,6 +84,21 @@ CLI, MCP, the native macOS client and the shared desktop preview are thin client
 拒绝），`needsSystemSettings` 为 `true`，表示系统不会再询问，必须由用户到「系统设置 › 通知」里手动开启；
 此时调用 `open-settings` 可直接打开该面板并定位到 TodoCueNotifier。`open-settings` 的 `ok` 为 `false`
 表示打开失败（例如运行环境没有 GUI 会话），调用方应退回到显示手动操作路径的文案。
+授权变为 `authorized`/`provisional` 时，`request-authorization` 会把最近 24 小时内失败的提醒重新入队，数量放在
+`requeued`；`reminders/retry-failed` 做同样的事，供用户在修好通知设置后手动触发。
+
+### 提醒投递语义
+
+`status: "submitted"` 只表示通知已**提交给系统**，不保证用户看到（专注模式、通知样式为「无」等无法被检测到）。
+投递失败时提醒保持 `pending` 并按退避重试：30 秒、2 分钟、5 分钟、之后每 15 分钟一次，直到提醒时间后满 24 小时
+才变为 `failed`。恢复后迟到的提醒标题带「错过的提醒」，状态为 `missed`（超过 2 分钟）或 `submitted`。runtime
+启动、检测到睡眠唤醒、授权恢复时，最近 24 小时内的 `failed` 提醒会再次入队。已经提交过的提醒，不会因为之后
+编辑无关字段（标题、备注等）而重复发送；只有提醒时间本身改变才会生成新的提醒。
+
+`GET /v1/doctor` 的 `notifier` 另含可选字段：`alertStyle`（macOS：`none|banner|alert`）、`visible`（授权了但系统不会
+显示时为 `false`）、`degraded`（helper 缺失，走 osascript 降级通道）、`registered`（Windows：toast 的
+AppUserModelID 已注册）。顶层的可选 `reminders` 给出 `failed`（只统计最近 24 小时内的失败，即重发还有意义的那些；更早的仍可用 `GET /v1/reminders?status=failed` 查看）、`retrying`、`overduePending`、`lastError`、
+`lastTickAt`；`checks` 里的 `reminderDelivery` 在调度器超过 60 秒没有运行时为 `error`。
 
 ### CreateTaskInput
 
@@ -134,7 +150,7 @@ To change a rule: stop the series and create a new one.
 
 ```json
 { "id": "r_…", "taskId": "t_…", "fireAt": "…Z", "status": "pending|submitted|failed|missed|cancelled",
-  "attempts": 0, "lastError": null, "submittedAt": null, "channel": "helper|osascript|summary" | null,
+  "attempts": 0, "lastError": null, "submittedAt": null, "channel": "helper|osascript|summary:<channel>" | null,
   "createdAt": "…Z", "updatedAt": "…Z" }
 ```
 

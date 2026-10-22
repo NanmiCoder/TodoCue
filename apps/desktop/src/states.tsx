@@ -1,4 +1,7 @@
+import { motion } from "motion/react";
 import { Icon, type IconName } from "./icons.js";
+import type { NotificationBanner } from "./notificationBanner.js";
+import { motionTokens } from "./tokens.js";
 
 /** Shared empty / offline / missing states, so every page speaks the same way. */
 export function OfflineBanner({
@@ -107,4 +110,46 @@ export function emptyCopy(view: View, searching: boolean, completedToday: number
         hint: en ? "Write it down, and let it go." : "记下来，就不用一直惦记。",
         actionLabel,
       };
+}
+
+/**
+ * The panel's standing notification strip: one line about why reminders may not reach the person and
+ * at most one button. It is not a layer (no Esc handling); the button is an ordinary tab stop.
+ */
+export function NotificationStrip({ banner, busy, reduced, language, onAction }: {
+  banner: NotificationBanner;
+  busy: boolean;
+  reduced: boolean;
+  language: string;
+  onAction: (type: NonNullable<NotificationBanner["action"]>["type"]) => void;
+}) {
+  const en = language === "en";
+  const { action } = banner;
+  return (
+    <motion.section
+      key="notification-strip"
+      className={`tile graphite notify-strip notify-${banner.severity}`}
+      role="status"
+      aria-label={en ? "Notification status" : "通知状态"}
+      style={{ originY: 0 }}
+      initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
+      transition={reduced ? { duration: 0.12 } : motionTokens.list}
+    >
+      <Icon name="bell" size={14} />
+      <p className="notify-message" title={banner.detail}>{banner.message}</p>
+      {action && (
+        <button
+          type="button"
+          className="notify-action"
+          disabled={busy}
+          aria-label={`${action.label}: ${banner.message}`}
+          onClick={() => onAction(action.type)}
+        >
+          {action.label}
+        </button>
+      )}
+    </motion.section>
+  );
 }

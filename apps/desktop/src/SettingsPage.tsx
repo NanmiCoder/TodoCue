@@ -3,21 +3,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Tabs } from "radix-ui";
 import { BellIcon, MixerHorizontalIcon, DesktopIcon, ArchiveIcon, CheckIcon, ArrowTopRightIcon, ReloadIcon, CopyIcon, ChevronRightIcon, ExclamationTriangleIcon, CalendarIcon } from "@radix-ui/react-icons";
-import type { DoctorReport } from "@todocue/shared";
+import type { DoctorReport, Reminder } from "@todocue/shared";
 import {
-  copyText, loadNotificationStatus, native, openDataFolder, openNotificationSettings,
+  client, copyText, loadNotificationStatus, native, openDataFolder, openNotificationSettings,
   requestNotificationPermission, saveSettings, sendTestNotification, focusPanel,
   type DesktopSettings, type NotificationStatus,
 } from "./bridge.js";
 import { NotchPreferences } from "./NotchPreferences.js";
 import { AppleSyncSettings } from "./AppleSyncSettings.js";
 import { describeError } from "./errors.js";
+import { recentFailed } from "./notification.js";
+import { retryResultLabel } from "./notificationBanner.js";
 import { formatShortcut, platform } from "./platform.js";
 import { createSettingsWriter } from "./settingsWriter.js";
 import { hintClass, SettingField, SettingSelect, SettingSwitch, SettingsButton, SettingsIntro, SettingsTransition, WidthSlider } from "./SettingsControls.js";
 import "./settings.css";
 
 type SettingsStatus = NotificationStatus & { doctor: DoctorReport };
+interface FailedReminder { reminder: Reminder; title: string | null }
 
 export function SettingsPage({ settings, setSettings, online, onError, onReconnect }: {
   settings: DesktopSettings;
@@ -59,6 +62,26 @@ export function SettingsPage({ settings, setSettings, online, onError, onReconne
     }
   }, [language]);
   useEffect(() => { if (online) void diagnose(); }, [online, diagnose]);
+  // The few most recent failures, with their task titles, read again whenever the diagnosis is.
+  const [failed, setFailed] = useState<FailedReminder[] | null>(null);
+  useEffect(() => {
+    if (!online || tab !== "notifications" || !status) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { reminders } = await client.listReminders({ status: "failed", limit: 200 });
+        const recent = recentFailed(reminders);
+        const items = await Promise.all(recent.map(async reminder => {
+          const title = await client.getTask(reminder.taskId).then(({ task }) => task.title, () => null);
+          return { reminder, title };
+        }));
+        if (!cancelled) setFailed(items);
+      } catch {
+        if (!cancelled) setFailed(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [online, tab, status]);
   useEffect(() => {
     const refocus = () => { if (online) void diagnose(); };
     window.addEventListener("focus", refocus);
@@ -171,7 +194,7 @@ export function SettingsPage({ settings, setSettings, online, onError, onReconne
             <div className="tw:mb-6 tw:flex tw:items-start tw:gap-3">
               <div className="tw:grid tw:size-10 tw:shrink-0 tw:place-items-center tw:rounded-xl tw:bg-(--s-fill) tw:text-(--s-accent)"><BellIcon width={20} height={20} /></div>
               <div className="tw:min-w-0 tw:flex-1 tw:pt-0.5" role="status">
-                <h3 className="tw:mb-1.5 tw:text-sm tw:font-semibold">{!online ? text("等待连接", "Waiting for connection") : statusFailed ? text("暂时无法读取", "Could not read status") : status ? { granted: text("通知已开启", "Notifications are on"), denied: text("通知已关闭", "Notifications are off"), unknown: text("等待授权", "Permission unknown"), unsupported: text("通知暂不可用", "Notifications unavailable") }[status.state] : text("正在检查…", "Checking…")}</h3>
+                <h3 className="tw:mb-1.5 tw:text-sm tw:font-semibold">{!online ? text("等待连接", "Waiting for connection") : statusFailed ? text("暂时无法读取", "Could not read status") : status ? { granted: text("通知已开启", "Notifications are on"), denied: text("通知已关闭", "Notifications are off"), invisible: text("已授权，但不会显示", "Allowed, but nothing will show"), unknown: text("等待授权", "Permission unknown"), unsupported: text("通知暂不可用", "Notifications unavailable") }[status.state] : text("正在检查…", "Checking…")}</h3>
                 {!status && !statusFailed && online ? <div className="settings-skeleton tw:h-8 tw:rounded-md" /> : <p className={hintClass}>{!online ? text("重新连接后可以检查通知权限。", "Reconnect to check notification permissions.") : statusFailed ? text("请重试，或打开系统设置检查权限。", "Retry, or check permissions in system settings.") : status?.reason}</p>}
               </div>
             </div>
@@ -181,7 +204,16 @@ export function SettingsPage({ settings, setSettings, online, onError, onReconne
               <SettingsButton disabled={!online || working || !status || status.actions.test === false} onClick={() => void perform(() => sendTestNotification(language))}><BellIcon />{text("发送测试通知", "Send a test notification")}</SettingsButton>
               {statusFailed && <SettingsButton disabled={!online || working} onClick={() => void perform(runDiagnostics)}><ReloadIcon />{text("重新检查", "Check again")}</SettingsButton>}
             </div>
-            <p className={`${hintClass} tw:mt-5`}>{text("专注模式或系统勿扰可能暂时隐藏通知。", "Focus or Do Not Disturb may temporarily silence notifications.")}</p>
+            {failed && failed.length > 0 && <section className="tw:mt-6 tw:grid tw:gap-3" aria-label={text("最近失败的提醒", "Recent failed reminders")}>
+              <h3 className="tw:text-sm tw:font-semibold">{text("最近失败的提醒", "Recent failed reminders")}</h3>
+              <ul className="tw:grid tw:gap-2">{failed.map(({ reminder, title }) => <li key={reminder.id} className="tw:grid tw:gap-0.5 tw:rounded-xl tw:border tw:border-(--s-line) tw:bg-(--s-fill) tw:px-3 tw:py-2">
+                <span className="tw:truncate tw:text-xs tw:font-medium">{title ?? text("（任务不可用）", "(task unavailable)")}</span>
+                <span className={hintClass}>{new Date(reminder.fireAt).toLocaleString(en ? "en" : "zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}{reminder.lastError ? ` · ${reminder.lastError}` : ""}</span>
+              </li>)}</ul>
+              <SettingsButton disabled={!online || working} onClick={() => void perform(async () => retryResultLabel((await client.retryFailedReminders()).requeued, language))}><ReloadIcon />{text("重新发送", "Re-send")}</SettingsButton>
+              <p className={hintClass}>{text("只会重新发送最近 24 小时内失败的提醒。", "Only reminders that failed in the last 24 hours are re-sent.")}</p>
+            </section>}
+            <p className={`${hintClass} tw:mt-5`}>{text("如果开启了专注模式，需要在专注模式的允许应用里加入 TodoCue，否则提醒可能被隐藏。", "If Focus mode is on, add TodoCue to its allowed apps, otherwise reminders may be hidden.")}</p>
           </SettingsTransition>
         </Tabs.Content>
         {platform === "macos" && <Tabs.Content value="sync" className="settings-tab-content">

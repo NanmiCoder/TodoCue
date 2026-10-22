@@ -12,8 +12,12 @@ export interface SchedulerOptions {
   missedGraceMs?: number;
   /** Gap between ticks that indicates the machine slept (default 30s). */
   sleepGapMs?: number;
-  retryDelayMs?: number;
-  maxAttempts?: number;
+  /** Backoff after the Nth failed delivery; the last entry repeats (default 30s, 2m, 5m, 15m). */
+  retryDelaysMs?: number[];
+  /** A reminder that still cannot be delivered this long after its time becomes `failed` (default 24h). */
+  giveUpAfterMs?: number;
+  /** On startup/wake, `failed` reminders newer than this are queued again (default 24h). */
+  requeueWindowMs?: number;
   log?: (msg: string) => void;
 }
 
@@ -27,8 +31,9 @@ export class Scheduler {
   private readonly tickMs: number;
   private readonly missedGraceMs: number;
   private readonly sleepGapMs: number;
-  private readonly retryDelayMs: number;
-  private readonly maxAttempts: number;
+  private readonly retryDelaysMs: number[];
+  private readonly giveUpAfterMs: number;
+  private readonly requeueWindowMs: number;
   private readonly log: (msg: string) => void;
   private timer: NodeJS.Timeout | null = null;
   private lastTickAt: number | null = null;
@@ -36,14 +41,21 @@ export class Scheduler {
   private running = false;
   private ticking: Promise<void> | null = null;
 
+  /** Wall-clock time (ms) the last tick started; `doctor` uses it to spot a stalled scheduler. */
+  get lastTickStartedAt(): number | null {
+    return this.lastStartedAt;
+  }
+  private lastStartedAt: number | null = null;
+
   constructor(opts: SchedulerOptions) {
     this.engine = opts.engine;
     this.notifier = opts.notifier;
     this.tickMs = opts.tickMs ?? 5_000;
     this.missedGraceMs = opts.missedGraceMs ?? 120_000;
     this.sleepGapMs = opts.sleepGapMs ?? 30_000;
-    this.retryDelayMs = opts.retryDelayMs ?? 30_000;
-    this.maxAttempts = opts.maxAttempts ?? 3;
+    this.retryDelaysMs = opts.retryDelaysMs?.length ? opts.retryDelaysMs : [30_000, 120_000, 300_000, 900_000];
+    this.giveUpAfterMs = opts.giveUpAfterMs ?? 24 * 3_600_000;
+    this.requeueWindowMs = opts.requeueWindowMs ?? 24 * 3_600_000;
     this.log = opts.log ?? (() => {});
     this.lastDate = this.engine.today();
   }
@@ -52,6 +64,7 @@ export class Scheduler {
     if (this.running) return;
     this.running = true;
     this.engine.ensureSeriesInstances();
+    this.requeueFailed("startup");
     void this.safeTick(true);
     this.timer = setInterval(() => void this.safeTick(false), this.tickMs);
     this.timer.unref?.();
@@ -84,8 +97,11 @@ export class Scheduler {
   private async runTick(catchUp: boolean): Promise<void> {
     const nowMs = this.engine.now().getTime();
     const wokeUp = this.lastTickAt !== null && nowMs - this.lastTickAt > this.sleepGapMs;
-    this.lastTickAt = nowMs;
-    if (wokeUp) this.log(`detected sleep/wake gap; catching up missed reminders`);
+    this.lastStartedAt = nowMs;
+    if (wokeUp) {
+      this.log(`detected sleep/wake gap; catching up missed reminders`);
+      this.requeueFailed("wake");
+    }
 
     const today = this.engine.today();
     if (today !== this.lastDate) {
@@ -95,10 +111,26 @@ export class Scheduler {
       this.log(`day changed to ${today}; generated ${n} recurring instances`);
     }
 
-    await Promise.all([
-      this.engine.periodic.tick(this.notifier, catchUp || wokeUp),
-      this.deliverTaskReminders(nowMs),
-    ]);
+    try {
+      await Promise.all([
+        this.engine.periodic.tick(this.notifier, catchUp || wokeUp),
+        this.deliverTaskReminders(nowMs),
+      ]);
+    } finally {
+      // Measured from the end of the pass: a slow delivery (several 15s helper timeouts in a row)
+      // must not look like the machine slept and flip periodic reminders into "expired".
+      this.lastTickAt = this.engine.now().getTime();
+    }
+  }
+
+  private requeueFailed(reason: string): void {
+    const n = this.engine.requeueFailedReminders(this.requeueWindowMs);
+    if (n > 0) this.log(`re-queued ${n} failed reminder(s) after ${reason}`);
+  }
+
+  private failureOptions(r: Reminder): { retryInMs: number; giveUpAt: string } {
+    const delay = this.retryDelaysMs[Math.min(r.attempts, this.retryDelaysMs.length - 1)]!;
+    return { retryInMs: delay, giveUpAt: new Date(new Date(r.fireAt).getTime() + this.giveUpAfterMs).toISOString() };
   }
 
   private async deliverTaskReminders(nowMs: number): Promise<void> {
@@ -162,7 +194,7 @@ export class Scheduler {
       this.log(`reminder ${r.id} for ${task.id} submitted via ${channel}${late ? " (late)" : ""}`);
     } catch (e) {
       const msg = (e as Error).message;
-      this.engine.markReminderFailed(r.id, msg, { retryInMs: this.retryDelayMs, maxAttempts: this.maxAttempts });
+      this.engine.markReminderFailed(r.id, msg, this.failureOptions(r));
       this.log(`reminder ${r.id} failed: ${msg}`);
     }
   }
@@ -183,7 +215,7 @@ export class Scheduler {
       this.log(`delivered summary for ${missed.length} missed reminders via ${channel}`);
     } catch (e) {
       const msg = (e as Error).message;
-      for (const r of missed) this.engine.markReminderFailed(r.id, msg, { retryInMs: this.retryDelayMs, maxAttempts: this.maxAttempts });
+      for (const r of missed) this.engine.markReminderFailed(r.id, msg, this.failureOptions(r));
       this.log(`missed-reminder summary failed: ${msg}`);
     }
   }

@@ -405,7 +405,26 @@ export const DoctorReport = z.object({
     available: z.boolean(),
     authorization: NotificationAuthorization,
     detail: z.string().nullable(),
+    /** macOS alert style ("none" | "banner" | "alert"); null when unknown or not applicable. */
+    alertStyle: z.string().nullable().optional(),
+    /** False when the system will accept a notification but show nothing (style "none", Windows app notifications off, ...). */
+    visible: z.boolean().optional(),
+    /** True when reminders go through a fallback channel (osascript) instead of the helper. */
+    degraded: z.boolean().optional(),
+    /** Windows: the AppUserModelID used for toasts is registered. */
+    registered: z.boolean().optional(),
   }),
+  /** Whether reminders are actually getting out; absent from older runtimes. */
+  reminders: z
+    .object({
+      failed: z.number().int(),
+      retrying: z.number().int(),
+      overduePending: z.number().int(),
+      lastError: z.object({ message: z.string(), at: z.string() }).nullable(),
+      /** ISO time the scheduler last started a pass; null before the first one. */
+      lastTickAt: z.string().nullable(),
+    })
+    .optional(),
   counts: z.object({
     tasks: z.number().int(),
     todo: z.number().int(),

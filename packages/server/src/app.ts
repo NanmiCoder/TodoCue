@@ -49,6 +49,8 @@ interface SseClient {
 }
 
 const EVENT_BUFFER = 500;
+/** Failed reminders newer than this are re-sent when notifications start working again. */
+const REQUEUE_WINDOW_MS = 24 * 3_600_000;
 
 export function buildApp(opts: AppOptions): FastifyInstance {
   const { engine, notifier, token } = opts;
@@ -265,6 +267,11 @@ export function buildApp(opts: AppOptions): FastifyInstance {
     const info = opts.doctorInfo();
     const n = await notifier.status();
     const counts = engine.counts();
+    const health = engine.reminderDiagnostics();
+    const lastTickMs = opts.scheduler?.lastTickStartedAt ?? null;
+    // The scheduler ticks every few seconds; a long silence means it is stuck, not idle.
+    const sinceTickMs = lastTickMs === null ? 0 : engine.now().getTime() - lastTickMs;
+    const stalled = opts.scheduler !== undefined && lastTickMs !== null && sinceTickMs > 60_000;
     const checks: DoctorReport["checks"] = [
       { name: "database", ok: true, level: "ok", detail: `${info.databasePath} (schema v${info.schemaVersion})` },
       {
@@ -284,11 +291,31 @@ export function buildApp(opts: AppOptions): FastifyInstance {
               ? "not requested yet; run `todocue doctor --request-notifications`"
               : `authorization: ${n.authorization}`,
       },
+      ...(n.degraded
+        ? [{ name: "notifierDegraded", ok: false, level: "warn" as const,
+            detail: "TodoCueNotifier is missing, so reminders use the osascript fallback: they appear under Script Editor, cannot be clicked through, and may not show at all. Reinstall TodoCue." }]
+        : []),
+      ...(n.visible === false && (n.authorization === "authorized" || n.authorization === "provisional" || n.registered === false)
+        ? [{ name: "notificationsInvisible", ok: false, level: "error" as const,
+            detail: n.registered === false
+              ? "the toast app identity is not registered, so Windows may discard reminders silently; reinstall TodoCue"
+              : `notifications are allowed but nothing would be shown (alert style: ${n.alertStyle ?? "unknown"}); change the style in System Settings > Notifications` }]
+        : []),
       {
         name: "failedReminders",
         ok: counts.failedReminders === 0,
         level: counts.failedReminders === 0 ? "ok" : "warn",
-        detail: `${counts.failedReminders} failed reminder(s); see todocue reminders --status failed`,
+        detail: `${counts.failedReminders} failed reminder(s); see todocue reminders --status failed${counts.failedReminders ? " (the app's notification banner can re-send recent ones)" : ""}`,
+      },
+      {
+        name: "reminderDelivery",
+        ok: !(health.overduePending > 0 || health.retrying > 0 || stalled),
+        level: stalled ? "error" : health.overduePending > 0 || health.retrying > 0 ? "warn" : "ok",
+        detail: stalled
+          ? `the scheduler has not run for ${Math.round(sinceTickMs / 1000)}s; reminders are not being delivered`
+          : health.retrying > 0 || health.overduePending > 0
+            ? `${health.overduePending} reminder(s) overdue, ${health.retrying} being retried${health.lastError ? `; last error: ${health.lastError.message}` : ""}`
+            : "reminders are being delivered",
       },
       ...((await opts.extraChecks?.()) ?? []),
     ];
@@ -302,7 +329,23 @@ export function buildApp(opts: AppOptions): FastifyInstance {
       baseUrl: info.baseUrl,
       pid: process.pid,
       uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
-      notifier: { path: n.path, available: n.available, authorization: n.authorization, detail: n.detail },
+      notifier: {
+        path: n.path,
+        available: n.available,
+        authorization: n.authorization,
+        detail: n.detail,
+        alertStyle: n.alertStyle ?? null,
+        ...(n.visible !== undefined ? { visible: n.visible } : {}),
+        ...(n.degraded !== undefined ? { degraded: n.degraded } : {}),
+        ...(n.registered !== undefined ? { registered: n.registered } : {}),
+      },
+      reminders: {
+        failed: health.recentFailed,
+        retrying: health.retrying,
+        overduePending: health.overduePending,
+        lastError: health.lastError,
+        lastTickAt: lastTickMs === null ? null : new Date(lastTickMs).toISOString(),
+      },
       counts,
       checks,
     };
@@ -311,13 +354,18 @@ export function buildApp(opts: AppOptions): FastifyInstance {
 
   app.post(`${API_PREFIX}/notifications/request-authorization`, async () => {
     const s = await notifier.requestAuthorization();
+    // Reminders that failed while notifications were off are delivered now, not left lost.
+    const requeued = s.authorization === "authorized" || s.authorization === "provisional" ? engine.requeueFailedReminders(REQUEUE_WINDOW_MS) : 0;
     return {
+      requeued,
       authorization: s.authorization,
       available: s.available,
       detail: s.detail,
       needsSystemSettings: s.needsSystemSettings === true,
     };
   });
+  // Re-sends reminders that failed within the last day, e.g. after the user fixed notification settings.
+  app.post(`${API_PREFIX}/reminders/retry-failed`, async () => ({ requeued: engine.requeueFailedReminders(REQUEUE_WINDOW_MS) }));
   app.post(`${API_PREFIX}/notifications/open-settings`, async () => {
     const r = await notifier.openSystemSettings();
     return { ok: r.ok, url: r.url };
@@ -328,7 +376,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
       const channel = await notifier.deliver({
         id: `todocue-test-${Date.now()}`,
         title: body.title ?? "TodoCue 测试通知",
-        body: body.body ?? "通知已正常送达。",
+        body: body.body ?? "看到这条通知，说明提醒可以正常显示。",
         thread: "todocue.test",
       });
       return { ok: true, channel };

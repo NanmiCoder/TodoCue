@@ -234,6 +234,7 @@ export function resizePanelMac(input: {
 // the host provides `open_data_dir`; a host without it (or a browser) falls back to showing the path.
 import {
   notificationStatus,
+  openSettingsFailureLabel,
   requestResultLabel,
   testResultLabel,
   type NotificationStatus,
@@ -251,9 +252,7 @@ export async function requestNotificationPermission(language: string): Promise<s
 export async function openNotificationSettings(language: string): Promise<string> {
   const { ok } = await client.openNotificationSettings();
   if (ok) return language === "en" ? "Opened the system notification settings" : "已打开系统通知设置";
-  return platform === "windows"
-    ? language === "en" ? "Open Windows Settings › System › Notifications yourself" : "无法自动打开，请手动前往 Windows 设置 › 系统 › 通知"
-    : language === "en" ? "Open System Settings › Notifications yourself" : "无法自动打开，请手动前往系统设置 › 通知";
+  return openSettingsFailureLabel(platform, language);
 }
 export async function sendTestNotification(language: string): Promise<string> {
   return testResultLabel(await client.testNotification(), language);
