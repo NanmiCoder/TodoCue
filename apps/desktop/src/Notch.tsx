@@ -1292,7 +1292,7 @@ export function Notch() {
                       <CueCard
                         key={cue.key}
                         cue={cue}
-                        featured={(featured && cue.key === featuredKey) || (cues.length === 1 && cueHovered)}
+                        featured={featured && cue.key === featuredKey}
                         language={settings.language}
                         now={now}
                         arrivedAt={arrivals.current.get(cue.key) ?? cue.receivedAt}
