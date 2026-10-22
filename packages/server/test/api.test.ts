@@ -105,6 +105,40 @@ describe("local api", () => {
     expect(doctor.checks.find((c) => c.name === "notifier")!.ok).toBe(true);
   });
 
+  it("keeps retrying through a notification outage and says so in doctor", async () => {
+    const { task } = await client.createTask({ title: "断网提醒", reminderAt: "2026-09-07T09:20" });
+    notifier.failing = "notifications denied";
+    try {
+      clock.set("2026-09-07T01:20:01.000Z");
+      await new Promise((r) => setTimeout(r, 400));
+      const doctor = await client.doctor();
+      expect(doctor.reminders).toMatchObject({ retrying: 1, lastError: { message: "notifications denied" } });
+      expect(doctor.reminders!.lastTickAt).not.toBeNull();
+      expect(doctor.checks.find((c) => c.name === "reminderDelivery")).toMatchObject({ ok: false, level: "warn" });
+      expect((await client.listReminders({ taskId: task.id })).reminders[0]!.status).toBe("pending");
+    } finally {
+      notifier.failing = null;
+    }
+    clock.advance(60_000);
+    await new Promise((r) => setTimeout(r, 400));
+    expect((await client.listReminders({ taskId: task.id })).reminders[0]!.status).toBe("submitted");
+    expect((await client.doctor()).checks.find((c) => c.name === "reminderDelivery")!.ok).toBe(true);
+  });
+
+  it("re-sends recently failed reminders once notifications are authorized again", async () => {
+    const { task } = await client.createTask({ title: "授权恢复", reminderAt: "2026-09-07T10:00" });
+    const reminder = (await client.listReminders({ taskId: task.id })).reminders[0]!;
+    rt.engine.markReminderFailed(reminder.id, "notifications denied"); // terminal failure, no retry
+    expect((await client.listReminders({ taskId: task.id })).reminders[0]!.status).toBe("failed");
+
+    expect((await client.doctor()).reminders!.failed).toBe(1);
+    const auth = await client.requestNotificationAuthorization();
+    expect(auth.requeued).toBe(1);
+    expect((await client.doctor()).reminders!.failed).toBe(0);
+    expect((await client.listReminders({ taskId: task.id })).reminders[0]!.status).toBe("pending");
+    expect(await client.retryFailedReminders()).toEqual({ requeued: 0 });
+  });
+
   it("reports notification authorization and can open System Settings", async () => {
     const auth = await client.requestNotificationAuthorization();
     expect(auth.authorization).toBe("authorized");

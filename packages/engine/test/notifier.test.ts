@@ -39,6 +39,42 @@ describe("HelperNotifier", () => {
       expect(args.slice(-2)).toEqual(["--home", home]);
     } finally { Object.defineProperty(process, "platform", original); }
   });
+  it("passes the originating data directory to deliver on macOS too, so a click can find the right runtime", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "todocue-notifier-home-"));
+    tempDirs.push(dir);
+    const script = path.join(dir, "notifier.cjs"), record = path.join(dir, "args.json");
+    fs.writeFileSync(script, `require('node:fs').writeFileSync(${JSON.stringify(record)},JSON.stringify(process.argv.slice(2))); console.log(JSON.stringify({ok:true,authorization:'authorized'}));`);
+    const original = Object.getOwnPropertyDescriptor(process, "platform")!;
+    try {
+      Object.defineProperty(process, "platform", { ...original, value: "darwin" });
+      const home = path.join(dir, "custom data");
+      const notifier = new HelperNotifier({ helperPath: process.execPath, helperArgs: [script], home });
+      await notifier.deliver({ id: "r_1", title: "Reminder" });
+      expect((JSON.parse(fs.readFileSync(record, "utf8")) as string[]).slice(-2)).toEqual(["--home", home]);
+      await notifier.status();
+      expect(JSON.parse(fs.readFileSync(record, "utf8")) as string[]).not.toContain("--home");
+    } finally { Object.defineProperty(process, "platform", original); }
+  });
+
+  it("reports whether a notification would actually be visible", async () => {
+    const hidden = new HelperNotifier({ ...fakeHelper({ ok: true, authorization: "authorized", alertStyle: "none", visible: false }) });
+    await expect(hidden.status()).resolves.toMatchObject({ authorization: "authorized", alertStyle: "none", visible: false });
+    const windows = new HelperNotifier({ ...fakeHelper({ ok: true, authorization: "authorized", registered: false, visible: false }) });
+    await expect(windows.status()).resolves.toMatchObject({ registered: false, visible: false });
+    // An older helper that does not know the field leaves it undefined rather than guessing.
+    const older = new HelperNotifier({ ...fakeHelper({ ok: true, authorization: "authorized", alertStyle: "banner" }) });
+    expect((await older.status()).visible).toBeUndefined();
+  });
+
+  it("marks the osascript fallback as degraded when the helper is missing", async () => {
+    const notifier = new HelperNotifier({ allowOsascriptFallback: true });
+    const saved = process.env.TODOCUE_NOTIFIER;
+    delete process.env.TODOCUE_NOTIFIER;
+    try {
+      await expect(notifier.status()).resolves.toMatchObject({ available: false, degraded: true });
+    } finally { if (saved !== undefined) process.env.TODOCUE_NOTIFIER = saved; }
+  });
+
   it("parses the helper's status payload", async () => {
     const notifier = new HelperNotifier({ ...fakeHelper({ ok: true, authorization: "authorized", alertStyle: "banner" }) });
     await expect(notifier.status()).resolves.toMatchObject({ available: true, authorization: "authorized" });

@@ -194,6 +194,10 @@ export class TodoCueClient {
   listReminders(q: ListRemindersQuery = {}) {
     return this.request<{ reminders: Reminder[] }>("GET", `/reminders${toQuery(q)}`);
   }
+  /** Re-sends reminders that failed in the last 24h; returns how many were queued again. */
+  retryFailedReminders() {
+    return this.request<{ requeued: number }>("POST", "/reminders/retry-failed", {});
+  }
   export() {
     return this.request<ExportBundle>("GET", "/export");
   }
@@ -207,6 +211,8 @@ export class TodoCueClient {
       detail: string | null;
       /** macOS has already recorded a decision, so it will not prompt again. */
       needsSystemSettings: boolean;
+      /** Failed reminders queued again because notifications are now authorized. */
+      requeued: number;
     }>("POST", "/notifications/request-authorization", {});
   }
   /** Opens System Settings › Notifications so the user can enable the helper by hand. */
