@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkPress, pageDirection, reveal, revealDelay, tabDirection, tabOrder, tabSwap, watchReveal } from "../src/motionKit.js";
+import { animateReveal, checkPress, pageDirection, reveal, revealDelay, tabDirection, tabOrder, tabSwap, watchReveal } from "../src/motionKit.js";
 import { motionTokens, spring } from "../src/tokens.js";
 
 describe("SwiftUI spring conversion", () => {
@@ -50,6 +50,34 @@ describe("completion and arrival timings", () => {
   it("staggers the tiles 45ms apart from 18pt", () => {
     expect(reveal.offset).toBe(18);
     expect([0, 1, 2, 3].map(revealDelay)).toEqual([0, 0.045, 0.09, 0.135].map((value) => expect.closeTo(value, 9)));
+  });
+});
+
+describe("tile reveal keeps its resting styles visible", () => {
+  it("uses a temporary browser effect that releases opacity after completion", () => {
+    const cancel = vi.fn();
+    const animate = vi.fn(() => ({ cancel }) as unknown as Animation);
+    const element = { animate, style: { opacity: "1", transform: "none" } };
+    const stop = animateReveal(element, 2);
+    const [frames, options] = animate.mock.calls[0] as unknown as [Keyframe[], KeyframeAnimationOptions];
+    expect(frames).toEqual([
+      { translate: "18px 0", opacity: 0 },
+      { translate: "0px 0", opacity: 1 },
+    ]);
+    // No forwards fill: a completed/cancelled effect cannot retain an invisible frame, even if
+    // the WebView suspends JS callbacks. The ordinary styles never depend on onComplete running.
+    expect(options.fill).toBe("backwards");
+    expect(options.delay).toBeCloseTo(90);
+    expect(element.style).toEqual({ opacity: "1", transform: "none" });
+    stop();
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("lets next-card and route transitions retain ownership of their opacity and transforms", () => {
+    const animate = vi.fn(() => ({ cancel: vi.fn() }) as unknown as Animation);
+    animateReveal({ animate }, 1, false);
+    const [frames] = animate.mock.calls[0] as unknown as [Keyframe[]];
+    expect(frames).toEqual([{ translate: "18px 0" }, { translate: "0px 0" }]);
   });
 });
 
