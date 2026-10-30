@@ -1,5 +1,5 @@
-import { forwardRef, useEffect, type ReactNode } from "react";
-import { animate, motion, useIsPresent, useMotionValue } from "motion/react";
+import { forwardRef, useEffect, useRef, type ReactNode } from "react";
+import { motion, useIsPresent } from "motion/react";
 import { spring } from "./tokens.js";
 
 /**
@@ -99,25 +99,33 @@ export const HeaderSwap = forwardRef<HTMLDivElement, { children: ReactNode; redu
 );
 
 /**
- * Tile arrival each time the panel is revealed: hidden at once, then spring in from the right after
- * `order * 45ms`. Skipped for reduced motion and for the first mount.
+ * Keep the resting styles visible. A hidden WebView can suspend Motion's frame loop midway through
+ * a reveal; writing opacity: 0 to a MotionValue then leaves the list and quick add invisible.
+ * A browser animation only overlays the resting styles and needs no JS frames to finish. Its
+ * separate translate property also leaves Motion's layout and scale transforms alone.
  */
-export function useReveal(order: number, tick: number, reduced: boolean) {
-  const x = useMotionValue(0);
-  const opacity = useMotionValue(1);
+export function animateReveal(element: Pick<HTMLElement, "animate">, order: number, fade = true) {
+  const playback = element.animate([
+    { translate: `${reveal.offset}px 0`, ...(fade ? { opacity: 0 } : {}) },
+    { translate: "0px 0", ...(fade ? { opacity: 1 } : {}) },
+  ], {
+    duration: reveal.response * 1000,
+    delay: revealDelay(order) * 1000,
+    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+    // Apply the starting frame during the stagger, then release all styles when finished/cancelled.
+    fill: "backwards",
+  });
+  return () => playback.cancel();
+}
+
+/** Tile arrival, skipped for reduced motion and the first mount. */
+export function useReveal<T extends HTMLElement>(order: number, tick: number, reduced: boolean, fade = true) {
+  const ref = useRef<T>(null);
   useEffect(() => {
-    if (tick === 0 || reduced) return;
-    x.set(reveal.offset);
-    opacity.set(0);
-    const transition = { ...spring(reveal.response, reveal.damping), delay: revealDelay(order) };
-    const playback = [animate(x, 0, transition), animate(opacity, 1, transition)];
-    return () => {
-      playback.forEach((item) => item.stop());
-      x.set(0);
-      opacity.set(1);
-    };
-  }, [tick, reduced, order, x, opacity]);
-  return { x, opacity };
+    if (tick === 0 || reduced || !ref.current) return;
+    return animateReveal(ref.current, order, fade);
+  }, [tick, reduced, order, fade]);
+  return ref;
 }
 
 /**

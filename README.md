@@ -78,20 +78,22 @@ todocue --json periodic add 'Move a little' --every 30m --weekdays mon,wed,sat -
 
 ## Download & install
 
-Current version: **[v0.6.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.6.0)**. Supports **macOS 14+**, **Windows 10/11 x64**, and **Windows 11 ARM64**. Both Mac architectures are Developer ID signed and Apple notarized; Windows installers are unsigned.
+Current version: **[v0.9.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.9.2)**. Supports **macOS 14+**, **Windows 10/11 x64**, and **Windows 11 ARM64**. Both Mac architectures are Developer ID signed and Apple notarized; Windows installers are unsigned.
+
+v0.9.2 fixes the desktop task list and quick-add bar staying invisible after an interrupted panel arrival animation. [Release notes](release-notes/v0.9.2.md) · [Verification](docs/qa/panel-reveal/README.md)
 
 | Computer | Installer |
 | --- | --- |
-| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-macOS-arm64.dmg) |
-| Intel Mac | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-macOS-x64.dmg) |
-| Windows x64 | [Download x64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-Windows-x64-setup.exe) |
-| Windows ARM64 | [Download ARM64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/TodoCue-0.6.0-Windows-arm64-setup.exe) |
+| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-macOS-arm64.dmg) |
+| Intel Mac | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-macOS-x64.dmg) |
+| Windows x64 | [Download x64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-Windows-x64-setup.exe) |
+| Windows ARM64 | [Download ARM64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-Windows-arm64-setup.exe) |
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
 The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
-[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.6.0/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
 
 Windows: choose `Windows-x64-setup.exe` or `Windows-arm64-setup.exe`. The current-user installer includes offline WebView2 and the runtime. Windows packages are unsigned; verify `SHA256SUMS` from the release. Quit and uninstall an older Preview before installing the production client; task data is retained.
 

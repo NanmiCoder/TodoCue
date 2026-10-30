@@ -4,7 +4,6 @@ import {
   AnimatePresence,
   motion,
   useIsPresent,
-  type MotionValue,
 } from "motion/react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -174,11 +173,11 @@ export function Panel() {
   const reduced = useReducedMotion();
   const [revealTick, setRevealTick] = useState(0);
   useEffect(() => watchReveal(() => setRevealTick((tick) => tick + 1), onPanelRevealed), []);
-  const headerReveal = useReveal(0, revealTick, !!reduced);
-  const nextReveal = useReveal(1, revealTick, !!reduced);
-  const listReveal = useReveal(2, revealTick, !!reduced);
-  const quickReveal = useReveal(3, revealTick, !!reduced);
-  const pageReveal = useReveal(1, revealTick, !!reduced);
+  const headerReveal = useReveal<HTMLElement>(0, revealTick, !!reduced);
+  const nextReveal = useReveal<HTMLElement>(1, revealTick, !!reduced, false);
+  const listReveal = useReveal<HTMLElement>(2, revealTick, !!reduced);
+  const quickReveal = useReveal<HTMLFormElement>(3, revealTick, !!reduced);
+  const pageReveal = useReveal<HTMLDivElement>(1, revealTick, !!reduced, false);
   // The lit dot's direction decides which side the new rows arrive from.
   const previousView = useRef(view);
   const viewDirection = tabDirection(previousView.current, view);
@@ -837,7 +836,7 @@ export function Panel() {
           </button>
         </div>
       )}
-      <motion.header className={`tile ${route === "settings" ? "" : "graphite"} panel-header`} data-route={route} style={headerReveal}>
+      <motion.header className={`tile ${route === "settings" ? "" : "graphite"} panel-header`} data-route={route} ref={headerReveal}>
         <div className="brand">
           {route === "list" ? (
             <Mark />
@@ -1170,7 +1169,8 @@ export function Panel() {
                         key="next-card"
                         className="tile frost next-card"
                         {...menuTriggers((anchor) => openTaskMenu(next, anchor))}
-                        style={{ x: nextReveal.x, originY: 0 }}
+                        ref={nextReveal}
+                        style={{ originY: 0 }}
                         initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
@@ -1246,7 +1246,7 @@ export function Panel() {
                     <motion.section
                       layout="position"
                       transition={reduced ? { duration: 0.12 } : motionTokens.list}
-                      style={listReveal}
+                      ref={listReveal}
                       className="tile graphite task-list"
                       aria-label={t(view)}
                     >
@@ -1444,7 +1444,7 @@ export function Panel() {
                   </motion.div>
                 )}
                 <motion.form
-                  style={route === "list" ? quickReveal : undefined}
+                  ref={route === "list" ? quickReveal : undefined}
                   className="tile frost quick-add"
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -1838,7 +1838,7 @@ function RouteSurface({
   children: import("react").ReactNode;
   reduced: boolean;
   depth: number;
-  reveal?: { x: MotionValue<number> };
+  reveal?: import("react").RefObject<HTMLDivElement | null>;
 }) {
   const present = useIsPresent();
   return (
@@ -1846,7 +1846,8 @@ function RouteSurface({
       className="page-content"
       inert={!present}
       aria-hidden={!present}
-      style={{ zIndex: depth, x: reveal?.x }}
+      ref={reveal}
+      style={{ zIndex: depth }}
       initial={{ y: reduced ? 0 : 14, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{
