@@ -21,13 +21,15 @@ use std::{
 use tokio::sync::oneshot;
 
 /// Commands the settings page may send. Anything else is refused before it reaches the helper.
-const COMMANDS: [&str; 6] = [
+const COMMANDS: [&str; 8] = [
     "status",
     "setEnabled",
     "syncNow",
     "removeData",
     "refreshAccess",
     "openPrivacySettings",
+    "setImportEnabled",
+    "setImportCalendar",
 ];
 /// A permission prompt waits for the user; a round can take a while on a large list.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(600);
@@ -71,7 +73,7 @@ pub fn command_line(id: u64, command: &Value) -> Result<String, String> {
     let mut line = Map::new();
     line.insert("id".into(), json!(id));
     line.insert("command".into(), json!(name));
-    for key in ["kind", "enabled"] {
+    for key in ["kind", "enabled", "calendar"] {
         if let Some(value) = object.get(key) {
             line.insert(key.into(), value.clone());
         }
@@ -287,6 +289,14 @@ mod tests {
             )
             .unwrap(),
             r#"{"command":"setEnabled","enabled":true,"id":3,"kind":"reminder"}"#
+        );
+        assert_eq!(
+            command_line(
+                4,
+                &json!({ "command": "setImportCalendar", "calendar": "ABC-1", "enabled": false })
+            )
+            .unwrap(),
+            r#"{"calendar":"ABC-1","command":"setImportCalendar","enabled":false,"id":4}"#
         );
         assert!(command_line(1, &json!({ "command": "setLanguage", "language": "en" })).is_err());
         assert!(command_line(1, &json!({ "command": "rm" })).is_err());

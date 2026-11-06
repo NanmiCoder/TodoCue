@@ -21,6 +21,9 @@ final class FakeItemStore: AppleItemStore {
     var normalize: (AppleSyncKind, AppleItemSnapshot) -> AppleItemSnapshot = { $1 }
     private(set) var saves = 0
     private var next = 0
+    /// Import: the user's other calendars and the events in them.
+    var calendars: [AppleCalendarInfo] = []
+    var sourceEvents: [String: AppleSourceEvent] = [:]
 
     func access(_ kind: AppleSyncKind) -> AppleSyncAccess { granted && !denied.contains(kind) ? .granted : .denied }
     func requestAccess(_ kind: AppleSyncKind) async -> Bool { granted }
@@ -80,6 +83,27 @@ final class FakeItemStore: AppleItemStore {
     }
 
     func only(_ kind: AppleSyncKind) -> String { items[kind]!.keys.sorted().first! }
+
+    func eventCalendars() -> [AppleCalendarInfo] {
+        guard access(.event) == .granted else { return [] }
+        // TodoCue's own calendar is listed too, as EventKit would; the controller must leave it out.
+        let own = containers[.event].map { [AppleCalendarInfo(identifier: $0, title: "TodoCue", sourceTitle: source)] } ?? []
+        return calendars + own
+    }
+
+    func events(in calendars: [String], from: Date, to: Date) -> [AppleSourceEvent] {
+        sourceEvents.values.filter { calendars.contains($0.calendarId) && !$0.isRecurring }
+            .sorted { $0.item.identifier < $1.item.identifier }
+    }
+
+    func findEvent(identifier: String, externalIdentifier: String?, preferring calendar: String?) -> AppleSourceEvent? {
+        if let event = sourceEvents[identifier] { return event }
+        if let stored = items[.event]?[identifier], let container = containers[.event] {
+            return AppleSourceEvent(calendarId: container, item: item(identifier, stored))
+        }
+        if let externalIdentifier { return sourceEvents.values.first { $0.item.externalIdentifier == externalIdentifier } }
+        return nil
+    }
 }
 
 final class FakeBackend: AppleSyncBackend, @unchecked Sendable {
@@ -149,6 +173,9 @@ final class FakeBackend: AppleSyncBackend, @unchecked Sendable {
     }
     func reopen(_ id: String, expectedVersion: Int?) async throws -> TodoTask {
         try await mutate(id, "reopen", expectedVersion: expectedVersion) { $0.status = .todo; $0.completedAt = nil }
+    }
+    func cancel(_ id: String, expectedVersion: Int?) async throws -> TodoTask {
+        try await mutate(id, "cancel", expectedVersion: expectedVersion) { $0.status = .cancelled }
     }
     func delete(_ id: String, expectedVersion: Int?) async throws {
         await onWrite?()

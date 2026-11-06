@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowTopRightIcon, ReloadIcon, TrashIcon } from "@radix-ui/react-icons";
 import { focusPanel, loadAppleSync, onAppleSync, sendAppleSync, type AppleSyncKind, type AppleSyncSnapshot } from "./bridge.js";
-import { anyEnabled, appleSyncKinds, channelNotice, channelTitle, explanation, hostErrorText, recommendation, removalText, statusLine, unavailableText } from "./appleSync.js";
+import { anyEnabled, appleSyncKinds, channelNotice, channelTitle, explanation, hostErrorText, importNotice, importText, recommendation, removalText, statusLine, unavailableText } from "./appleSync.js";
 import { clockTime } from "./dates.js";
 import { describeError } from "./errors.js";
 import { hintClass, SettingsButton, SettingsIntro, SettingSwitch } from "./SettingsControls.js";
@@ -79,6 +79,9 @@ export function AppleSyncSettings({ language }: { language: "zh-CN" | "en" }) {
   if (unavailable || !status) return <>{intro}<p role="status" className={hintClass}>{unavailable}</p></>;
 
   const advice = recommendation(status, language);
+  const importing = status.importing;
+  const importCopy = importText(language);
+  const importProblem = importNotice(status, language);
   const line = statusLine(status, language, instant => clockTime(instant, Intl.DateTimeFormat().resolvedOptions().timeZone, language));
   const removal = removalText(language);
   return <>
@@ -128,6 +131,47 @@ export function AppleSyncSettings({ language }: { language: "zh-CN" | "en" }) {
           </div>}
         </div>;
       })}
+      {importing && <div className="tw:grid tw:gap-2.5 tw:border-t tw:border-(--s-line) tw:pt-5">
+        <SettingSwitch label={importCopy.title} hint={importCopy.hint} checked={importing.enabled}
+          disabled={importing.changing || working}
+          onChange={enabled => void run(async () => {
+            if (enabled) await focusPanel().catch(() => {});
+            return sendAppleSync({ command: "setImportEnabled", enabled });
+          })} />
+        {importing.changing && <p role="status" className={hintClass}>{text("正在处理…", "Working…")}</p>}
+        {importProblem && <div className="tw:flex tw:items-center tw:justify-between tw:gap-3">
+          <p className={`${hintClass} tw:text-(--s-accent)!`}>{importProblem.text}</p>
+          <SettingsButton className="tw:shrink-0" disabled={working || importing.changing}
+            onClick={() => void run(async () => {
+              if (importProblem.kind === "denied") return sendAppleSync({ command: "openPrivacySettings", kind: "event" });
+              await focusPanel().catch(() => {});
+              // Turning import on again asks macOS for full calendar access.
+              return sendAppleSync({ command: "setImportEnabled", enabled: true });
+            })}>
+            {importProblem.kind === "denied" ? <>{text("打开系统设置", "Open System Settings")}<ArrowTopRightIcon /></> : text("授权访问", "Grant access")}
+          </SettingsButton>
+        </div>}
+        {importing.enabled && !importProblem && <div className="tw:grid tw:gap-2">
+          <p id="apple-import-calendars" className="tw:text-[11px] tw:font-medium">{importCopy.listLabel}</p>
+          {importing.calendars.length === 0
+            ? <p className={hintClass}>{importCopy.empty}</p>
+            : <ul aria-labelledby="apple-import-calendars" className="settings-calendar-list tw:flex tw:flex-col tw:gap-px tw:overflow-hidden tw:rounded-xl tw:border tw:border-(--s-line)">
+              {importing.calendars.map(calendar => <li key={calendar.identifier}>
+                <label className="settings-calendar-row tw:flex tw:min-w-0 tw:cursor-pointer tw:items-center tw:gap-2.5 tw:px-3 tw:py-2 tw:text-xs">
+                  <input type="checkbox" checked={calendar.included} disabled={working}
+                    style={calendar.color ? { accentColor: calendar.color } : undefined}
+                    onChange={event => {
+                      const enabled = event.currentTarget.checked;
+                      void run(() => sendAppleSync({ command: "setImportCalendar", calendar: calendar.identifier, enabled }));
+                    }} />
+                  <span className="tw:min-w-0 tw:truncate">{calendar.title}</span>
+                  {calendar.sourceTitle && <span className="tw:ml-auto tw:shrink-0 tw:text-[11px] tw:text-(--s-muted)">{calendar.sourceTitle}</span>}
+                </label>
+              </li>)}
+            </ul>}
+          <p className={hintClass}>{importCopy.listHint}</p>
+        </div>}
+      </div>}
       <div className="tw:border-t tw:border-(--s-line)" />
       <p className={hintClass}>{explanation(language)}</p>
       <p className={`${hintClass} ${advice.warning ? "tw:text-(--s-accent)!" : ""}`}>{advice.text}</p>

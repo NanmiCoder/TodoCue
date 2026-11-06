@@ -19,6 +19,7 @@ final class SyncHelper {
         self.sync = sync
         self.link = link
         self.write = write
+        sync.supportsImport = true
         sync.backend = { [weak link] in link?.online == true ? link?.client : nil }
         sync.todoTasks = { [weak link] in link?.online == true ? link?.tasks : nil }
         link.onChange = { [weak self] in
@@ -101,6 +102,15 @@ final class SyncHelper {
         case .setLanguage:
             guard let language = command.language else { return (nil, "language is required") }
             L10n.languageOverride = AppLanguage(desktopSetting: language)
+            return (nil, nil)
+        case .setImportEnabled:
+            guard let enabled = command.enabled else { return (nil, "enabled is required") }
+            return (await sync.setImportEnabled(enabled), nil)
+        case .setImportCalendar:
+            guard let calendar = command.calendar, let enabled = command.enabled else {
+                return (nil, "calendar and enabled are required")
+            }
+            sync.setCalendarIncluded(calendar, enabled)
             return (nil, nil)
         case .setEnabled, .removeData, .openPrivacySettings:
             guard let kind = command.kind else { return (nil, "kind is required") }

@@ -55,7 +55,7 @@ Agent 创建的任务会同步出现在面板中。打开后，先看下一步�
 
 - **看得见做过什么。** 完成的事不会消失：从面板菜单或当天的已完成区打开「已完成」，按天回看，也能搜。点一下就能重新打开。
 - **看得更远。** 从面板头部（⌘⇧K）打开日历，做过的、在做的和排到几个月后的任务在同一个平面上。可以在月视图和周视图之间切换，点某一天就展开这天的完整安排。改期直接把任务拖到另一天，时刻保留、截止与提醒不动；也可以直接往正在看的那天添加。超出 30 天预生成范围的重复任务会显示为「待生成」占位，而不是让远期月份看起来空空如也。
-- **macOS：带到 iPhone 上。** 在设置 › 同步里打开「同步到日历」或「同步到提醒事项」，有日期的待办会出现在「TodoCue」日历或提醒事项列表里，经 iCloud 同步到 iPhone。双向同步：在那边改期、改标题或勾选完成，TodoCue 跟着变；删除即删除对应任务。推荐只开提醒事项：iOS 18 / macOS 15 起，带日期的提醒也会显示在日历里。仅在 App 运行时同步，不额外设闹钟。[详细说明](docs/apple-sync.md)
+- **macOS：带到 iPhone 上。** 在设置 › 同步里打开「同步到日历」或「同步到提醒事项」，有日期的待办会出现在「TodoCue」日历或提醒事项列表里，经 iCloud 同步到 iPhone。双向同步：在那边改期、改标题或勾选完成，TodoCue 跟着变；删除即删除对应任务。推荐只开提醒事项：iOS 18 / macOS 15 起，带日期的提醒也会显示在日历里。再打开「从其他日历导入」，其他日历里新建的日程也会自动成为任务（单向，TodoCue 不改动那些日历）。仅在 App 运行时同步，不额外设闹钟。[详细说明](docs/apple-sync.md)
 - **中英切换。** 在设置中选择简体中文或 English，立即生效并记住选择；首次启动跟随系统语言，任务内容保持原文。
 - **待在手边。** 共享 React/Tauri 浮动面板与原生系统效果，支持浅色与深色外观。石墨色块始终保持深色；雾面块跟随系统外观，并模糊背后的桌面。
 - **刘海就是入口。** 屏幕顶部的虚拟刘海显示今日剩余数；鼠标停上去就展开今日任务：下一步、逾期与已安排各项，可直接完成、稍后提醒、改期到明天，或回车添加新任务。点一下刘海可固定并直接输入，Esc 收起。设置 → 刘海可选择顶部、左侧或右侧停靠；顶部在带刘海的 Mac 上贴住屏幕顶边，中间按实际摄像头宽度留空，图标与任务数放在左右两侧；两侧各仅留 22 点，总宽不超过原默认 273 点，本机为 229 点；其他屏幕保持同样宽度并放进菜单栏：中间空着就居中，否则紧挨菜单栏图标、不盖住任何图标，放不下时才退到菜单栏下方。可跟随鼠标换屏，也可固定到检测到的某块显示器；断开时暂用主屏，重新连接后恢复。macOS 使用显示器 UUID 记住选择；不需要时可关闭。
@@ -77,22 +77,22 @@ todocue --json periodic add '起来活动一下' --every 30m --weekdays mon,wed,
 
 ## 下载与安装
 
-当前版本 **[v0.9.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.9.2)**，支持 **macOS 14+**、**Windows 10/11 x64**、**Windows 11 ARM64**。两个 Mac 架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证；Windows 安装包未签名。
+当前版本 **[v0.10.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.10.0)**，支持 **macOS 14+**、**Windows 10/11 x64**、**Windows 11 ARM64**。两个 Mac 架构的 App 和 DMG 均通过 Developer ID 签名与 Apple 公证；Windows 安装包未签名。
 
-v0.9.2 修复面板入场动画中断后，任务列表和快速添加栏持续不可见的问题。[版本说明](release-notes/v0.9.2.md) · [验收记录](docs/qa/panel-reveal/README.md)
+v0.10.0 在 macOS 上新增「从其他日历导入」：其他日历（包括别的 App 自动建的日历）里新建的日程会单向导入为任务。[版本说明](release-notes/v0.10.0.md) · [验收记录](docs/qa/calendar-import/README.md)
 
 | 你的电脑 | 安装包 |
 | --- | --- |
-| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-macOS-arm64.dmg) |
-| Intel Mac | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-macOS-x64.dmg) |
-| Windows x64 | [下载 x64 安装包](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-Windows-x64-setup.exe) |
-| Windows ARM64 | [下载 ARM64 安装包](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-Windows-arm64-setup.exe) |
+| Apple Silicon（M 系列） | [下载 ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-macOS-arm64.dmg) |
+| Intel Mac | [下载 Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-macOS-x64.dmg) |
+| Windows x64 | [下载 x64 安装包](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-Windows-x64-setup.exe) |
+| Windows ARM64 | [下载 ARM64 安装包](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-Windows-arm64-setup.exe) |
 
 打开 DMG → 将 **TodoCue.app 拖入 Applications** → 从应用程序中启动。
 
 App 自带 Node、后台服务、CLI、通知辅助程序和 Agent skill，无需另装运行时。需要提醒时，在设置中允许通知。更新时下载新 DMG 并替换 App；当前尚无 App 内自动更新。
 
-[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
+[校验和](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/SHA256SUMS) · [安装、备份与卸载](docs/macos-install.md)
 
 Windows：选择 `Windows-x64-setup.exe` 或 `Windows-arm64-setup.exe`。当前用户安装包包含离线 WebView2 与运行时。Windows 包未签名，请核对 Release 的 `SHA256SUMS`。使用过 Preview 时先退出并卸载 Preview，再安装正式版；任务数据保留。
 

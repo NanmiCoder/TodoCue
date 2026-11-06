@@ -48,6 +48,16 @@ public protocol AppleItemStore: AnyObject {
               in container: String) throws -> AppleItem
     func delete(_ kind: AppleSyncKind, identifier: String) throws
     func removeContainer(_ kind: AppleSyncKind, identifier: String) throws
+
+    // Import from other calendars: read only, nothing here writes.
+    /// The user's own event calendars (no subscriptions, birthdays or Siri suggestions), TodoCue's
+    /// included — the caller leaves those out. Empty without full calendar access.
+    func eventCalendars() -> [AppleCalendarInfo]
+    /// Non-recurring, non-cancelled events in these calendars that overlap the interval.
+    func events(in calendars: [String], from: Date, to: Date) -> [AppleSourceEvent]
+    /// An event by identifier, then by external identifier (preferring one in `calendar`), wherever it
+    /// is now. A cancelled event counts as gone.
+    func findEvent(identifier: String, externalIdentifier: String?, preferring calendar: String?) -> AppleSourceEvent?
 }
 
 enum AppleSyncStoreError: LocalizedError {
@@ -285,6 +295,53 @@ public final class EventKitStore: AppleItemStore {
     public func removeContainer(_ kind: AppleSyncKind, identifier: String) throws {
         guard let calendar = calendar(kind, identifier) else { return }
         try store.removeCalendar(calendar, commit: true)
+    }
+
+    // MARK: - Import from other calendars
+
+    /// Accounts and calendar kinds the user writes to. Subscriptions, birthdays and the system's own
+    /// calendars (Siri suggestions, scheduled reminders) are left out.
+    private static let importableSources: Set<EKSourceType> = [.local, .calDAV, .exchange, .mobileMe]
+    private static let importableTypes: Set<EKCalendarType> = [.local, .calDAV, .exchange]
+
+    public func eventCalendars() -> [AppleCalendarInfo] {
+        guard access(.event) == .granted else { return [] }
+        return store.calendars(for: .event).filter { calendar in
+            Self.importableTypes.contains(calendar.type)
+                && calendar.source.map { Self.importableSources.contains($0.sourceType) } ?? false
+        }.map { calendar in
+            AppleCalendarInfo(identifier: calendar.calendarIdentifier, title: calendar.title,
+                              sourceTitle: calendar.source?.title ?? "", color: Self.hex(calendar.cgColor))
+        }
+    }
+
+    public func events(in calendars: [String], from: Date, to: Date) -> [AppleSourceEvent] {
+        let found = calendars.compactMap { calendar(.event, $0) }
+        guard !found.isEmpty, from < to else { return [] }
+        let predicate = store.predicateForEvents(withStart: from, end: to, calendars: found)
+        var seen = Set<String>()
+        return store.events(matching: predicate).compactMap { event in
+            guard let calendar = event.calendar, !event.hasRecurrenceRules, !event.isDetached, event.status != .canceled,
+                  seen.insert(event.calendarItemIdentifier).inserted else { return nil }
+            return AppleSourceEvent(calendarId: calendar.calendarIdentifier, item: Self.item(event))
+        }
+    }
+
+    public func findEvent(identifier: String, externalIdentifier: String?, preferring calendar: String?) -> AppleSourceEvent? {
+        var found = store.calendarItem(withIdentifier: identifier) as? EKEvent
+        if found == nil, let externalIdentifier {
+            let matches = store.calendarItems(withExternalIdentifier: externalIdentifier).compactMap { $0 as? EKEvent }
+            found = matches.first { $0.calendar?.calendarIdentifier == calendar } ?? matches.first
+        }
+        guard let event = found, let owner = event.calendar, event.status != .canceled else { return nil }
+        return AppleSourceEvent(calendarId: owner.calendarIdentifier, item: Self.item(event),
+                                isRecurring: event.hasRecurrenceRules || event.isDetached)
+    }
+
+    nonisolated static func hex(_ color: CGColor?) -> String? {
+        guard let color, let rgb = NSColor(cgColor: color)?.usingColorSpace(.sRGB) else { return nil }
+        let channel = { (v: CGFloat) in Int((min(max(v, 0), 1) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", channel(rgb.redComponent), channel(rgb.greenComponent), channel(rgb.blueComponent))
     }
 
     // MARK: - Conversion

@@ -55,7 +55,7 @@ Drag the empty area in the top bar to move the panel; dragging in titles and not
 
 - **See what you finished.** Completed work is kept: open Completed from the panel menu, or from the day's completed list, to review by day and search back through it. Reopen anything with one click.
 - **Look further ahead.** Open the calendar from the panel header (⌘⇧K) to see what you have done, what is in flight, and what is scheduled months out. Switch between a month grid and a week list; pick a day to work through it. Drag a task onto another day to reschedule it — the time of day is kept, the deadline and reminder are not touched — and add straight to the day you are looking at. Repeating tasks beyond the 30-day generation horizon show as not-yet-created placeholders rather than an empty month.
-- **On macOS: carry it to your iPhone.** Turn on **Sync to Calendar** or **Sync to Reminders** in Settings › Sync and dated tasks appear in a "TodoCue" calendar or reminder list that iCloud brings to your iPhone. Changes go both ways: reschedule, rename, or check off there and TodoCue follows; deleting an item deletes its task. Reminders alone is the recommended setup — dated reminders also appear in Calendar on iOS 18 and macOS 15. Sync runs while the app is open and adds no alerts of its own. [Details (中文)](docs/apple-sync.md)
+- **On macOS: carry it to your iPhone.** Turn on **Sync to Calendar** or **Sync to Reminders** in Settings › Sync and dated tasks appear in a "TodoCue" calendar or reminder list that iCloud brings to your iPhone. Changes go both ways: reschedule, rename, or check off there and TodoCue follows; deleting an item deletes its task. Reminders alone is the recommended setup — dated reminders also appear in Calendar on iOS 18 and macOS 15. Turn on **Import from other calendars** as well and new events from your other calendars become tasks (one way: TodoCue never changes those calendars). Sync runs while the app is open and adds no alerts of its own. [Details (中文)](docs/apple-sync.md)
 - **Reorder as you go.** Drag a task and its neighbors move out of the way. Move between projects in All or dates in Upcoming; reorder within a group in Today. Undo a move or restore automatic sorting.
 - **Choose your language.** English and Simplified Chinese are available in Settings. The first launch follows your system language, with English as the fallback. Task content stays in its original language.
 - **Keep it close.** A shared React/Tauri floating panel with native system effects in light and dark appearances. Graphite tiles stay dark; frosted tiles follow your system and blur the desktop behind them.
@@ -78,22 +78,22 @@ todocue --json periodic add 'Move a little' --every 30m --weekdays mon,wed,sat -
 
 ## Download & install
 
-Current version: **[v0.9.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.9.2)**. Supports **macOS 14+**, **Windows 10/11 x64**, and **Windows 11 ARM64**. Both Mac architectures are Developer ID signed and Apple notarized; Windows installers are unsigned.
+Current version: **[v0.10.0](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.10.0)**. Supports **macOS 14+**, **Windows 10/11 x64**, and **Windows 11 ARM64**. Both Mac architectures are Developer ID signed and Apple notarized; Windows installers are unsigned.
 
-v0.9.2 fixes the desktop task list and quick-add bar staying invisible after an interrupted panel arrival animation. [Release notes](release-notes/v0.9.2.md) · [Verification](docs/qa/panel-reveal/README.md)
+v0.10.0 adds **Import from other calendars** on macOS: new events in your other calendars (including ones another app creates) become tasks, one way. [Release notes](release-notes/v0.10.0.md) · [Verification](docs/qa/calendar-import/README.md)
 
 | Computer | Installer |
 | --- | --- |
-| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-macOS-arm64.dmg) |
-| Intel Mac | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-macOS-x64.dmg) |
-| Windows x64 | [Download x64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-Windows-x64-setup.exe) |
-| Windows ARM64 | [Download ARM64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/TodoCue-0.9.2-Windows-arm64-setup.exe) |
+| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-macOS-arm64.dmg) |
+| Intel Mac | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-macOS-x64.dmg) |
+| Windows x64 | [Download x64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-Windows-x64-setup.exe) |
+| Windows ARM64 | [Download ARM64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/TodoCue-0.10.0-Windows-arm64-setup.exe) |
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
 The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
-[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.9.2/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.0/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
 
 Windows: choose `Windows-x64-setup.exe` or `Windows-arm64-setup.exe`. The current-user installer includes offline WebView2 and the runtime. Windows packages are unsigned; verify `SHA256SUMS` from the release. Quit and uninstall an older Preview before installing the production client; task data is retained.
 

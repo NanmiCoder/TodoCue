@@ -1,10 +1,10 @@
 # Apple 日历 / 提醒事项同步
 
-TodoCue.app 通过 EventKit 把任务镜像到 Apple 的「日历」和「提醒事项」。二者经 iCloud 同步到 iPhone，于是不需要单独的 iOS App 也能在手机上查看和处理任务。只在 macOS 上提供。
+TodoCue.app 通过 EventKit 把任务镜像到 Apple 的「日历」和「提醒事项」。二者经 iCloud 同步到 iPhone，于是不需要单独的 iOS App 也能在手机上查看和处理任务。反方向上，它还能把你其他日历里新建的日程单向导入为任务（见[从其他日历导入](#从其他日历导入)）。只在 macOS 上提供。
 
 同步引擎在 `apps/macos/Sources/AppleSyncKit/`（规划逻辑在 `TodoCueKit/AppleSyncModel.swift`），两个客户端共用：
 
-- **通用版（React + Tauri，正式客户端）**：App 启动时由 Rust 宿主（`apps/desktop/src-tauri/src/apple_sync.rs`）拉起无界面辅助程序 `TodoCue.app/Contents/Helpers/TodoCueAppleSync`（`apps/macos/Sources/TodoCueAppleSync/`）。它自己读 `connection.json`、订阅 `/v1/events`、拉 `/v1/board`，和 SwiftUI 版交给同步引擎的输入完全一样。宿主与它之间是 stdin/stdout 上的 JSON 行：宿主转发设置页的命令（`setEnabled`、`syncNow`、`removeData`、`refreshAccess`、`openPrivacySettings`），辅助程序回报状态，宿主以 `apple-sync:status` 事件推给面板。辅助程序是 App 的子进程，macOS 把日历和提醒事项权限算在 TodoCue.app 名下；App 退出时它的 stdin 关闭，随之退出；意外退出时宿主按 1、2、4…最长 60 秒退避重启。WebView 仍不接触令牌。
+- **通用版（React + Tauri，正式客户端）**：App 启动时由 Rust 宿主（`apps/desktop/src-tauri/src/apple_sync.rs`）拉起无界面辅助程序 `TodoCue.app/Contents/Helpers/TodoCueAppleSync`（`apps/macos/Sources/TodoCueAppleSync/`）。它自己读 `connection.json`、订阅 `/v1/events`、拉 `/v1/board`，和 SwiftUI 版交给同步引擎的输入完全一样。宿主与它之间是 stdin/stdout 上的 JSON 行：宿主转发设置页的命令（`setEnabled`、`syncNow`、`removeData`、`refreshAccess`、`openPrivacySettings`、`setImportEnabled`、`setImportCalendar`），辅助程序回报状态，宿主以 `apple-sync:status` 事件推给面板。辅助程序是 App 的子进程，macOS 把日历和提醒事项权限算在 TodoCue.app 名下；App 退出时它的 stdin 关闭，随之退出；意外退出时宿主按 1、2、4…最长 60 秒退避重启。WebView 仍不接触令牌。
 - **旧 SwiftUI 版（v0.5.x）**：同一套引擎在 App 进程内运行。
 
 两者都和其他客户端一样，通过现有 HTTP API 读写任务；runtime、API 契约和数据库都没有为此改动。
@@ -23,6 +23,7 @@ TodoCue.app 通过 EventKit 把任务镜像到 Apple 的「日历」和「提醒
 - **换客户端时接管已有关联，不会因此删任务。** `apple-sync.json` 记着最近写它的客户端（`client`：`swiftui` / `desktop`；v0.5.3 不认识这个字段，保存时会丢掉它）。记录与当前客户端不同时，每条关联都标记为「接管」（`inherited`），随下一次写入保存，所以 App 重启、某个通道暂时没有权限都不会丢失这个标记。被标记的条目找不到时，照常走 10 分钟宽限和熔断；宽限期满也只解除关联、下一轮重新创建，**不会**删除任务。条目只要被找到一次，标记就清除，之后在手机上删除条目按正常规则删除任务。所以从 v0.5.3 升级到通用版时，期间在手机上删过的条目不会让任务被删，iCloud 短暂读空也不会因此建出重复条目。注意：通用版运行后回退到 v0.5.3，如果 v0.5.3 期间没有任何改动可写，它不会保存文件，`client` 仍是 `desktop`；再升级回来时按同一客户端重启处理。
 - **旧版运行时暂停。** 通用版启动时会要求先退出旧 SwiftUI 版，但旧版可能在通用版之后被打开。同步辅助程序每轮检查，发现旧版 TodoCue 正在运行就暂停并在设置里提示，旧版退出后自动继续，避免两个同步引擎同时写 `apple-sync.json`。
 - 「移除同步数据」会删除 Apple 侧的「TodoCue」日历或列表，并清空关联。TodoCue 里的任务不受影响。
+- 第三个开关「从其他日历导入」只在通用版里有，默认关闭，见下文。
 
 ## 容器
 
@@ -97,10 +98,25 @@ TodoCue.app 通过 EventKit 把任务镜像到 Apple 的「日历」和「提醒
 - 在手机上改期后，任务的 `reminderAt` 不会跟着移动，Mac 上的通知仍按原来的提醒时间发出。
 - 「不设闹钟」只保证 TodoCue 不往条目上加闹钟。iCloud 日历的「默认提醒」会不会被 iPhone 套用到这些事件上，需要在真机上确认。
 - 系统授权弹窗里的用途说明目前只有中文。
-- 不要在多台 Mac 上同时开启同步，它们会在同一个 iCloud 日历里写出重复条目。
+- 不要在多台 Mac 上同时开启同步，它们会在同一个 iCloud 日历里写出重复条目。多台 Mac 同时开「从其他日历导入」，同一个日程会在各自的 TodoCue 数据里各导入一次。
 - 本地 ad-hoc 构建（`scripts/build-macos.sh`）每次重签都会改变代码签名。macOS 可能因此要求重新授权日历和提醒事项。
 - 签名要求：App 用 `scripts/app.entitlements.plist` 签名，其中包含 `com.apple.security.personal-information.calendars`（开启 hardened runtime 后需要它；hardened runtime 没有单独的提醒事项 entitlement）。通用版的 `Contents/Helpers/TodoCueAppleSync` 也用同一份 entitlements 签名，`scripts/package-macos.mjs` 会检查两者都带着它。Info.plist 需要带上 `NSCalendars*UsageDescription` 和 `NSReminders*UsageDescription`（通用版在 `apps/desktop/src-tauri/Info.plist`）。本地 ad-hoc 构建没有开启 hardened runtime，所以 entitlement 是否正确，只能在 `npm run desktop:macos -- --release` 打出的产物上验证。
 - 开发时 `npm run desktop:native` 不带辅助程序，设置页显示「这个构建没有附带 Apple 同步程序」。需要时先 `swift build --package-path apps/macos --product TodoCueAppleSync`，再用 `TODOCUE_APPLE_SYNC_HELPER=apps/macos/.build/debug/TodoCueAppleSync` 指过去；这时授权会算在启动它的终端名下，不能代表正式包。
+
+## 从其他日历导入
+
+「TodoCue」日历是双向同步的，所以只认它自己的条目：你在「工作」「个人」，或其他 App 自动建的日历（如「BOSS直聘日历」）里新建的日程，默认不会进 TodoCue。打开设置 › 同步 › 「从其他日历导入」后，这些日历里新建的日程会自动成为任务。
+
+- **单向、只读。** TodoCue 不会修改、完成或删除那些日历里的任何日程。导入的任务也不会再镜像进「TodoCue」日历，否则同一场日程会在日历里出现两次（打开了「同步到提醒事项」时，它照常出现在提醒事项里）。
+- **哪些日历。** 默认导入这台 Mac 上的全部日历，以后新出现的日历（比如某个 App 新建的）也自动包含；设置里列出这些日历，可以逐个取消勾选。不列出、也不导入：「TodoCue」日历本身（以及隔离 `TODOCUE_HOME` 的「TodoCue (…)」）、订阅日历、生日、Siri 建议之类的系统日历。开关存在偏好域里：`appleCalendarImportEnabled`；排除的日历是 `appleCalendarImportExcluded`，按日历标识符记，同时记下账户和名称。EventKit 完整同步后可能给日历换标识符：原标识符不见了、又出现一个从没见过的同账户同名日历时，排除跟着转过去，不会把它当新日历整个导入（见过的日历记在 `appleCalendarImportSeen`，已经在列表里的同名日历不会被顺带排除）。
+- **哪些日程。** 未来一年内、还没结束的一次性日程。重复日程、已取消的会议邀请、带 `todocue://` 链接的条目（任何一份 TodoCue 数据的镜像）都不导入。打开开关时，已有的未来日程会一起导入。
+- **映射。** 与「在『TodoCue』日历里新建」相同：定时日程写入 `scheduledAt` 与 `estimateMinutes`（时长），全天日程写入 `scheduledDate`，标题和备注照搬。地点、参会人、日程自带的闹钟不导入。
+- **那边改了。** 标题、备注、时间按字段跟随原日程。你在 TodoCue 里改过的字段以 TodoCue 为准，之后那边再改这个字段也不覆盖（`lastDesired` 记着导入最后写入的样子，判断方式同双向同步）。
+- **那边删了（或会议被取消）。** 先标记为缺失，连续 10 分钟以上都找不到，就把任务**标为已取消**——不删除，可以在 TodoCue 里重新打开；之后日程又出现了（多半是 iCloud 的瞬时状态），任务自动重新打开。熔断有两道：一轮里要取消的超过 `max(3, 导入数 / 5)`，或某一个日历里要取消的超过 `max(3, 该日历导入数 / 5)`，这些就先不取消，设置里提示。日历本身读不到（账户退出、日历被删）时，什么都不判断，任务保持原样。
+- **不会重复导入。** 每条导入单独记在 `$TODOCUE_HOME/apple-calendar-import.json`（0600）：原日历、标识符、服务器标识符、任务 id、两个基线。没有放进 `apple-sync.json`，是因为不认识新字段的旧客户端保存时会把它丢掉，回来后就会把所有日程重新导入。日程换了标识符时，先按服务器标识符找，再按「同一日历里内容与上次读到的完全一致」找回。
+- **暂停跟随，而不是忘掉。** 任务完成、取消、删除，或日程移到了被排除的日历、改成了重复日程，记录转为「关闭」：不再跟随，但仍然认领这个日程，所以它不会被再导入一次（日程短暂读不到也一样）。任务又成了待办（撤销完成、重新打开），且日程在被导入的日历里，就恢复跟随，期间那边的改动会补上。记录在日程结束、且任务不再是待办之后才删除；任务一直是待办，记录就一直留着，这个任务也一直不会被镜像进「TodoCue」日历。所以在 TodoCue 里删掉一个导入的任务，它不会再回来；关掉开关再打开、取消再勾选某个日历，也不会重复导入。
+- **移进「TodoCue」日历。** 开着「同步到日历」时，把一个导入的日程拖进「TodoCue」日历，它就变成这个任务的双向同步条目，不会再建一个任务。关联沿用导入时的基线，所以同一次保存里改的时间也会写回任务，不会被 TodoCue 改回去；条目随后补上 `todocue://` 链接。
+- **旧 SwiftUI 版**没有这项设置，也不会执行导入，它的镜像同样不复制导入的任务。v0.5.3 不认识这些：回退到 v0.5.3 期间不导入；如果开着「同步到日历」，它会把导入的任务也复制进「TodoCue」日历，日历里会出现两份。导入记录在单独的文件里，再升级回来不受影响。
 
 ## 周期提醒不参与同步
 

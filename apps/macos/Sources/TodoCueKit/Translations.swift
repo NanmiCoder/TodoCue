@@ -522,5 +522,6 @@ extension L10n {
         "旧版 TodoCue 正在运行，Apple 同步已暂停，退出旧版后会自动继续。": "The previous TodoCue is running, so Apple sync is paused. It resumes once that app quits.",
         "有 {0} 个已同步条目同时从 Apple 侧消失，为防误删，暂未删除对应任务。如确是你删除的，请在 TodoCue 中处理这些任务。": "{0} synced items disappeared from Apple's apps at once. To avoid accidental loss, their tasks were not deleted. If you deleted them on purpose, handle those tasks in TodoCue.",
         "目前只有写入权限，打开开关可申请完整访问": "Write-only access so far. Turn the switch on to request full access.",
+        "有 {0} 个导入的日程同时从原日历消失，为防误操作，暂未取消对应任务。如确是那边删除的，请在 TodoCue 中处理这些任务。": "{0} imported events disappeared from their calendars at once. To be safe, their tasks were not cancelled. If they were deleted on purpose, handle those tasks in TodoCue.",
     ]
 }

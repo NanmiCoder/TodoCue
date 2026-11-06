@@ -39,6 +39,40 @@ public enum AppleSyncPreferences {
         defaults.set(on, forKey: key(kind))
     }
 
+    static let importKey = "appleCalendarImportEnabled"
+    static let excludedKey = "appleCalendarImportExcluded"
+    static let seenKey = "appleCalendarImportSeen"
+
+    /// Importing new events from the user's other calendars. Off until turned on.
+    public static func isImportEnabled(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: importKey) as? Bool ?? false
+    }
+
+    public static func setImportEnabled(_ on: Bool, in defaults: UserDefaults) {
+        defaults.set(on, forKey: importKey)
+    }
+
+    /// Calendars left out of import, by identifier, each with the account and name it had ("account\nname"),
+    /// so the exclusion can follow a calendar EventKit gives a new identifier. Everything else is in,
+    /// including calendars that appear later.
+    public static func excludedCalendars(in defaults: UserDefaults) -> [String: String] {
+        defaults.dictionary(forKey: excludedKey) as? [String: String] ?? [:]
+    }
+
+    public static func setExcludedCalendars(_ excluded: [String: String], in defaults: UserDefaults) {
+        defaults.set(excluded, forKey: excludedKey)
+    }
+
+    /// Identifiers of every calendar import has listed. Only one never seen before can take over the
+    /// exclusion of a calendar that disappeared — never one the user already saw included.
+    static func seenCalendars(in defaults: UserDefaults) -> Set<String> {
+        Set(defaults.stringArray(forKey: seenKey) ?? [])
+    }
+
+    static func setSeenCalendars(_ ids: Set<String>, in defaults: UserDefaults) {
+        defaults.set(ids.sorted(), forKey: seenKey)
+    }
+
     static func key(_ kind: AppleSyncKind) -> String {
         kind == .event ? "appleCalendarSyncEnabled" : "appleRemindersSyncEnabled"
     }
