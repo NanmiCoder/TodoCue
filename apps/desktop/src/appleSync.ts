@@ -31,7 +31,7 @@ export function recommendation(status: AppleSyncStatus, language: Language): { t
 }
 
 export function anyEnabled(status: AppleSyncStatus | null): boolean {
-  return !!status && (status.event.enabled || status.reminder.enabled);
+  return !!status && (status.event.enabled || status.reminder.enabled || !!status.importing?.enabled);
 }
 
 /** The line beside "Sync now", in the SwiftUI order: syncing, error, last sync, waiting. */
@@ -39,8 +39,9 @@ export function statusLine(status: AppleSyncStatus, language: Language, time: (i
   if (status.syncing) return { text: pick(language, "正在同步…", "Syncing…"), error: false };
   if (status.lastError) return { text: pick(language, `同步出错：${status.lastError}`, `Sync error: ${status.lastError}`), error: true };
   // A switch carried over from another client (or a reinstall) can be on without access: no round runs.
-  const on = appleSyncKinds.filter(kind => status[kind].enabled);
-  if (on.length && on.every(kind => status[kind].access !== "granted")) {
+  const needed = appleSyncKinds.filter(kind => status[kind].enabled).map(kind => status[kind].access);
+  if (status.importing?.enabled) needed.push(status.event.access);
+  if (needed.length && needed.every(access => access !== "granted")) {
     return { text: pick(language, "等待授权后同步", "Will sync once access is granted"), error: true };
   }
   if (status.lastSyncAt) return { text: pick(language, `上次同步 ${time(status.lastSyncAt)}`, `Last synced ${time(status.lastSyncAt)}`), error: false };
@@ -74,6 +75,30 @@ export function channelNotice(kind: AppleSyncKind, channel: AppleSyncChannel, la
       ? pick(language, "这台 Mac 未开启 iCloud 日历，不会同步到 iPhone。可在系统设置 › Apple 账户 › iCloud 中开启「日历」。", "iCloud Calendars is off on this Mac, so this will not reach your iPhone. Turn on Calendars in System Settings › Apple Account › iCloud.")
       : pick(language, "这台 Mac 未开启 iCloud 提醒事项，不会同步到 iPhone。可在系统设置 › Apple 账户 › iCloud 中开启「提醒事项」。", "iCloud Reminders is off on this Mac, so this will not reach your iPhone. Turn on Reminders in System Settings › Apple Account › iCloud."),
   };
+}
+
+export function importText(language: Language) {
+  return {
+    title: pick(language, "从其他日历导入", "Import from other calendars"),
+    hint: pick(language,
+      "其他日历里新建的日程会自动成为任务，那边改期或改标题也会跟着改（你在 TodoCue 里改过的除外）；那边删除日程，任务标为已取消。TodoCue 不会改动这些日历。",
+      "New events in your other calendars become tasks, and reschedules or renames there follow (unless you changed that in TodoCue). Deleting an event there cancels its task. TodoCue never changes those calendars."),
+    listLabel: pick(language, "导入这些日历", "Import from"),
+    listHint: pick(language,
+      "以后新出现的日历也会自动导入。取消勾选后不再导入，已导入的任务保留。重复日程和订阅日历不导入。",
+      "Calendars added later are imported too. Unchecking one stops new imports and keeps the tasks already imported. Repeating events and subscribed calendars are not imported."),
+    empty: pick(language, "没有可导入的日历。", "There are no calendars to import from."),
+  };
+}
+
+/** What sits under the import switch: an access problem, or nothing (the calendar list shows instead). */
+export function importNotice(status: AppleSyncStatus, language: Language): Exclude<ChannelNotice, { kind: "container" } | { kind: "writeOnly" }> {
+  if (!status.importing?.enabled) return null;
+  if (status.event.access === "denied") return { kind: "denied", text: pick(language, "macOS 未允许访问日历", "macOS has not allowed calendar access") };
+  if (status.event.access !== "granted") {
+    return { kind: "needsAccess", text: pick(language, "开关已打开，但还没有获得日历的完整访问权限，暂未导入。", "On, but TodoCue does not have full calendar access yet, so nothing is imported.") };
+  }
+  return null;
 }
 
 /** Nothing to operate yet: the copy shown in place of the switches. */

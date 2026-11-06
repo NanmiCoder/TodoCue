@@ -6,12 +6,16 @@ import TodoCueKit
 struct HelperCommand: Decodable, Equatable {
     enum Name: String, Decodable {
         case status, setEnabled, syncNow, removeData, refreshAccess, openPrivacySettings, setLanguage
+        /// Import from other calendars: the switch (`enabled`), and one calendar in or out (`calendar`, `enabled`).
+        case setImportEnabled, setImportCalendar
     }
 
     var id: Int?
     var command: Name
     var kind: AppleSyncKind?
     var enabled: Bool?
+    /// A calendar identifier, for `setImportCalendar`.
+    var calendar: String?
     /// The desktop app's language setting: "en" or "zh-CN".
     var language: String?
 
@@ -37,8 +41,25 @@ struct HelperStatus: Encodable, Equatable {
         var container: Container?
     }
 
+    struct ImportCalendar: Encodable, Equatable {
+        var identifier: String
+        var title: String
+        var sourceTitle: String
+        var color: String?
+        var included: Bool
+    }
+
+    /// Import from other calendars. It uses calendar access, which `event.access` reports.
+    struct Import: Encodable, Equatable {
+        var enabled: Bool
+        var changing: Bool
+        /// Only while import is on and calendar access is granted.
+        var calendars: [ImportCalendar]
+    }
+
     var event: Channel
     var reminder: Channel
+    var importing: Import
     var syncing: Bool
     var lastSyncAt: String?
     var lastError: String?
@@ -58,6 +79,12 @@ struct HelperStatus: Encodable, Equatable {
         }
         event = channel(.event)
         reminder = channel(.reminder)
+        let excluded = sync.excludedCalendars
+        importing = Import(enabled: sync.isImportEnabled, changing: sync.importChanging,
+                           calendars: sync.importCalendars.map {
+                               ImportCalendar(identifier: $0.identifier, title: $0.title, sourceTitle: $0.sourceTitle,
+                                              color: $0.color, included: !excluded.contains($0.identifier))
+                           })
         syncing = sync.isSyncing
         lastSyncAt = sync.lastSyncAt.map(TCDate.iso)
         lastError = sync.lastError

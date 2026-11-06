@@ -53,6 +53,10 @@
 .settings-switch[data-state="checked"] { background: var(--s-accent); }
 .settings-switch-thumb { display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #29292726; transition: transform 180ms cubic-bezier(.2,.8,.2,1); }
 .settings-switch-thumb[data-state="checked"] { transform: translateX(14px); }
+.settings-calendar-list { list-style: none; margin: 0; padding: 0; background: var(--s-line); }
+.settings-calendar-row { background: var(--s-surface); }
+.settings-calendar-row:hover { background: var(--s-fill); }
+.settings-calendar-row input { width: 14px; height: 14px; margin: 0; flex-shrink: 0; accent-color: var(--s-accent); }
 .settings-slider-thumb { display: block; width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--s-line); background: var(--s-surface); box-shadow: 0 1px 4px #29292729; }
 .settings-segment { color: var(--s-muted) !important; }
 .settings-segment[data-state="checked"] { background: var(--s-surface); color: var(--s-ink) !important; box-shadow: 0 1px 4px #29292715; }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppleSyncChannel, AppleSyncStatus } from "../src/bridge.js";
-import { anyEnabled, channelNotice, hostErrorText, recommendation, statusLine, unavailableText } from "../src/appleSync.js";
+import { anyEnabled, channelNotice, hostErrorText, importNotice, recommendation, statusLine, unavailableText } from "../src/appleSync.js";
 
 const off: AppleSyncChannel = { enabled: false, access: "notDetermined", changing: false };
 function status(patch: Partial<AppleSyncStatus> = {}): AppleSyncStatus {
@@ -71,5 +71,20 @@ describe("Apple sync settings copy", () => {
     expect(anyEnabled(null)).toBe(false);
     expect(anyEnabled(status())).toBe(false);
     expect(anyEnabled(status({ event: { ...off, enabled: true } }))).toBe(true);
+    expect(anyEnabled(status({ importing: { enabled: true, changing: false, calendars: [] } }))).toBe(true);
+    expect(anyEnabled(status({ importing: { enabled: false, changing: false, calendars: [] } }))).toBe(false);
+  });
+
+  it("asks for calendar access when import is on without it, and stays quiet otherwise", () => {
+    const on = { enabled: true, changing: false, calendars: [] };
+    expect(importNotice(status({ importing: on, event: { ...off, access: "granted" } }), "zh-CN")).toBeNull();
+    expect(importNotice(status({ importing: { ...on, enabled: false }, event: { ...off, access: "denied" } }), "zh-CN")).toBeNull();
+    expect(importNotice(status({ importing: on, event: { ...off, access: "denied" } }), "en"))
+      .toEqual({ kind: "denied", text: "macOS has not allowed calendar access" });
+    expect(importNotice(status({ importing: on, event: { ...off, access: "writeOnly" } }), "zh-CN")?.kind).toBe("needsAccess");
+    expect(importNotice(status(), "zh-CN")).toBeNull();
+    // Import alone, still waiting for calendar access: the status line says so.
+    expect(statusLine(status({ importing: on, event: { ...off, access: "notDetermined" } }), "zh-CN", time))
+      .toEqual({ text: "等待授权后同步", error: true });
   });
 });

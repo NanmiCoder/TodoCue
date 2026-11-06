@@ -284,9 +284,26 @@ export interface AppleSyncChannel {
   /** The calendar or list in use, only for a channel that is on. */
   container?: { title: string; sourceTitle: string; isICloud: boolean } | null;
 }
+/** A calendar new events may be imported from. `color` is `#RRGGBB`. */
+export interface AppleImportCalendar {
+  identifier: string;
+  title: string;
+  sourceTitle: string;
+  color?: string | null;
+  included: boolean;
+}
+/** Import from the user's other calendars. It uses calendar access, which `event.access` reports. */
+export interface AppleImportStatus {
+  enabled: boolean;
+  changing: boolean;
+  /** Only while import is on and calendar access is granted. */
+  calendars: AppleImportCalendar[];
+}
 export interface AppleSyncStatus {
   event: AppleSyncChannel;
   reminder: AppleSyncChannel;
+  /** Absent from a helper that predates import. */
+  importing?: AppleImportStatus;
   syncing: boolean;
   lastSyncAt?: string | null;
   lastError?: string | null;
@@ -302,7 +319,9 @@ export interface AppleSyncSnapshot {
 export type AppleSyncCommand =
   | { command: "status" | "syncNow" | "refreshAccess" }
   | { command: "setEnabled"; kind: AppleSyncKind; enabled: boolean }
-  | { command: "removeData" | "openPrivacySettings"; kind: AppleSyncKind };
+  | { command: "removeData" | "openPrivacySettings"; kind: AppleSyncKind }
+  | { command: "setImportEnabled"; enabled: boolean }
+  | { command: "setImportCalendar"; calendar: string; enabled: boolean };
 const appleSyncUnavailable: AppleSyncSnapshot = { available: false, running: false, status: null };
 /** Apple Calendar / Reminders sync runs in the macOS host's helper (`apple_sync.rs`). */
 export async function loadAppleSync(): Promise<AppleSyncSnapshot> {
