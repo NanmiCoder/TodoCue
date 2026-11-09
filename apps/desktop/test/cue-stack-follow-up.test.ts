@@ -34,3 +34,24 @@ describe("a habit cue that the runtime asks again", () => {
     }
   });
 });
+
+describe("a periodic cue that arrives before the board has caught up", () => {
+  // The claim answers with the rule as it is now; the board still holds the rule from before the
+  // fire (its last occurrence completed). The once-a-second sync used to drop the row on that
+  // snapshot, so the cue flashed and vanished, and was receipted as not displayed.
+  const claimed = { ...(rule(1, "claimed") as object), revision: 12 } as never;
+  const before = { ...(rule(1, "displayed", { id: "o0", result: "completed" }) as object), revision: 10 } as never;
+  it("keeps the row while the rules snapshot is older than the claim", () => {
+    const stack = new CueStack();
+    stack.receive({ key: "periodic:p1", id: "o1:1", title: "站起来", periodic: claimed, receivedAt: 1 } as never);
+    stack.sync([], [before]);
+    expect(stack.entries.map((entry) => entry.id)).toEqual(["o1:1"]);
+    expect(stack.entries[0].periodic?.revision).toBe(12);
+  });
+  it("still drops it once a newer snapshot shows the occurrence ended", () => {
+    const stack = new CueStack();
+    stack.receive({ key: "periodic:p1", id: "o1:1", title: "站起来", periodic: claimed, receivedAt: 1 } as never);
+    stack.sync([], [{ ...(rule(1, "displayed", { result: "completed" }) as object), revision: 14 } as never]);
+    expect(stack.entries).toEqual([]);
+  });
+});

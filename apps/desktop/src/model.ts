@@ -65,6 +65,9 @@ export class CueStack {
       }
       if (cue.periodic) {
         const rule = rules.find((rule) => rule.id === cue.periodic!.id);
+        // A cue claimed just now carries a newer rule than the board, which refreshes a moment later:
+        // judging it on the older snapshot would drop a reminder that is still on its way in.
+        if (rule && rule.revision < cue.periodic.revision) return true;
         if (
           !rule ||
           !rule.enabled ||
