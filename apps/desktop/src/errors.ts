@@ -6,6 +6,7 @@ export function errorCode(error: unknown): string | undefined {
 
 export const isVersionConflict = (error: unknown) => errorCode(error) === "VERSION_CONFLICT";
 export const isNotFound = (error: unknown) => errorCode(error) === "NOT_FOUND";
+export const isInvalidState = (error: unknown) => errorCode(error) === "INVALID_STATE";
 
 function isValidationFailure(error: unknown): boolean {
   const value = error as { name?: string; issues?: unknown } | null;

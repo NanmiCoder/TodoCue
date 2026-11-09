@@ -52,6 +52,8 @@ import {
   PERIODIC_RENDER_STEP,
   ActionGate,
   errorFeedback,
+  isLostClaim,
+  NOTCH_ERROR_MS,
   type PinMemory,
   type PointerSample,
   type QuickLookClose,
@@ -365,6 +367,12 @@ export function Notch() {
     if (feedback.refresh) void runtime.refresh();
   };
   const fail = (error: unknown) => failRef.current(error);
+  // The error is drawn on whatever cue is up, so one set while the notch was empty would surface on a later cue.
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), NOTCH_ERROR_MS);
+    return () => clearTimeout(timer);
+  }, [error]);
   eventHandler.current = (event) => {
     if (event.type === "reminder.fired" && event.related?.taskId) {
       void client
@@ -465,7 +473,7 @@ export function Notch() {
         commitCues();
       }
     } catch (error) {
-      fail(error);
+      if (!isLostClaim(error)) fail(error);
     } finally {
       inFlight.current.delete(id);
       stack.current.release(key);

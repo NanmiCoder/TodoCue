@@ -7,7 +7,9 @@ import {
   PIN_MEMORY_MS,
   STACK_RETURN_DELAY,
   deferredAfterExpand,
+  NOTCH_ERROR_MS,
   errorFeedback,
+  isLostClaim,
   menuAbandoned,
   periodicRenderGate,
   pointerIsOutside,
@@ -138,5 +140,24 @@ describe("what a failed call says", () => {
   it("never shows a raw 'Error: ...' wrapper", () => {
     const failure = errorFeedback(new Error("boom"), "en");
     expect(failure).toEqual({ message: "boom", refresh: false });
+  });
+});
+
+describe("a notch claim the runtime refuses", () => {
+  it("is not an error when another channel took the delivery or the cue went stale", () => {
+    const taken = Object.assign(new Error("本次投递已由其他通道处理"), { code: "INVALID_STATE" });
+    const stale = Object.assign(new Error("这条提醒已经失效"), { code: "INVALID_STATE" });
+    expect(isLostClaim(taken)).toBe(true);
+    expect(isLostClaim(stale)).toBe(true);
+  });
+  it("still reports failures the person could act on (offline, conflicts, unknown errors)", () => {
+    expect(isLostClaim(Object.assign(new Error("offline"), { code: "UNAVAILABLE" }))).toBe(false);
+    expect(isLostClaim(Object.assign(new Error("stale"), { code: "VERSION_CONFLICT" }))).toBe(false);
+    expect(isLostClaim(new Error("boom"))).toBe(false);
+    expect(isLostClaim(undefined)).toBe(false);
+  });
+  it("keeps an error up for a few seconds, longer than a toast and far shorter than the next reminder", () => {
+    expect(NOTCH_ERROR_MS).toBeGreaterThanOrEqual(4000);
+    expect(NOTCH_ERROR_MS).toBeLessThan(60_000);
   });
 });
