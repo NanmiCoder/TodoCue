@@ -1,6 +1,6 @@
 import { TodoCueClient, type Board } from "@todocue/client";
 import type { PeriodicReminder, RuntimeEvent, Task } from "@todocue/shared";
-import { describeError, isVersionConflict } from "./errors.js";
+import { describeError, isInvalidState, isVersionConflict } from "./errors.js";
 import { overdueMinutes, snoozeCount } from "./periodic.js";
 
 export interface Cue {
@@ -508,3 +508,13 @@ export class ActionGate {
 export function errorFeedback(error: unknown, language: string): { message: string; refresh: boolean } {
   return { message: describeError(error, language), refresh: isVersionConflict(error) };
 }
+
+/** How long an error stays on the notch. It answers what was just done; it must not wait for the next cue. */
+export const NOTCH_ERROR_MS = 6000;
+
+/**
+ * The runtime refuses a notch claim with INVALID_STATE when the three-second window has passed and the
+ * system notification took the delivery, or when the cue went stale. The reminder still reaches the
+ * person through the other channel, so a lost claim is an outcome, not an error to show.
+ */
+export const isLostClaim = (error: unknown) => isInvalidState(error);
