@@ -149,10 +149,13 @@ export function newDraft(
   };
 }
 
-/** Expanding typed quick input starts a separate task; empty input can continue a draft. */
+/**
+ * Expanding typed quick input starts a separate task; empty input can continue a draft. A blank task
+ * starts on `date` (today, or the calendar's selected day), like the quick add it sits next to.
+ */
 export function composerDraft(saved: TaskDraft | undefined, date: string, title?: string, fromQuickAdd = false, calendar = false): TaskDraft {
   if (fromQuickAdd && title?.trim()) return newDraft(undefined, date, title);
-  const draft = saved ?? newDraft(undefined, date, "", false);
+  const draft = saved ?? newDraft(undefined, date);
   if (fromQuickAdd && calendar) return { ...draft, scheduledMode: "date", scheduledDate: date, key: crypto.randomUUID() };
   return draft;
 }

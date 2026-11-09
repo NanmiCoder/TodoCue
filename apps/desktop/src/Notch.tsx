@@ -458,13 +458,16 @@ export function Notch() {
           ...displayState.current,
           hovered: hovering.current,
         }) &&
-        (await presentNotch({
+        ((await presentNotch({
           width: 460,
           height: Math.min(content.current?.scrollHeight ?? 190, STACK_MAX_HEIGHT),
           expanded: false,
           pinned: false,
           stack: true,
-        }));
+        })) ||
+          // The host also answers false when a newer resize (the row growing in) took over the
+          // animation; the window is still showing it then. Only a notch that cannot show counts.
+          ((await canShowNotch()) && isRendered()));
       await client.receiptPeriodic(id, { ...claim, displayed });
       if (!displayed) {
         stack.current.entries = stack.current.entries.filter(

@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { composerDraft, draftPayload, newDraft } from "../src/drafts.js";
 
 describe("full composer entry follows the original draft rules", () => {
-  it("opens an unplanned blank task without transferring unrelated quick input", () => {
+  it("opens a blank task on today without transferring unrelated quick input", () => {
     const draft = composerDraft(undefined, "2026-10-14");
     expect(draft.title).toBe("");
-    expect(draftPayload({ ...draft, title: "Blank task" }).scheduledDate).toBeNull();
+    expect(draftPayload({ ...draft, title: "Blank task" }).scheduledDate).toBe("2026-10-14");
   });
   it("continues an existing draft from an empty entry", () => {
     const saved = { ...newDraft(), title: "Previous draft", notes: "Keep notes" };
