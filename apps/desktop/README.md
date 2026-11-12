@@ -2,6 +2,8 @@
 
 v0.6.0 起正式桌面客户端使用 React / TypeScript / Motion 与 Tauri 2，复用现有引擎、数据库、API、CLI 和 MCP。Mac / Windows 正式安装包都内置对应架构运行时，首次打开自动配置后台，无需另装 Node；关闭 UI 后服务继续运行。
 
+Windows 启动后台时会把 Tauri 返回的规范化资源路径转成 Node 可读取的普通路径，避免 Node 26 对 `\\?\C:\...` 主模块路径报 `EISDIR`。离线横幅和托盘的「重试」会重新执行后台初始化；结果写入数据目录的 `logs/desktop-bootstrap.log`。面板禁用 Windows 默认无边框阴影，保留 Acrylic 和自定义圆角；拖动 Logo、应用名称或标题行空白可移动窗口，左右尺寸手柄具有显式 Tauri 权限。
+
 Mac 打包：`npm run desktop:macos`；正式签名/公证：`npm run desktop:macos -- --release`。产物为 `apps/desktop/build/TodoCue-<version>-macOS-<arm64|x64>.dmg`。Windows 对应架构打包：`npm run windows:build -- --release`，产物为 `TodoCue-<version>-Windows-<arm64|x64>-setup.exe`。`Release desktop (Mac and Windows)` 在 tag 上构建四种安装包，验证所有校验和后才发布；手动运行只构建验收，不公开 Release。Windows 暂无 Authenticode 证书，安装包未签名。
 
 正式版默认 `~/.todocue`，显式 `--home` / `TODOCUE_HOME` 优先；Mac 选择记在 `~/Library/Application Support/TodoCue/launch-home.json`，后续 Finder/Dock 打开复用。debug、开发脚本和没有内置运行时的 CI App 默认仍用临时隔离目录；裸 App 不读取或改写正式目录指针。正式版不自动读取旧 Preview 的目录指针。Mac 包含签名通知辅助程序、runtime BUILD.json 和 Skill；与旧 SwiftUI 包使用兼容的 CLI bootstrap，保留数据格式和后台端口。检测到旧 SwiftUI App 正在运行会提示退出。

@@ -837,7 +837,11 @@ export function Panel() {
         </div>
       )}
       <motion.header className={`tile ${route === "settings" ? "" : "graphite"} panel-header`} data-route={route} ref={headerReveal}>
-        <div className="brand">
+        <div className="brand" onPointerDown={(event) => {
+          if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+          event.preventDefault();
+          void startDrag().catch((error) => setError(String(error)));
+        }}>
           {route === "list" ? (
             <Mark />
           ) : (
@@ -853,9 +857,6 @@ export function Panel() {
           <span>{route === "settings" ? t("settings") : "TodoCue"}</span>
           <div
             className="drag-zone"
-            onPointerDown={(event) => {
-              if (event.button === 0) void startDrag();
-            }}
             aria-hidden="true"
           />
           {route === "list" && (
@@ -1013,7 +1014,7 @@ export function Panel() {
             retrying={retrying}
             onRetry={() => {
               setRetrying(true);
-              void refresh().finally(() => setRetrying(false));
+              void reconnect().catch((error) => setError(String(error))).finally(() => setRetrying(false));
             }}
           />
         )}

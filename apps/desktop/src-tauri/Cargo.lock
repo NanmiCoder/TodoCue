@@ -4183,10 +4183,11 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "todocue-desktop"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "base64 0.22.1",
  "block2",
+ "dunce",
  "futures-util",
  "objc2",
  "objc2-app-kit",

@@ -51,7 +51,7 @@ Tasks created by your Agent appear in the panel. Start with the next suggestion,
 
 Away from an Agent conversation, type a task title at the bottom of the panel and press Return to add it to today. Choose **Add details** to fill in a project, priority, time, reminder, or repeat rule. Your existing text stays in place.
 
-Drag the empty area in the top bar to move the panel; dragging in titles and notes selects text. Back keeps drafts, with new tasks and each task’s edits stored separately. If a task changes elsewhere, the editor keeps your input and offers an explicit reload of the latest task.
+Drag the TodoCue logo, app title, or empty area in the top bar to move the panel anywhere on the desktop. Dragging in task titles and notes selects text. If the background service disconnects, **Retry** starts it again and reloads your data. Back keeps drafts, with new tasks and each task’s edits stored separately. If a task changes elsewhere, the editor keeps your input and offers an explicit reload of the latest task.
 
 - **See what you finished.** Completed work is kept: open Completed from the panel menu, or from the day's completed list, to review by day and search back through it. Reopen anything with one click.
 - **Look further ahead.** Open the calendar from the panel header (⌘⇧K) to see what you have done, what is in flight, and what is scheduled months out. Switch between a month grid and a week list; pick a day to work through it. Drag a task onto another day to reschedule it — the time of day is kept, the deadline and reminder are not touched — and add straight to the day you are looking at. Repeating tasks beyond the 30-day generation horizon show as not-yet-created placeholders rather than an empty month.
@@ -78,22 +78,22 @@ todocue --json periodic add 'Move a little' --every 30m --weekdays mon,wed,sat -
 
 ## Download & install
 
-Current version: **[v0.10.2](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.10.2)**. Supports **macOS 14+**, **Windows 10/11 x64**, and **Windows 11 ARM64**. Both Mac architectures are Developer ID signed and Apple notarized; Windows installers are unsigned.
+Current version: **[v0.10.3](https://github.com/NanmiCoder/TodoCue/releases/tag/v0.10.3)**. Supports **macOS 14+**, **Windows 10/11 x64**, and **Windows 11 ARM64**. Both Mac architectures are Developer ID signed and Apple notarized; Windows installers are unsigned.
 
-v0.10.2 fixes periodic reminders that flashed in the notch and vanished, and new tasks from the panel's full form now default to today. [Release notes](release-notes/v0.10.2.md)
+v0.10.3 fixes Windows background-service startup, makes Retry restart the service, and restores dragging from the TodoCue logo and title bar. Windows frame and resize-permission fixes are included. [Release notes](release-notes/v0.10.3.md)
 
 | Computer | Installer |
 | --- | --- |
-| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.2/TodoCue-0.10.2-macOS-arm64.dmg) |
-| Intel Mac | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.2/TodoCue-0.10.2-macOS-x64.dmg) |
-| Windows x64 | [Download x64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.2/TodoCue-0.10.2-Windows-x64-setup.exe) |
-| Windows ARM64 | [Download ARM64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.2/TodoCue-0.10.2-Windows-arm64-setup.exe) |
+| Apple Silicon (M series) | [Download ARM64 DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.3/TodoCue-0.10.3-macOS-arm64.dmg) |
+| Intel Mac | [Download Intel DMG](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.3/TodoCue-0.10.3-macOS-x64.dmg) |
+| Windows x64 | [Download x64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.3/TodoCue-0.10.3-Windows-x64-setup.exe) |
+| Windows ARM64 | [Download ARM64 installer](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.3/TodoCue-0.10.3-Windows-arm64-setup.exe) |
 
 Open the DMG → drag **TodoCue.app into Applications** → launch it from Applications.
 
 The app bundles Node, the background service, CLI, notification helper, and Agent Skill. No separate runtime installation is needed. Allow notifications in Settings when you want reminders — macOS asks only once, so if you declined before, enable TodoCueNotifier under System Settings › Notifications (the app's 打开系统设置 button takes you there). To update, quit the old app, replace it with the new one, and reopen it. In-app automatic updates are not yet available.
 
-[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.2/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
+[Checksums](https://github.com/NanmiCoder/TodoCue/releases/download/v0.10.3/SHA256SUMS) · [Installation, backup, and removal (中文)](docs/macos-install.md)
 
 Windows: choose `Windows-x64-setup.exe` or `Windows-arm64-setup.exe`. The current-user installer includes offline WebView2 and the runtime. Windows packages are unsigned; verify `SHA256SUMS` from the release. Quit and uninstall an older Preview before installing the production client; task data is retained.
 

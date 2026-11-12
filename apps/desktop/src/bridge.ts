@@ -77,6 +77,10 @@ async function request(input: Request): Promise<TransportResponse> {
 }
 export const client = new TodoCueClient({ transport: { request } });
 
+export async function reconnectRuntime() {
+  if (native) await invoke("runtime_reconnect");
+}
+
 /** Install listeners before the host opens its stream; tokens never enter the WebView. */
 export async function subscribe(
   onEvent: (event: Event) => void,

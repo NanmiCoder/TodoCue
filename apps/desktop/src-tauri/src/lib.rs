@@ -249,6 +249,14 @@ async fn runtime_subscribe(
 ) -> Result<Status, String> {
     Ok(runtime.inner().subscribe(app).await)
 }
+#[tauri::command]
+async fn runtime_reconnect(
+    app: tauri::AppHandle,
+    runtime: State<'_, Arc<Runtime>>,
+) -> Result<(), String> {
+    let resources = app.path().resource_dir().map_err(|error| error.to_string())?;
+    runtime.ensure_started(&app, resources).await
+}
 /// Apple Calendar / Reminders sync: `{ available, running, status }` (see `apple_sync.rs`).
 #[tauri::command]
 fn apple_sync_status(sync: State<'_, Arc<AppleSync>>) -> Value {
@@ -652,6 +660,8 @@ fn panel_focus(app: tauri::AppHandle) -> Result<(), String> {
 }
 #[tauri::command]
 fn panel_drag(window: WebviewWindow) -> Result<(), String> {
+    platform::allow_activation(&window)?;
+    window.set_focusable(true).map_err(|e| e.to_string())?;
     window.start_dragging().map_err(|e| e.to_string())
 }
 #[tauri::command]
@@ -1429,6 +1439,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             runtime_request,
             runtime_subscribe,
+            runtime_reconnect,
             apple_sync_status,
             apple_sync_command,
             settings_load,
@@ -1514,46 +1525,13 @@ pub fn run() {
             #[cfg(any(windows, target_os = "macos"))]
             {
                 let resources = app.path().resource_dir()?;
-                let runtime = resources.join("runtime");
-                let node = runtime.join(if cfg!(windows) {
-                    "bin/node.exe"
-                } else {
-                    "bin/node"
+                let handle = app.handle().clone();
+                let runtime = app.state::<Arc<Runtime>>().inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = runtime.ensure_started(&handle, resources).await {
+                        eprintln!("Runtime bootstrap failed: {error}");
+                    }
                 });
-                if node.exists() {
-                    let data = app.state::<Desktop>().home.clone();
-                    let handle = app.handle().clone();
-                    std::thread::spawn(move || {
-                        let mut command = std::process::Command::new(node);
-                        command
-                            .arg(runtime.join("packages/cli/dist/index.js"))
-                            .arg("--home")
-                            .arg(data)
-                            .arg("--json")
-                            .arg("bootstrap");
-                        #[cfg(windows)]
-                        {
-                            use std::os::windows::process::CommandExt;
-                            command.creation_flags(0x08000000);
-                        }
-                        let error = match command.output() {
-                            Ok(output) if output.status.success() => None,
-                            Ok(output) => Some(format!(
-                                "{}{}",
-                                String::from_utf8_lossy(&output.stdout),
-                                String::from_utf8_lossy(&output.stderr)
-                            )),
-                            Err(error) => Some(error.to_string()),
-                        };
-                        if let Some(message) = error {
-                            eprintln!("Runtime bootstrap failed: {message}");
-                            let runtime = handle.state::<Arc<Runtime>>().inner().clone();
-                            tauri::async_runtime::block_on(
-                                runtime.bootstrap_failed(&handle, message),
-                            );
-                        }
-                    });
-                }
             }
             let panel = app.get_webview_window("panel").unwrap();
             platform::glass(&panel).map_err(std::io::Error::other)?;
