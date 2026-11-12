@@ -34,7 +34,7 @@ const taskName = `TodoCue-Runtime-${homeId}`;
 assert(process.env.LOCALAPPDATA, "Windows installation smoke needs the current-user local application directory");
 const registration = path.join(process.env.LOCALAPPDATA, "TodoCue/homes", `${homeId}.json`);
 const manifest = path.join(home, "windows-runtime.json");
-let mcp;
+let mcp, gui;
 let taskDisabled = false;
 const report = { architecture: process.arch, installer: installers[0], passed: [] };
 const pass = name => { report.passed.push(name); console.log(`PASS ${name}`); };
@@ -42,8 +42,8 @@ const run = async (file, args, timeout = 60000, childEnv = env) => (await exec(f
 const command = async (...args) => JSON.parse(await run(cli, ["--home", home, "--json", ...args]));
 const ordinaryCommand = async (...args) => JSON.parse(await run(shim, ["--json", ...args], 60000, ordinaryEnv));
 const present = async file => { try { await fs.access(file); return true; } catch { return false; } };
-const waitForInstalledHealth = async () => {
-  const deadline = Date.now() + 15000;
+const waitForInstalledHealth = async (timeoutMs = 15000) => {
+  const deadline = Date.now() + timeoutMs;
   let status;
   do {
     status = await command("service", "status");
@@ -76,6 +76,26 @@ try {
   assert.equal((await run(node, ["-p", "process.arch"])).trim(), process.arch);
   await run(node, ["--input-type=module", "-e", "import {createRequire} from 'node:module'; const require=createRequire(process.argv[1]); const Database=require('better-sqlite3'); const db=new Database(':memory:'); if(db.prepare('select 1 as n').get().n!==1)process.exit(1); db.close();", path.join(app, "runtime/package.json")]);
   pass("silent NSIS install, packaged Node architecture and native SQLite SQL");
+
+  // Start the actual GUI before any CLI install/bootstrap. Calling bootstrap
+  // ourselves first masks a broken first-launch path in the packaged desktop.
+  gui = spawn(path.join(app, "todocue-desktop.exe"), ["--home", home, "--background"], {
+    env, cwd: os.tmpdir(), windowsHide: true, stdio: "ignore",
+  });
+  let guiError;
+  gui.on("error", error => { guiError = error; });
+  await waitForInstalledHealth(30000);
+  if (guiError) throw guiError;
+  assert.equal(gui.exitCode, null, "GUI exited during cold bootstrap");
+  const logPath = path.join(home, "logs/desktop-bootstrap.log");
+  const logDeadline = Date.now() + 5000;
+  while (!await present(logPath) && Date.now() < logDeadline) await new Promise(resolve => setTimeout(resolve, 50));
+  const bootstrapLog = await fs.readFile(logPath, "utf8");
+  assert.equal(bootstrapLog, "Runtime setup succeeded");
+  await new Promise(resolve => { gui.once("exit", resolve); gui.kill(); });
+  gui = undefined;
+  assert.equal((await command("service", "status")).launchAgent.loaded, true);
+  pass("cold GUI launch provisions its own runtime; service survives closing the GUI");
 
   const installed = await command("install", "--skip-notifications");
   assert.equal(installed.running, true);
@@ -204,6 +224,7 @@ try {
   assert(!userPath.split(";").some(entry => path.resolve(entry.trim() || ".").toLowerCase() === path.join(home, "bin").toLowerCase()), "Managed PATH remains after uninstall");
   pass("uninstall removes service, CLI and PATH while preserving the database");
 } finally {
+  gui?.kill();
   mcp?.stdin.end(); mcp?.kill();
   if (taskDisabled) await run("schtasks.exe", ["/Change", "/TN", taskName, "/ENABLE"]).catch(error => console.error("Cleanup enable task:", error.message));
   if (await present(uninstaller)) await run(uninstaller, ["/S"], 180000).catch(error => console.error("Cleanup uninstall:", error.message));

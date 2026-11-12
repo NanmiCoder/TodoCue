@@ -768,6 +768,9 @@ pub fn glass(window: &WebviewWindow) -> Result<(), String> {
 #[cfg(windows)]
 pub fn glass(window: &WebviewWindow) -> Result<(), String> {
     use tauri::{utils::WindowEffect, window::EffectsBuilder};
+    // The default undecorated-window shadow adds a native white frame on Windows.
+    // Keep its hidden frame insets out of the custom rounded shell.
+    window.set_shadow(false).map_err(|error| error.to_string())?;
     // Acrylic is available on Windows 10/11. CSS retains an opaque fallback if the
     // compositor cannot apply it (remote sessions and disabled transparency).
     let _ = window.set_effects(

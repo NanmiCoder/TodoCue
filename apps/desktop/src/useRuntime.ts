@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Board } from "@todocue/client";
 import type { PeriodicReminder, RuntimeEvent } from "@todocue/shared";
-import { client, subscribe, type ConnectionState } from "./bridge.js";
+import { client, reconnectRuntime, subscribe, type ConnectionState } from "./bridge.js";
 import { latestBoard } from "./model.js";
 
 export function useRuntime(onEvent?: (event: RuntimeEvent) => void) {
@@ -107,6 +107,7 @@ export function useRuntime(onEvent?: (event: RuntimeEvent) => void) {
     // Automatic refreshes report errors through state; explicit reconnection must also reject.
     refresh: async () => { await refresh.current(); },
     reconnect: async () => {
+      await reconnectRuntime();
       const error = await refresh.current();
       if (error !== null) throw new Error(error);
     },

@@ -4187,6 +4187,7 @@ version = "0.10.2"
 dependencies = [
  "base64 0.22.1",
  "block2",
+ "dunce",
  "futures-util",
  "objc2",
  "objc2-app-kit",

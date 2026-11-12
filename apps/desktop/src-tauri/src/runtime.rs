@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 use tauri::{AppHandle, Emitter};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 #[derive(Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +35,7 @@ pub struct Runtime {
     status: Arc<RwLock<Status>>,
     started: AtomicBool,
     bootstrap_error: RwLock<Option<String>>,
+    bootstrap: Mutex<()>,
 }
 
 #[derive(Deserialize)]
@@ -116,7 +117,28 @@ impl Runtime {
             status: Arc::default(),
             started: AtomicBool::new(false),
             bootstrap_error: RwLock::new(None),
+            bootstrap: Mutex::new(()),
         }
+    }
+    /// Startup and an explicit retry use the same serialized, idempotent installer.
+    /// Run outside the UI thread; Windows task registration can take several seconds.
+    pub async fn ensure_started(&self, app: &AppHandle, resources: PathBuf) -> Result<(), String> {
+        let _guard = self.bootstrap.lock().await;
+        // A development host can use desktop:dev's external runtime.
+        if cfg!(debug_assertions) && !resources.join("runtime").exists() {
+            return Ok(());
+        }
+        let home = self.home.clone();
+        let result =
+            tauri::async_runtime::spawn_blocking(move || bootstrap_runtime(&resources, &home))
+                .await
+                .map_err(|error| error.to_string())
+                .and_then(|result| result);
+        match &result {
+            Ok(()) => *self.bootstrap_error.write().await = None,
+            Err(message) => self.bootstrap_failed(app, message.clone()).await,
+        }
+        result
     }
     pub async fn bootstrap_failed(&self, app: &AppHandle, message: String) {
         *self.bootstrap_error.write().await = Some(message.clone());
@@ -259,7 +281,13 @@ impl Runtime {
                 &app,
                 Status {
                     online: false,
-                    message: Some("Runtime disconnected".into()),
+                    message: Some(
+                        self.bootstrap_error
+                            .read()
+                            .await
+                            .clone()
+                            .unwrap_or_else(|| "Runtime disconnected".into()),
+                    ),
                     generation: Some(generation),
                 },
             )
@@ -267,6 +295,59 @@ impl Runtime {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
+}
+
+fn bootstrap_runtime(resources: &std::path::Path, home: &std::path::Path) -> Result<(), String> {
+    // Tauri's resource_dir is canonicalized (\\?\C:\... on Windows).
+    // Node 26 rejects a verbatim main-module path with EISDIR while resolving C:.
+    let runtime = dunce::simplified(resources).join("runtime");
+    let node = runtime.join(if cfg!(windows) {
+        "bin/node.exe"
+    } else {
+        "bin/node"
+    });
+    let result = (|| {
+        if !node.is_file() {
+            return Err(format!(
+                "Packaged runtime missing: {}. Reinstall TodoCue.",
+                node.display()
+            ));
+        }
+        let mut command = std::process::Command::new(&node);
+        command
+            .arg(runtime.join("packages/cli/dist/index.js"))
+            .arg("--home")
+            .arg(home)
+            .arg("--json")
+            .arg("bootstrap")
+            // Explorer's working directory can be a protected system directory.
+            .current_dir(&runtime);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        let output = command.output().map_err(|error| error.to_string())?;
+        if output.status.success() {
+            return Ok(());
+        }
+        Err(format!(
+            "Runtime setup failed ({}): {}{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    })();
+    let logs = home.join("logs");
+    if std::fs::create_dir_all(&logs).is_ok() {
+        let message = result
+            .as_ref()
+            .err()
+            .map(String::as_str)
+            .unwrap_or("Runtime setup succeeded");
+        let _ = std::fs::write(logs.join("desktop-bootstrap.log"), message);
+    }
+    result
 }
 
 #[derive(Default)]
@@ -313,6 +394,84 @@ impl SseParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn node_bootstraps_from_tauris_verbatim_resource_path() {
+        let root = std::env::temp_dir().join(format!(
+            "todocue-node-资源 with spaces-{}",
+            std::process::id()
+        ));
+        let resources = root.join("app");
+        let runtime = resources.join("runtime");
+        std::fs::create_dir_all(runtime.join("bin")).unwrap();
+        std::fs::create_dir_all(runtime.join("packages/cli/dist")).unwrap();
+        let node = std::process::Command::new("node")
+            .args(["-p", "process.execPath"])
+            .output()
+            .expect("Node 24+ is required");
+        assert!(node.status.success());
+        std::fs::copy(
+            String::from_utf8(node.stdout).unwrap().trim(),
+            runtime.join("bin/node.exe"),
+        )
+        .unwrap();
+        std::fs::write(
+            runtime.join("packages/cli/dist/index.js"),
+            r#"
+            const assert = require('node:assert/strict');
+            assert.equal(process.argv[2], '--home');
+            assert.equal(process.argv[4], '--json');
+            assert.equal(process.argv[5], 'bootstrap');
+            assert.equal(require('node:path').basename(process.cwd()), 'runtime');
+            console.log(JSON.stringify({ running: true }));
+        "#,
+        )
+        .unwrap();
+        let canonical = std::fs::canonicalize(&resources).unwrap();
+        assert!(canonical.to_string_lossy().starts_with(r"\\?\"));
+        let home = root.join("data home");
+        bootstrap_runtime(&canonical, &home).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(home.join("logs/desktop-bootstrap.log")).unwrap(),
+            "Runtime setup succeeded"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn missing_packaged_runtime_is_reported_and_logged_instead_of_silently_skipped() {
+        let root =
+            std::env::temp_dir().join(format!("todocue-bootstrap-missing-{}", std::process::id()));
+        let home = root.join("data with spaces");
+        let message = bootstrap_runtime(&root.join("app"), &home).unwrap_err();
+        assert!(message.contains("Packaged runtime missing:"));
+        assert_eq!(
+            std::fs::read_to_string(home.join("logs/desktop-bootstrap.log")).unwrap(),
+            message
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn failed_setup_preserves_the_process_error_in_the_diagnostic_log() {
+        let root =
+            std::env::temp_dir().join(format!("todocue-bootstrap-failed-{}", std::process::id()));
+        let runtime = root.join("app/runtime");
+        std::fs::create_dir_all(runtime.join("bin")).unwrap();
+        // A test executable rejects the CLI flags, exercising the real subprocess failure path.
+        let node = runtime.join(if cfg!(windows) {
+            "bin/node.exe"
+        } else {
+            "bin/node"
+        });
+        std::fs::copy(std::env::current_exe().unwrap(), node).unwrap();
+        let home = root.join("data");
+        let message = bootstrap_runtime(&root.join("app"), &home).unwrap_err();
+        assert!(message.contains("Runtime setup failed ("));
+        assert_eq!(
+            std::fs::read_to_string(home.join("logs/desktop-bootstrap.log")).unwrap(),
+            message
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn rejects_remote_and_credentialed_urls() {
         for base_url in [
